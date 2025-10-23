@@ -29,12 +29,19 @@ impl WindowState {
         let component_definition = builder.component_definition.ok_or_else(|| {
             LayerShikaError::InvalidInput("Component definition is required".into())
         })?;
+        let window = builder
+            .window
+            .ok_or_else(|| LayerShikaError::InvalidInput("Window is required".into()))?;
         let component_instance = component_definition
             .create()
             .map_err(|e| LayerShikaError::SlintComponentCreation(e.to_string()))?;
         component_instance
             .show()
             .map_err(|e| LayerShikaError::SlintComponentCreation(e.to_string()))?;
+
+        // Request initial redraw to ensure the first frame is rendered
+        window.request_redraw();
+
         Ok(Self {
             component_instance,
             surface: builder
@@ -45,9 +52,7 @@ impl WindowState {
                 .ok_or_else(|| LayerShikaError::InvalidInput("Layer surface is required".into()))?,
             size: builder.size.unwrap_or_default(),
             output_size: builder.output_size.unwrap_or_default(),
-            window: builder
-                .window
-                .ok_or_else(|| LayerShikaError::InvalidInput("Window is required".into()))?,
+            window,
             current_pointer_position: LogicalPosition::default(),
             scale_factor: builder.scale_factor,
             height: builder.height,
