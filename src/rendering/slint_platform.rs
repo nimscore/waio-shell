@@ -2,22 +2,27 @@ use slint::{
     platform::{Platform, WindowAdapter},
     PlatformError,
 };
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 use super::femtovg_window::FemtoVGWindow;
 
 pub struct CustomSlintPlatform {
-    window: Rc<FemtoVGWindow>,
+    window: Weak<FemtoVGWindow>,
 }
 
 impl CustomSlintPlatform {
-    pub const fn new(window: Rc<FemtoVGWindow>) -> Self {
-        Self { window }
+    pub fn new(window: &Rc<FemtoVGWindow>) -> Self {
+        Self {
+            window: Rc::downgrade(window),
+        }
     }
 }
 
 impl Platform for CustomSlintPlatform {
     fn create_window_adapter(&self) -> Result<Rc<dyn WindowAdapter + 'static>, PlatformError> {
-        Result::Ok(Rc::clone(&self.window) as Rc<dyn WindowAdapter>)
+        self.window
+            .upgrade()
+            .ok_or(PlatformError::NoPlatform)
+            .map(|w| w as Rc<dyn WindowAdapter>)
     }
 }

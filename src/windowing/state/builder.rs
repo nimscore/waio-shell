@@ -110,11 +110,11 @@ impl WindowStateBuilder {
     }
 
     pub fn build(self) -> Result<WindowState> {
-        let platform = CustomSlintPlatform::new(Rc::clone(
+        let platform = CustomSlintPlatform::new(
             self.window
                 .as_ref()
                 .ok_or_else(|| LayerShikaError::InvalidInput("Window is required".into()))?,
-        ));
+        );
         set_platform(Box::new(platform)).map_err(|e| {
             LayerShikaError::PlatformSetup(format!("Failed to set platform: {e:?}"))
         })?;
