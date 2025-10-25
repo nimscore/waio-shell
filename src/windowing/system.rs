@@ -97,6 +97,7 @@ impl WindowingSystem {
             .with_scale_factor(config.scale_factor)
             .with_height(config.height)
             .with_exclusive_zone(config.exclusive_zone)
+            .with_connection(Rc::new(connection.clone()))
             .with_window(window);
 
         if let Some(fs) = &surface_ctx.fractional_scale {

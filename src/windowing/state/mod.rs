@@ -4,12 +4,14 @@ use log::info;
 use slint::{LogicalPosition, PhysicalSize, ComponentHandle};
 use slint_interpreter::ComponentInstance;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
-use wayland_client::protocol::{wl_output::WlOutput, wl_pointer::WlPointer, wl_surface::WlSurface};
-use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
-use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
+use wayland_client::protocol::{wl_output::WlOutput, wl_surface::WlSurface};
 use crate::rendering::femtovg_window::FemtoVGWindow;
 use crate::errors::{LayerShikaError, Result};
 use crate::windowing::surface_dimensions::SurfaceDimensions;
+use crate::windowing::proxies::{
+    ManagedWlPointer, ManagedWlSurface, ManagedZwlrLayerSurfaceV1,
+    ManagedWpFractionalScaleV1, ManagedWpViewport,
+};
 
 pub mod builder;
 pub mod dispatches;
@@ -23,12 +25,12 @@ enum ScalingMode {
 
 pub struct WindowState {
     component_instance: ComponentInstance,
-    surface: Rc<WlSurface>,
-    layer_surface: Rc<ZwlrLayerSurfaceV1>,
-    fractional_scale: Option<Rc<WpFractionalScaleV1>>,
-    viewport: Option<Rc<WpViewport>>,
+    viewport: Option<ManagedWpViewport>,
+    fractional_scale: Option<ManagedWpFractionalScaleV1>,
+    layer_surface: ManagedZwlrLayerSurfaceV1,
+    surface: ManagedWlSurface,
     #[allow(dead_code)]
-    pointer: Rc<WlPointer>,
+    pointer: ManagedWlPointer,
     #[allow(dead_code)]
     output: Rc<WlOutput>,
     size: PhysicalSize,
@@ -58,19 +60,38 @@ impl WindowState {
 
         window.request_redraw();
 
+        let connection = builder
+            .connection
+            .ok_or_else(|| LayerShikaError::InvalidInput("Connection is required".into()))?;
+
+        let surface_rc = builder
+            .surface
+            .ok_or_else(|| LayerShikaError::InvalidInput("Surface is required".into()))?;
+        let layer_surface_rc = builder
+            .layer_surface
+            .ok_or_else(|| LayerShikaError::InvalidInput("Layer surface is required".into()))?;
+        let pointer_rc = builder
+            .pointer
+            .ok_or_else(|| LayerShikaError::InvalidInput("Pointer is required".into()))?;
+
+        let viewport = builder
+            .viewport
+            .map(|vp| ManagedWpViewport::new(vp, Rc::clone(&connection)));
+        let fractional_scale = builder
+            .fractional_scale
+            .map(|fs| ManagedWpFractionalScaleV1::new(fs, Rc::clone(&connection)));
+        let layer_surface =
+            ManagedZwlrLayerSurfaceV1::new(layer_surface_rc, Rc::clone(&connection));
+        let surface = ManagedWlSurface::new(surface_rc, Rc::clone(&connection));
+        let pointer = ManagedWlPointer::new(pointer_rc, connection);
+
         Ok(Self {
             component_instance,
-            surface: builder
-                .surface
-                .ok_or_else(|| LayerShikaError::InvalidInput("Surface is required".into()))?,
-            layer_surface: builder
-                .layer_surface
-                .ok_or_else(|| LayerShikaError::InvalidInput("Layer surface is required".into()))?,
-            fractional_scale: builder.fractional_scale,
-            viewport: builder.viewport,
-            pointer: builder
-                .pointer
-                .ok_or_else(|| LayerShikaError::InvalidInput("Pointer is required".into()))?,
+            viewport,
+            fractional_scale,
+            layer_surface,
+            surface,
+            pointer,
             output: builder
                 .output
                 .ok_or_else(|| LayerShikaError::InvalidInput("Output is required".into()))?,
@@ -202,11 +223,11 @@ impl WindowState {
     }
 
     pub fn layer_surface(&self) -> Rc<ZwlrLayerSurfaceV1> {
-        Rc::clone(&self.layer_surface)
+        Rc::clone(self.layer_surface.inner())
     }
 
     pub fn surface(&self) -> Rc<WlSurface> {
-        Rc::clone(&self.surface)
+        Rc::clone(self.surface.inner())
     }
 
     pub const fn height(&self) -> u32 {
