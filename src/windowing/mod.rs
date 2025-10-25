@@ -40,21 +40,21 @@ mod config;
 mod macros;
 mod state;
 
-type GlobalObjects = (
-    WlCompositor,
-    WlOutput,
-    ZwlrLayerShellV1,
-    WlSeat,
-    Option<WpFractionalScaleManagerV1>,
-    Option<WpViewporter>,
-);
+pub struct GlobalCtx {
+    pub compositor: WlCompositor,
+    pub output: WlOutput,
+    pub layer_shell: ZwlrLayerShellV1,
+    pub seat: WlSeat,
+    pub fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
+    pub viewporter: Option<WpViewporter>,
+}
 
-type SurfaceObjects = (
-    Rc<WlSurface>,
-    Rc<ZwlrLayerSurfaceV1>,
-    Option<Rc<WpFractionalScaleV1>>,
-    Option<Rc<WpViewport>>,
-);
+pub struct SurfaceCtx {
+    pub surface: Rc<WlSurface>,
+    pub layer_surface: Rc<ZwlrLayerSurfaceV1>,
+    pub fractional_scale: Option<Rc<WpFractionalScaleV1>>,
+    pub viewport: Option<Rc<WpViewport>>,
+}
 
 pub struct WindowingSystem {
     state: WindowState,
@@ -70,39 +70,39 @@ impl WindowingSystem {
             Rc::new(Connection::connect_to_env().map_err(LayerShikaError::WaylandConnection)?);
         let event_queue = connection.new_event_queue();
 
-        let (compositor, output, layer_shell, seat, fractional_scale_manager, viewporter) =
-            Self::initialize_globals(&connection, &event_queue.handle())
-                .map_err(|e| LayerShikaError::GlobalInitialization(e.to_string()))?;
+        let global_ctx = Self::initialize_globals(&connection, &event_queue.handle())
+            .map_err(|e| LayerShikaError::GlobalInitialization(e.to_string()))?;
 
-        let (surface, layer_surface, fractional_scale, viewport) = Self::setup_surface(
-            &compositor,
-            &output,
-            &layer_shell,
-            fractional_scale_manager.as_ref(),
-            viewporter.as_ref(),
+        let surface_ctx = Self::setup_surface(
+            &global_ctx.compositor,
+            &global_ctx.output,
+            &global_ctx.layer_shell,
+            global_ctx.fractional_scale_manager.as_ref(),
+            global_ctx.viewporter.as_ref(),
             &event_queue.handle(),
             &config,
         );
 
-        let pointer = Rc::new(seat.get_pointer(&event_queue.handle(), ()));
-        let window = Self::initialize_renderer(&surface, &connection.display(), &config)
-            .map_err(|e| LayerShikaError::EGLContextCreation(e.to_string()))?;
+        let pointer = Rc::new(global_ctx.seat.get_pointer(&event_queue.handle(), ()));
+        let window =
+            Self::initialize_renderer(&surface_ctx.surface, &connection.display(), &config)
+                .map_err(|e| LayerShikaError::EGLContextCreation(e.to_string()))?;
 
         let mut builder = WindowStateBuilder::new()
             .with_component_definition(config.component_definition)
-            .with_surface(Rc::clone(&surface))
-            .with_layer_surface(Rc::clone(&layer_surface))
+            .with_surface(Rc::clone(&surface_ctx.surface))
+            .with_layer_surface(Rc::clone(&surface_ctx.layer_surface))
             .with_pointer(Rc::clone(&pointer))
             .with_scale_factor(config.scale_factor)
             .with_height(config.height)
             .with_exclusive_zone(config.exclusive_zone)
             .with_window(window);
 
-        if let Some(fs) = fractional_scale {
+        if let Some(fs) = surface_ctx.fractional_scale {
             builder = builder.with_fractional_scale(fs);
         }
 
-        if let Some(vp) = viewport {
+        if let Some(vp) = surface_ctx.viewport {
             builder = builder.with_viewport(vp);
         }
 
@@ -124,7 +124,7 @@ impl WindowingSystem {
     fn initialize_globals(
         connection: &Connection,
         queue_handle: &QueueHandle<WindowState>,
-    ) -> Result<GlobalObjects> {
+    ) -> Result<GlobalCtx> {
         let global_list = registry_queue_init::<WindowState>(connection)
             .map(|(global_list, _)| global_list)
             .map_err(|e| LayerShikaError::GlobalInitialization(e.to_string()))?;
@@ -154,14 +154,14 @@ impl WindowingSystem {
             info!("Viewporter protocol not available");
         }
 
-        Ok((
+        Ok(GlobalCtx {
             compositor,
             output,
             layer_shell,
             seat,
             fractional_scale_manager,
             viewporter,
-        ))
+        })
     }
 
     fn setup_surface(
@@ -172,7 +172,7 @@ impl WindowingSystem {
         viewporter: Option<&WpViewporter>,
         queue_handle: &QueueHandle<WindowState>,
         config: &WindowConfig,
-    ) -> SurfaceObjects {
+    ) -> SurfaceCtx {
         let surface = Rc::new(compositor.create_surface(queue_handle, ()));
         let layer_surface = Rc::new(layer_shell.get_layer_surface(
             &surface,
@@ -197,7 +197,12 @@ impl WindowingSystem {
 
         surface.set_buffer_scale(1);
 
-        (surface, layer_surface, fractional_scale, viewport)
+        SurfaceCtx {
+            surface,
+            layer_surface,
+            fractional_scale,
+            viewport,
+        }
     }
 
     fn configure_layer_surface(
