@@ -4,7 +4,7 @@ use crate::{
     errors::{LayerShikaError, Result},
     rendering::{egl_context::EGLContext, femtovg_window::FemtoVGWindow},
 };
-use config::WindowConfig;
+use config::{LayerSurfaceParams, WindowConfig};
 use log::{debug, error, info};
 use slint::{
     platform::{femtovg_renderer::FemtoVGRenderer, update_timers_and_animations},
@@ -193,7 +193,15 @@ impl WindowingSystem {
             Rc::new(vp.get_viewport(&surface, queue_handle, ()))
         });
 
-        Self::configure_layer_surface(&layer_surface, &surface, config);
+        let params = LayerSurfaceParams {
+            anchor: config.anchor,
+            margin: config.margin,
+            exclusive_zone: config.exclusive_zone,
+            keyboard_interactivity: config.keyboard_interactivity,
+            height: config.height,
+        };
+
+        Self::configure_layer_surface(&layer_surface, &surface, &params);
 
         surface.set_buffer_scale(1);
 
@@ -208,19 +216,19 @@ impl WindowingSystem {
     fn configure_layer_surface(
         layer_surface: &Rc<ZwlrLayerSurfaceV1>,
         surface: &WlSurface,
-        config: &WindowConfig,
+        params: &LayerSurfaceParams,
     ) {
-        layer_surface.set_anchor(config.anchor);
+        layer_surface.set_anchor(params.anchor);
         layer_surface.set_margin(
-            config.margin.top,
-            config.margin.right,
-            config.margin.bottom,
-            config.margin.left,
+            params.margin.top,
+            params.margin.right,
+            params.margin.bottom,
+            params.margin.left,
         );
 
-        layer_surface.set_exclusive_zone(config.exclusive_zone);
-        layer_surface.set_keyboard_interactivity(config.keyboard_interactivity);
-        layer_surface.set_size(1, config.height);
+        layer_surface.set_exclusive_zone(params.exclusive_zone);
+        layer_surface.set_keyboard_interactivity(params.keyboard_interactivity);
+        layer_surface.set_size(1, params.height);
         surface.commit();
     }
 

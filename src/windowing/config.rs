@@ -12,6 +12,15 @@ pub struct Margins {
     pub left: i32,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct LayerSurfaceParams {
+    pub anchor: Anchor,
+    pub margin: Margins,
+    pub exclusive_zone: i32,
+    pub keyboard_interactivity: KeyboardInteractivity,
+    pub height: u32,
+}
+
 #[derive(Clone)]
 pub struct WindowConfig {
     pub height: u32,
