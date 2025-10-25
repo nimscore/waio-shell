@@ -63,8 +63,9 @@ impl WindowingSystem {
 
         let pointer = Rc::new(global_ctx.seat.get_pointer(&event_queue.handle(), ()));
         let output = Rc::new(global_ctx.output);
-        let window = Self::initialize_renderer(&surface_ctx.surface, &connection.display(), &config)
-            .map_err(|e| LayerShikaError::EGLContextCreation(e.to_string()))?;
+        let window =
+            Self::initialize_renderer(&surface_ctx.surface, &connection.display(), &config)
+                .map_err(|e| LayerShikaError::EGLContextCreation(e.to_string()))?;
 
         let mut builder = WindowStateBuilder::new()
             .with_component_definition(config.component_definition)
@@ -132,26 +133,38 @@ impl WindowingSystem {
     pub fn run(&mut self) -> Result<()> {
         info!("Starting WindowingSystem main loop");
 
+        // Process all initial configuration events by repeatedly dispatching until queue is empty.
+        // After each batch, flush and render to allow compositor to respond with additional
+        // configure events (e.g., after fractional scale is applied).
+        // This ensures proper initialization.
+        info!("Processing initial Wayland configuration events");
         while self
             .event_queue
             .blocking_dispatch(&mut self.state)
             .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?
             > 0
         {
+            // Flush requests to compositor after processing each event batch
             self.connection
                 .flush()
                 .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?;
+
+            // Render if window was marked dirty by the configure events
+            update_timers_and_animations();
             self.state
                 .window()
                 .render_frame_if_dirty()
                 .map_err(|e| LayerShikaError::Rendering(e.to_string()))?;
         }
 
+        // Setup Wayland file descriptor as event source for ongoing events
         self.setup_wayland_event_source()?;
 
         let event_queue = &mut self.event_queue;
         let connection = &self.connection;
 
+        // Enter the main event loop with consistent event processing:
+        // read -> dispatch -> animate -> render -> flush
         self.event_loop
             .run(None, &mut self.state, move |shared_data| {
                 if let Err(e) = Self::process_events(connection, event_queue, shared_data) {
@@ -180,23 +193,31 @@ impl WindowingSystem {
         event_queue: &mut EventQueue<WindowState>,
         shared_data: &mut WindowState,
     ) -> Result<()> {
+        // 1. READ: Read pending events from Wayland socket if available
         if let Some(guard) = event_queue.prepare_read() {
             guard
                 .read()
                 .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?;
         }
-        connection.flush()?;
 
+        // 2. DISPATCH: Process all queued Wayland events
         event_queue
             .dispatch_pending(shared_data)
             .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?;
 
+        // 3. ANIMATE: Update Slint timers and animations
         update_timers_and_animations();
 
+        // 4. RENDER: Render frame if window was marked dirty
         shared_data
             .window()
             .render_frame_if_dirty()
             .map_err(|e| LayerShikaError::Rendering(e.to_string()))?;
+
+        // 5. FLUSH: Send buffered Wayland requests to compositor
+        connection
+            .flush()
+            .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?;
 
         Ok(())
     }
