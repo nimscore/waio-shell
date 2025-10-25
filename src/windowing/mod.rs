@@ -64,7 +64,7 @@ pub struct WindowingSystem {
 }
 
 impl WindowingSystem {
-    fn new(config: &mut WindowConfig) -> Result<Self> {
+    fn new(config: &WindowConfig) -> Result<Self> {
         info!("Initializing WindowingSystem");
         let connection =
             Rc::new(Connection::connect_to_env().map_err(LayerShikaError::WaylandConnection)?);
@@ -87,12 +87,9 @@ impl WindowingSystem {
         let pointer = Rc::new(seat.get_pointer(&event_queue.handle(), ()));
         let window = Self::initialize_renderer(&surface, &connection.display(), config)
             .map_err(|e| LayerShikaError::EGLContextCreation(e.to_string()))?;
-        let component_definition = config.component_definition.take().ok_or_else(|| {
-            LayerShikaError::WindowConfiguration("Component definition is required".to_string())
-        })?;
 
         let mut builder = WindowStateBuilder::new()
-            .with_component_definition(component_definition)
+            .with_component_definition(config.component_definition.clone())
             .with_surface(Rc::clone(&surface))
             .with_layer_surface(Rc::clone(&layer_surface))
             .with_pointer(Rc::clone(&pointer))
@@ -210,10 +207,10 @@ impl WindowingSystem {
     ) {
         layer_surface.set_anchor(config.anchor);
         layer_surface.set_margin(
-            config.margin.0,
-            config.margin.1,
-            config.margin.2,
-            config.margin.3,
+            config.margin.top,
+            config.margin.right,
+            config.margin.bottom,
+            config.margin.left,
         );
 
         layer_surface.set_exclusive_zone(config.exclusive_zone);
