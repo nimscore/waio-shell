@@ -24,6 +24,13 @@ use wayland_client::{
     },
     Connection, EventQueue, Proxy, QueueHandle,
 };
+use wayland_protocols::wp::fractional_scale::v1::client::{
+    wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
+    wp_fractional_scale_v1::WpFractionalScaleV1,
+};
+use wayland_protocols::wp::viewporter::client::{
+    wp_viewport::WpViewport, wp_viewporter::WpViewporter,
+};
 
 pub mod builder;
 mod config;
@@ -44,14 +51,16 @@ impl WindowingSystem {
             Rc::new(Connection::connect_to_env().map_err(LayerShikaError::WaylandConnection)?);
         let event_queue = connection.new_event_queue();
 
-        let (compositor, output, layer_shell, seat) =
+        let (compositor, output, layer_shell, seat, fractional_scale_manager, viewporter) =
             Self::initialize_globals(&connection, &event_queue.handle())
                 .map_err(|e| LayerShikaError::GlobalInitialization(e.to_string()))?;
 
-        let (surface, layer_surface) = Self::setup_surface(
+        let (surface, layer_surface, fractional_scale, viewport) = Self::setup_surface(
             &compositor,
             &output,
             &layer_shell,
+            fractional_scale_manager.as_ref(),
+            viewporter.as_ref(),
             &event_queue.handle(),
             config,
         );
@@ -63,7 +72,7 @@ impl WindowingSystem {
             LayerShikaError::WindowConfiguration("Component definition is required".to_string())
         })?;
 
-        let state = WindowStateBuilder::new()
+        let mut builder = WindowStateBuilder::new()
             .with_component_definition(component_definition)
             .with_surface(Rc::clone(&surface))
             .with_layer_surface(Rc::clone(&layer_surface))
@@ -71,7 +80,17 @@ impl WindowingSystem {
             .with_scale_factor(config.scale_factor)
             .with_height(config.height)
             .with_exclusive_zone(config.exclusive_zone)
-            .with_window(window)
+            .with_window(window);
+
+        if let Some(fs) = fractional_scale {
+            builder = builder.with_fractional_scale(fs);
+        }
+
+        if let Some(vp) = viewport {
+            builder = builder.with_viewport(vp);
+        }
+
+        let state = builder
             .build()
             .map_err(|e| LayerShikaError::WindowConfiguration(e.to_string()))?;
 
@@ -89,7 +108,17 @@ impl WindowingSystem {
     fn initialize_globals(
         connection: &Connection,
         queue_handle: &QueueHandle<WindowState>,
-    ) -> Result<(WlCompositor, WlOutput, ZwlrLayerShellV1, WlSeat), LayerShikaError> {
+    ) -> Result<
+        (
+            WlCompositor,
+            WlOutput,
+            ZwlrLayerShellV1,
+            WlSeat,
+            Option<WpFractionalScaleManagerV1>,
+            Option<WpViewporter>,
+        ),
+        LayerShikaError,
+    > {
         let global_list = registry_queue_init::<WindowState>(connection)
             .map(|(global_list, _)| global_list)
             .map_err(|e| LayerShikaError::GlobalInitialization(e.to_string()))?;
@@ -97,22 +126,52 @@ impl WindowingSystem {
         let (compositor, output, layer_shell, seat) = bind_globals!(
             &global_list,
             queue_handle,
-            (WlCompositor, compositor, 1..=1),
-            (WlOutput, output, 1..=1),
-            (ZwlrLayerShellV1, layer_shell, 1..=1),
-            (WlSeat, seat, 1..=1)
+            (WlCompositor, compositor, 3..=6),
+            (WlOutput, output, 1..=4),
+            (ZwlrLayerShellV1, layer_shell, 1..=5),
+            (WlSeat, seat, 1..=9)
         )?;
 
-        Ok((compositor, output, layer_shell, seat))
+        let fractional_scale_manager = global_list
+            .bind::<WpFractionalScaleManagerV1, _, _>(queue_handle, 1..=1, ())
+            .ok();
+
+        let viewporter = global_list
+            .bind::<WpViewporter, _, _>(queue_handle, 1..=1, ())
+            .ok();
+
+        if fractional_scale_manager.is_none() {
+            info!("Fractional scale protocol not available, using integer scaling");
+        }
+
+        if viewporter.is_none() {
+            info!("Viewporter protocol not available");
+        }
+
+        Ok((
+            compositor,
+            output,
+            layer_shell,
+            seat,
+            fractional_scale_manager,
+            viewporter,
+        ))
     }
 
     fn setup_surface(
         compositor: &WlCompositor,
         output: &WlOutput,
         layer_shell: &ZwlrLayerShellV1,
+        fractional_scale_manager: Option<&WpFractionalScaleManagerV1>,
+        viewporter: Option<&WpViewporter>,
         queue_handle: &QueueHandle<WindowState>,
         config: &WindowConfig,
-    ) -> (Rc<WlSurface>, Rc<ZwlrLayerSurfaceV1>) {
+    ) -> (
+        Rc<WlSurface>,
+        Rc<ZwlrLayerSurfaceV1>,
+        Option<Rc<WpFractionalScaleV1>>,
+        Option<Rc<WpViewport>>,
+    ) {
         let surface = Rc::new(compositor.create_surface(queue_handle, ()));
         let layer_surface = Rc::new(layer_shell.get_layer_surface(
             &surface,
@@ -123,9 +182,21 @@ impl WindowingSystem {
             (),
         ));
 
+        let fractional_scale = fractional_scale_manager.map(|manager| {
+            info!("Creating fractional scale object for surface");
+            Rc::new(manager.get_fractional_scale(&surface, queue_handle, ()))
+        });
+
+        let viewport = viewporter.map(|vp| {
+            info!("Creating viewport for surface");
+            Rc::new(vp.get_viewport(&surface, queue_handle, ()))
+        });
+
         Self::configure_layer_surface(&layer_surface, &surface, config);
 
-        (surface, layer_surface)
+        surface.set_buffer_scale(1);
+
+        (surface, layer_surface, fractional_scale, viewport)
     }
 
     fn configure_layer_surface(

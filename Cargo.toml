@@ -38,4 +38,4 @@ slint-interpreter = { path = "../slint/internal/interpreter", default-features =
 smithay-client-toolkit = "0.20.0"
 thiserror = "2.0.17"
 wayland-client = "0.31.11"
-wayland-protocols = { version = "0.32.6", features = ["client", "staging"] }
+wayland-protocols = { version = "0.32.9", features = ["client", "staging"] }

@@ -21,10 +21,20 @@ use wayland_client::{
     },
     Connection, Dispatch, Proxy, QueueHandle,
 };
+use wayland_protocols::wp::fractional_scale::v1::client::{
+    wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
+    wp_fractional_scale_v1::{self, WpFractionalScaleV1},
+};
+use wayland_protocols::wp::viewporter::client::{
+    wp_viewport::WpViewport, wp_viewporter::WpViewporter,
+};
 
 use super::WindowState;
 
 impl Dispatch<ZwlrLayerSurfaceV1, ()> for WindowState {
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_sign_loss)]
+    #[allow(clippy::cast_precision_loss)]
     fn event(
         state: &mut Self,
         layer_surface: &ZwlrLayerSurfaceV1,
@@ -39,14 +49,49 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for WindowState {
                 width,
                 height,
             } => {
-                info!("Layer surface configured with size: {}x{}", width, height);
+                info!(
+                    "Layer surface configured with compositor size: {}x{}",
+                    width, height
+                );
                 layer_surface.ack_configure(serial);
-                if width > 0 && height > 0 {
-                    state.update_size(state.output_size().width, state.height());
+
+                let output_width = state.output_size().width;
+                let scale_factor = state.scale_factor();
+
+                let target_width = if width == 0 || (width == 1 && output_width > 1) {
+                    if scale_factor > 1.0 {
+                        (output_width as f32 / scale_factor).round() as u32
+                    } else {
+                        output_width
+                    }
                 } else {
-                    let current_size = state.output_size();
-                    state.update_size(current_size.width, current_size.height);
-                }
+                    width
+                };
+
+                let target_height = if height > 0 {
+                    height
+                } else {
+                    let h = state.height();
+                    if scale_factor > 1.0 {
+                        (h as f32 / scale_factor).round() as u32
+                    } else {
+                        h
+                    }
+                };
+
+                let clamped_width = target_width.min(output_width);
+
+                info!(
+                    "Using dimensions: {}x{} (clamped from {}x{}, output: {}x{})",
+                    clamped_width,
+                    target_height,
+                    target_width,
+                    target_height,
+                    output_width,
+                    state.output_size().height
+                );
+
+                state.update_size(clamped_width, target_height);
             }
             zwlr_layer_surface_v1::Event::Closed => {
                 info!("Layer surface closed");
@@ -153,10 +198,31 @@ impl Dispatch<WlPointer, ()> for WindowState {
     }
 }
 
+impl Dispatch<WpFractionalScaleV1, ()> for WindowState {
+    fn event(
+        state: &mut Self,
+        _proxy: &WpFractionalScaleV1,
+        event: wp_fractional_scale_v1::Event,
+        _data: &(),
+        _conn: &Connection,
+        _qhandle: &QueueHandle<Self>,
+    ) {
+        if let wp_fractional_scale_v1::Event::PreferredScale { scale } = event {
+            #[allow(clippy::cast_precision_loss)]
+            let scale_float = scale as f32 / 120.0;
+            info!("Fractional scale received: {scale_float} ({scale}x)");
+            state.update_scale_factor(scale);
+        }
+    }
+}
+
 impl_empty_dispatch!(
     (WlRegistry, GlobalListContents),
     (WlCompositor, ()),
     (WlSurface, ()),
     (ZwlrLayerShellV1, ()),
-    (WlSeat, ())
+    (WlSeat, ()),
+    (WpFractionalScaleManagerV1, ()),
+    (WpViewporter, ()),
+    (WpViewport, ())
 );

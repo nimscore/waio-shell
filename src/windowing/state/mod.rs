@@ -5,6 +5,8 @@ use slint::{LogicalPosition, PhysicalSize, ComponentHandle};
 use slint_interpreter::ComponentInstance;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use wayland_client::protocol::wl_surface::WlSurface;
+use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
+use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use crate::rendering::femtovg_window::FemtoVGWindow;
 use crate::errors::LayerShikaError;
 
@@ -15,7 +17,10 @@ pub struct WindowState {
     component_instance: ComponentInstance,
     surface: Rc<WlSurface>,
     layer_surface: Rc<ZwlrLayerSurfaceV1>,
+    fractional_scale: Option<Rc<WpFractionalScaleV1>>,
+    viewport: Option<Rc<WpViewport>>,
     size: PhysicalSize,
+    logical_size: PhysicalSize,
     output_size: PhysicalSize,
     window: Rc<FemtoVGWindow>,
     current_pointer_position: LogicalPosition,
@@ -39,7 +44,6 @@ impl WindowState {
             .show()
             .map_err(|e| LayerShikaError::SlintComponentCreation(e.to_string()))?;
 
-        // Request initial redraw to ensure the first frame is rendered
         window.request_redraw();
 
         Ok(Self {
@@ -50,7 +54,10 @@ impl WindowState {
             layer_surface: builder
                 .layer_surface
                 .ok_or_else(|| LayerShikaError::InvalidInput("Layer surface is required".into()))?,
+            fractional_scale: builder.fractional_scale,
+            viewport: builder.viewport,
             size: builder.size.unwrap_or_default(),
+            logical_size: PhysicalSize::default(),
             output_size: builder.output_size.unwrap_or_default(),
             window,
             current_pointer_position: LogicalPosition::default(),
@@ -61,27 +68,92 @@ impl WindowState {
     }
 
     pub fn update_size(&mut self, width: u32, height: u32) {
-        let new_size = PhysicalSize::new(width, height);
-        info!("Updating window size to {}x{}", width, height);
-        self.window.set_size(slint::WindowSize::Physical(new_size));
-        self.window.set_scale_factor(self.scale_factor);
+        if width == 0 || height == 0 {
+            info!(
+                "Skipping update_size with zero dimension: {}x{}",
+                width, height
+            );
+            return;
+        }
 
-        info!("Updating layer surface size to {}x{}", width, height);
+        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss)]
+        #[allow(clippy::cast_precision_loss)]
+        let physical_width = (width as f32 * self.scale_factor).round() as u32;
+        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss)]
+        #[allow(clippy::cast_precision_loss)]
+        let physical_height = (height as f32 * self.scale_factor).round() as u32;
+
+        let new_physical_size = PhysicalSize::new(physical_width, physical_height);
+        let new_logical_size = PhysicalSize::new(width, height);
+
+        info!(
+            "Updating window size: buffer {}x{}, physical {}x{}, scale {}, has_viewport: {}",
+            width,
+            height,
+            physical_width,
+            physical_height,
+            self.scale_factor,
+            self.viewport.is_some()
+        );
+
+        if self.fractional_scale.is_some() && self.viewport.is_some() {
+            self.surface.set_buffer_scale(1);
+            self.window
+                .set_size(slint::WindowSize::Logical(slint::LogicalSize::new(
+                    width as f32,
+                    height as f32,
+                )));
+            self.window.set_scale_factor(self.scale_factor);
+
+            if let Some(viewport) = &self.viewport {
+                viewport.set_destination(width as i32, height as i32);
+            }
+        } else if self.fractional_scale.is_some() {
+            #[allow(clippy::cast_possible_truncation)]
+            let buffer_scale = self.scale_factor.round() as i32;
+            self.surface.set_buffer_scale(buffer_scale);
+
+            self.window
+                .set_size(slint::WindowSize::Logical(slint::LogicalSize::new(
+                    width as f32,
+                    height as f32,
+                )));
+            #[allow(clippy::cast_precision_loss)]
+            self.window.set_scale_factor(buffer_scale as f32);
+        } else {
+            #[allow(clippy::cast_possible_truncation)]
+            let buffer_scale = self.scale_factor.round() as i32;
+            self.surface.set_buffer_scale(buffer_scale);
+
+            self.window
+                .set_size(slint::WindowSize::Physical(new_physical_size));
+            self.window.set_scale_factor(self.scale_factor);
+        }
+
+        info!("Window physical size: {:?}", self.window.size());
+
         self.layer_surface.set_size(width, height);
         self.layer_surface.set_exclusive_zone(self.exclusive_zone);
-
         self.surface.commit();
-        self.size = new_size;
+
+        self.size = new_physical_size;
+        self.logical_size = new_logical_size;
         self.window.request_redraw();
     }
 
     #[allow(clippy::cast_possible_truncation)]
     pub fn set_current_pointer_position(&mut self, physical_x: f64, physical_y: f64) {
-        let scale_factor = self.scale_factor;
-        let logical_position = LogicalPosition::new(
-            physical_x as f32 / scale_factor,
-            physical_y as f32 / scale_factor,
-        );
+        let logical_position = if self.fractional_scale.is_some() {
+            LogicalPosition::new(physical_x as f32, physical_y as f32)
+        } else {
+            let scale_factor = self.scale_factor;
+            LogicalPosition::new(
+                physical_x as f32 / scale_factor,
+                physical_y as f32 / scale_factor,
+            )
+        };
         self.current_pointer_position = logical_position;
     }
 
@@ -119,5 +191,24 @@ impl WindowState {
 
     pub const fn component_instance(&self) -> &ComponentInstance {
         &self.component_instance
+    }
+
+    pub fn update_scale_factor(&mut self, scale_120ths: u32) {
+        #[allow(clippy::cast_precision_loss)]
+        let new_scale_factor = scale_120ths as f32 / 120.0;
+        info!(
+            "Updating scale factor from {} to {} ({}x)",
+            self.scale_factor, new_scale_factor, scale_120ths
+        );
+        self.scale_factor = new_scale_factor;
+
+        let current_logical_size = self.logical_size;
+        if current_logical_size.width > 0 && current_logical_size.height > 0 {
+            self.update_size(current_logical_size.width, current_logical_size.height);
+        }
+    }
+
+    pub const fn scale_factor(&self) -> f32 {
+        self.scale_factor
     }
 }

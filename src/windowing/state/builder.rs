@@ -3,6 +3,8 @@ use slint::PhysicalSize;
 use slint_interpreter::ComponentDefinition;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use wayland_client::protocol::{wl_pointer::WlPointer, wl_surface::WlSurface};
+use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
+use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use crate::{errors::LayerShikaError, rendering::{femtovg_window::FemtoVGWindow, slint_platform::CustomSlintPlatform}};
 
 use super::WindowState;
@@ -11,6 +13,8 @@ pub struct WindowStateBuilder {
     pub component_definition: Option<ComponentDefinition>,
     pub surface: Option<Rc<WlSurface>>,
     pub layer_surface: Option<Rc<ZwlrLayerSurfaceV1>>,
+    pub fractional_scale: Option<Rc<WpFractionalScaleV1>>,
+    pub viewport: Option<Rc<WpViewport>>,
     pub size: Option<PhysicalSize>,
     pub output_size: Option<PhysicalSize>,
     pub pointer: Option<Rc<WlPointer>>,
@@ -86,6 +90,18 @@ impl WindowStateBuilder {
         self
     }
 
+    #[must_use]
+    pub fn with_fractional_scale(mut self, fractional_scale: Rc<WpFractionalScaleV1>) -> Self {
+        self.fractional_scale = Some(fractional_scale);
+        self
+    }
+
+    #[must_use]
+    pub fn with_viewport(mut self, viewport: Rc<WpViewport>) -> Self {
+        self.viewport = Some(viewport);
+        self
+    }
+
     pub fn build(self) -> Result<WindowState, LayerShikaError> {
         let platform = CustomSlintPlatform::new(Rc::clone(
             self.window
@@ -106,6 +122,8 @@ impl Default for WindowStateBuilder {
             component_definition: None,
             surface: None,
             layer_surface: None,
+            fractional_scale: None,
+            viewport: None,
             size: None,
             output_size: None,
             pointer: None,
