@@ -64,7 +64,7 @@ pub struct WindowingSystem {
 }
 
 impl WindowingSystem {
-    fn new(config: &WindowConfig) -> Result<Self> {
+    fn new(config: WindowConfig) -> Result<Self> {
         info!("Initializing WindowingSystem");
         let connection =
             Rc::new(Connection::connect_to_env().map_err(LayerShikaError::WaylandConnection)?);
@@ -81,15 +81,15 @@ impl WindowingSystem {
             fractional_scale_manager.as_ref(),
             viewporter.as_ref(),
             &event_queue.handle(),
-            config,
+            &config,
         );
 
         let pointer = Rc::new(seat.get_pointer(&event_queue.handle(), ()));
-        let window = Self::initialize_renderer(&surface, &connection.display(), config)
+        let window = Self::initialize_renderer(&surface, &connection.display(), &config)
             .map_err(|e| LayerShikaError::EGLContextCreation(e.to_string()))?;
 
         let mut builder = WindowStateBuilder::new()
-            .with_component_definition(config.component_definition.clone())
+            .with_component_definition(config.component_definition)
             .with_surface(Rc::clone(&surface))
             .with_layer_surface(Rc::clone(&layer_surface))
             .with_pointer(Rc::clone(&pointer))

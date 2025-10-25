@@ -6,7 +6,10 @@ use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
 
 use crate::errors::{LayerShikaError, Result};
 
-use super::{config::{Margins, WindowConfig}, WindowingSystem};
+use super::{
+    config::{Margins, WindowConfig},
+    WindowingSystem,
+};
 
 pub struct WindowingSystemBuilder {
     config: Option<WindowConfig>,
@@ -22,9 +25,7 @@ impl WindowingSystemBuilder {
     #[inline]
     #[must_use]
     pub const fn new() -> Self {
-        Self {
-            config: None,
-        }
+        Self { config: None }
     }
 
     #[must_use]
@@ -46,7 +47,12 @@ impl WindowingSystemBuilder {
     #[must_use]
     pub const fn with_margin(mut self, top: i32, right: i32, bottom: i32, left: i32) -> Self {
         if let Some(ref mut config) = self.config {
-            config.margin = Margins { top, right, bottom, left };
+            config.margin = Margins {
+                top,
+                right,
+                bottom,
+                left,
+            };
         }
         self
     }
@@ -102,9 +108,9 @@ impl WindowingSystemBuilder {
 
     #[allow(clippy::missing_errors_doc)]
     pub fn build(self) -> Result<WindowingSystem> {
-        let config = self.config.as_ref().ok_or_else(|| {
-            LayerShikaError::InvalidInput("Slint component not set".into())
-        })?;
+        let config = self
+            .config
+            .ok_or_else(|| LayerShikaError::InvalidInput("Slint component not set".into()))?;
         WindowingSystem::new(config)
     }
 }
