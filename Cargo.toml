@@ -18,6 +18,7 @@ clone_on_ref_ptr = "warn"
 multiple-crate-versions = "allow"
 module_name_repetitions = "allow"
 unwrap_used = "warn"
+absolute_paths = "deny"
 
 [dependencies]
 glutin = { version = "0.32.3", default-features = false, features = [

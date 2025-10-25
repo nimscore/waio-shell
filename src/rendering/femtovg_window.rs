@@ -1,4 +1,5 @@
 use crate::errors::{LayerShikaError, Result};
+use core::ops::Deref;
 use log::info;
 use slint::{
     platform::{femtovg_renderer::FemtoVGRenderer, Renderer, WindowAdapter, WindowEvent},
@@ -83,7 +84,7 @@ impl WindowAdapter for FemtoVGWindow {
     }
 }
 
-impl core::ops::Deref for FemtoVGWindow {
+impl Deref for FemtoVGWindow {
     type Target = Window;
     fn deref(&self) -> &Self::Target {
         &self.window

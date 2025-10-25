@@ -1,6 +1,11 @@
 use crate::errors::{LayerShikaError, Result};
 use glutin::{
-    api::egl::{context::PossiblyCurrentContext, display::Display, surface::Surface},
+    api::egl::{
+        config::Config,
+        context::{NotCurrentContext, PossiblyCurrentContext},
+        display::Display,
+        surface::Surface,
+    },
     config::ConfigTemplateBuilder,
     context::ContextAttributesBuilder,
     display::GetGlDisplay,
@@ -12,9 +17,11 @@ use raw_window_handle::{
 };
 use slint::{platform::femtovg_renderer::OpenGLInterface, PhysicalSize};
 use std::{
+    error::Error,
     ffi::{self, c_void, CStr},
     num::NonZeroU32,
     ptr::NonNull,
+    result::Result as StdResult,
 };
 use wayland_client::backend::ObjectId;
 
@@ -128,7 +135,7 @@ fn create_wayland_display_handle(display_id: &ObjectId) -> Result<RawDisplayHand
 fn select_config(
     glutin_display: &Display,
     config_template: ConfigTemplateBuilder,
-) -> Result<glutin::api::egl::config::Config> {
+) -> Result<Config> {
     let mut configs = unsafe { glutin_display.find_configs(config_template.build()) }
         .map_err(|e| LayerShikaError::EGLContextCreation(format!("Failed to find configs: {e}")))?;
     configs.next().ok_or_else(|| {
@@ -138,9 +145,9 @@ fn select_config(
 
 fn create_context(
     glutin_display: &Display,
-    config: &glutin::api::egl::config::Config,
+    config: &Config,
     context_attributes: ContextAttributesBuilder,
-) -> Result<glutin::api::egl::context::NotCurrentContext> {
+) -> Result<NotCurrentContext> {
     unsafe { glutin_display.create_context(config, &context_attributes.build(None)) }
         .map_err(|e| LayerShikaError::EGLContextCreation(format!("Failed to create context: {e}")))
 }
@@ -155,7 +162,7 @@ fn create_surface_handle(surface_id: &ObjectId) -> Result<RawWindowHandle> {
 
 fn create_surface(
     glutin_display: &Display,
-    config: &glutin::api::egl::config::Config,
+    config: &Config,
     surface_handle: RawWindowHandle,
     size: PhysicalSize,
 ) -> Result<Surface<WindowSurface>> {
@@ -174,12 +181,12 @@ fn create_surface(
 }
 
 unsafe impl OpenGLInterface for EGLContext {
-    fn ensure_current(&self) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    fn ensure_current(&self) -> StdResult<(), Box<dyn Error + Send + Sync>> {
         self.ensure_current()
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
     }
 
-    fn swap_buffers(&self) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    fn swap_buffers(&self) -> StdResult<(), Box<dyn Error + Send + Sync>> {
         self.surface.swap_buffers(&self.context).map_err(|e| {
             LayerShikaError::EGLContextCreation(format!("Failed to swap buffers: {e}")).into()
         })
@@ -189,7 +196,7 @@ unsafe impl OpenGLInterface for EGLContext {
         &self,
         width: NonZeroU32,
         height: NonZeroU32,
-    ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> StdResult<(), Box<dyn Error + Send + Sync>> {
         self.ensure_current()?;
         self.surface.resize(&self.context, width, height);
         Ok(())

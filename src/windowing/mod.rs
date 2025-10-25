@@ -6,10 +6,13 @@ use crate::{
 };
 use config::WindowConfig;
 use log::{debug, error, info};
-use slint::{platform::femtovg_renderer::FemtoVGRenderer, LogicalPosition, PhysicalSize};
+use slint::{
+    platform::{femtovg_renderer::FemtoVGRenderer, update_timers_and_animations},
+    LogicalPosition, PhysicalSize,
+};
 use slint_interpreter::ComponentInstance;
 use smithay_client_toolkit::reexports::{
-    calloop::{self, EventLoop, Interest, LoopHandle, Mode, PostAction},
+    calloop::{generic::Generic, EventLoop, Interest, LoopHandle, Mode, PostAction},
     protocols_wlr::layer_shell::v1::client::{
         zwlr_layer_shell_v1::ZwlrLayerShellV1, zwlr_layer_surface_v1::ZwlrLayerSurfaceV1,
     },
@@ -288,7 +291,7 @@ impl WindowingSystem {
         self.event_loop
             .handle()
             .insert_source(
-                calloop::generic::Generic::new(connection, Interest::READ, Mode::Level),
+                Generic::new(connection, Interest::READ, Mode::Level),
                 move |_, _connection, _shared_data| Ok(PostAction::Continue),
             )
             .map_err(|e| LayerShikaError::EventLoop(e.to_string()))?;
@@ -312,7 +315,7 @@ impl WindowingSystem {
             .dispatch_pending(shared_data)
             .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?;
 
-        slint::platform::update_timers_and_animations();
+        update_timers_and_animations();
 
         shared_data
             .window()

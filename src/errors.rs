@@ -1,6 +1,8 @@
+use std::result::Result as StdResult;
 use thiserror::Error;
+use wayland_client::backend::WaylandError;
 
-pub type Result<T> = std::result::Result<T, LayerShikaError>;
+pub type Result<T> = StdResult<T, LayerShikaError>;
 
 #[derive(Error, Debug)]
 pub enum LayerShikaError {
@@ -41,5 +43,5 @@ pub enum LayerShikaError {
     PlatformSetup(String),
 
     #[error("Failed to flush connection: {0}")]
-    ConnectionFlush(#[from] wayland_client::backend::WaylandError),
+    ConnectionFlush(#[from] WaylandError),
 }
