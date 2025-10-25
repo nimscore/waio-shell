@@ -33,11 +33,32 @@ pub struct WindowingSystem {
 impl WindowingSystem {
     pub(super) fn new(config: WindowConfig) -> Result<Self> {
         info!("Initializing WindowingSystem");
+        let (connection, event_queue) = Self::init_wayland_connection()?;
+        let state = Self::init_state(config, &connection, &event_queue)?;
+        let event_loop =
+            EventLoop::try_new().map_err(|e| LayerShikaError::EventLoop(e.to_string()))?;
+
+        Ok(Self {
+            state,
+            connection,
+            event_queue,
+            event_loop,
+        })
+    }
+
+    fn init_wayland_connection() -> Result<(Rc<Connection>, EventQueue<WindowState>)> {
         let connection =
             Rc::new(Connection::connect_to_env().map_err(LayerShikaError::WaylandConnection)?);
         let event_queue = connection.new_event_queue();
+        Ok((connection, event_queue))
+    }
 
-        let global_ctx = GlobalCtx::initialize(&connection, &event_queue.handle())
+    fn init_state(
+        config: WindowConfig,
+        connection: &Connection,
+        event_queue: &EventQueue<WindowState>,
+    ) -> Result<WindowState> {
+        let global_ctx = GlobalCtx::initialize(connection, &event_queue.handle())
             .map_err(|e| LayerShikaError::GlobalInitialization(e.to_string()))?;
 
         let layer_surface_params = LayerSurfaceParams {
@@ -86,19 +107,9 @@ impl WindowingSystem {
             builder = builder.with_viewport(Rc::clone(vp));
         }
 
-        let state = builder
+        builder
             .build()
-            .map_err(|e| LayerShikaError::WindowConfiguration(e.to_string()))?;
-
-        let event_loop =
-            EventLoop::try_new().map_err(|e| LayerShikaError::EventLoop(e.to_string()))?;
-
-        Ok(Self {
-            state,
-            connection,
-            event_queue,
-            event_loop,
-        })
+            .map_err(|e| LayerShikaError::WindowConfiguration(e.to_string()))
     }
 
     fn initialize_renderer(
