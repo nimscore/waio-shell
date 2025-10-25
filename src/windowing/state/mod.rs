@@ -4,7 +4,7 @@ use log::info;
 use slint::{LogicalPosition, PhysicalSize, ComponentHandle};
 use slint_interpreter::ComponentInstance;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
-use wayland_client::protocol::wl_surface::WlSurface;
+use wayland_client::protocol::{wl_output::WlOutput, wl_pointer::WlPointer, wl_surface::WlSurface};
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use crate::rendering::femtovg_window::FemtoVGWindow;
@@ -19,6 +19,10 @@ pub struct WindowState {
     layer_surface: Rc<ZwlrLayerSurfaceV1>,
     fractional_scale: Option<Rc<WpFractionalScaleV1>>,
     viewport: Option<Rc<WpViewport>>,
+    #[allow(dead_code)]
+    pointer: Rc<WlPointer>,
+    #[allow(dead_code)]
+    output: Rc<WlOutput>,
     size: PhysicalSize,
     logical_size: PhysicalSize,
     output_size: PhysicalSize,
@@ -56,6 +60,12 @@ impl WindowState {
                 .ok_or_else(|| LayerShikaError::InvalidInput("Layer surface is required".into()))?,
             fractional_scale: builder.fractional_scale,
             viewport: builder.viewport,
+            pointer: builder
+                .pointer
+                .ok_or_else(|| LayerShikaError::InvalidInput("Pointer is required".into()))?,
+            output: builder
+                .output
+                .ok_or_else(|| LayerShikaError::InvalidInput("Output is required".into()))?,
             size: builder.size.unwrap_or_default(),
             logical_size: PhysicalSize::default(),
             output_size: builder.output_size.unwrap_or_default(),

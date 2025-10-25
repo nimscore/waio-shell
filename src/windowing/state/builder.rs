@@ -2,7 +2,7 @@ use std::rc::Rc;
 use slint::{platform::set_platform, PhysicalSize};
 use slint_interpreter::ComponentDefinition;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
-use wayland_client::protocol::{wl_pointer::WlPointer, wl_surface::WlSurface};
+use wayland_client::protocol::{wl_output::WlOutput, wl_pointer::WlPointer, wl_surface::WlSurface};
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use crate::{errors::{LayerShikaError, Result}, rendering::{femtovg_window::FemtoVGWindow, slint_platform::CustomSlintPlatform}};
@@ -18,6 +18,7 @@ pub struct WindowStateBuilder {
     pub size: Option<PhysicalSize>,
     pub output_size: Option<PhysicalSize>,
     pub pointer: Option<Rc<WlPointer>>,
+    pub output: Option<Rc<WlOutput>>,
     pub window: Option<Rc<FemtoVGWindow>>,
     pub scale_factor: f32,
     pub height: u32,
@@ -57,6 +58,12 @@ impl WindowStateBuilder {
     #[must_use]
     pub fn with_pointer(mut self, pointer: Rc<WlPointer>) -> Self {
         self.pointer = Some(pointer);
+        self
+    }
+
+    #[must_use]
+    pub fn with_output(mut self, output: Rc<WlOutput>) -> Self {
+        self.output = Some(output);
         self
     }
 
@@ -127,6 +134,7 @@ impl Default for WindowStateBuilder {
             size: None,
             output_size: None,
             pointer: None,
+            output: None,
             window: None,
             scale_factor: 1.0,
             height: 30,

@@ -73,9 +73,10 @@ impl WindowingSystem {
         let global_ctx = Self::initialize_globals(&connection, &event_queue.handle())
             .map_err(|e| LayerShikaError::GlobalInitialization(e.to_string()))?;
 
+        let output_ref = &global_ctx.output;
         let surface_ctx = Self::setup_surface(
             &global_ctx.compositor,
-            &global_ctx.output,
+            output_ref,
             &global_ctx.layer_shell,
             global_ctx.fractional_scale_manager.as_ref(),
             global_ctx.viewporter.as_ref(),
@@ -84,6 +85,7 @@ impl WindowingSystem {
         );
 
         let pointer = Rc::new(global_ctx.seat.get_pointer(&event_queue.handle(), ()));
+        let output = Rc::new(global_ctx.output);
         let window =
             Self::initialize_renderer(&surface_ctx.surface, &connection.display(), &config)
                 .map_err(|e| LayerShikaError::EGLContextCreation(e.to_string()))?;
@@ -93,6 +95,7 @@ impl WindowingSystem {
             .with_surface(Rc::clone(&surface_ctx.surface))
             .with_layer_surface(Rc::clone(&surface_ctx.layer_surface))
             .with_pointer(Rc::clone(&pointer))
+            .with_output(Rc::clone(&output))
             .with_scale_factor(config.scale_factor)
             .with_height(config.height)
             .with_exclusive_zone(config.exclusive_zone)
