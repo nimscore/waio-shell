@@ -37,6 +37,22 @@ mod config;
 mod macros;
 mod state;
 
+type GlobalObjects = (
+    WlCompositor,
+    WlOutput,
+    ZwlrLayerShellV1,
+    WlSeat,
+    Option<WpFractionalScaleManagerV1>,
+    Option<WpViewporter>,
+);
+
+type SurfaceObjects = (
+    Rc<WlSurface>,
+    Rc<ZwlrLayerSurfaceV1>,
+    Option<Rc<WpFractionalScaleV1>>,
+    Option<Rc<WpViewport>>,
+);
+
 pub struct WindowingSystem {
     state: WindowState,
     connection: Rc<Connection>,
@@ -108,17 +124,7 @@ impl WindowingSystem {
     fn initialize_globals(
         connection: &Connection,
         queue_handle: &QueueHandle<WindowState>,
-    ) -> Result<
-        (
-            WlCompositor,
-            WlOutput,
-            ZwlrLayerShellV1,
-            WlSeat,
-            Option<WpFractionalScaleManagerV1>,
-            Option<WpViewporter>,
-        ),
-        LayerShikaError,
-    > {
+    ) -> Result<GlobalObjects, LayerShikaError> {
         let global_list = registry_queue_init::<WindowState>(connection)
             .map(|(global_list, _)| global_list)
             .map_err(|e| LayerShikaError::GlobalInitialization(e.to_string()))?;
@@ -166,12 +172,7 @@ impl WindowingSystem {
         viewporter: Option<&WpViewporter>,
         queue_handle: &QueueHandle<WindowState>,
         config: &WindowConfig,
-    ) -> (
-        Rc<WlSurface>,
-        Rc<ZwlrLayerSurfaceV1>,
-        Option<Rc<WpFractionalScaleV1>>,
-        Option<Rc<WpViewport>>,
-    ) {
+    ) -> SurfaceObjects {
         let surface = Rc::new(compositor.create_surface(queue_handle, ()));
         let layer_surface = Rc::new(layer_shell.get_layer_surface(
             &surface,
@@ -273,7 +274,7 @@ impl WindowingSystem {
         self.event_loop
             .run(None, &mut self.state, move |shared_data| {
                 if let Err(e) = Self::process_events(connection, event_queue, shared_data) {
-                    error!("Error processing events: {}", e);
+                    error!("Error processing events: {e}");
                 }
             })
             .map_err(|e| LayerShikaError::EventLoop(e.to_string()))

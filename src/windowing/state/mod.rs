@@ -67,12 +67,11 @@ impl WindowState {
         })
     }
 
+    #[allow(clippy::cast_precision_loss)]
+    #[allow(clippy::cast_possible_wrap)]
     pub fn update_size(&mut self, width: u32, height: u32) {
         if width == 0 || height == 0 {
-            info!(
-                "Skipping update_size with zero dimension: {}x{}",
-                width, height
-            );
+            info!("Skipping update_size with zero dimension: {width}x{height}");
             return;
         }
 
@@ -181,7 +180,7 @@ impl WindowState {
         self.height
     }
 
-    pub fn set_output_size(&mut self, output_size: PhysicalSize) {
+    pub const fn set_output_size(&mut self, output_size: PhysicalSize) {
         self.output_size = output_size;
     }
 

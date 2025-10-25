@@ -49,10 +49,7 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for WindowState {
                 width,
                 height,
             } => {
-                info!(
-                    "Layer surface configured with compositor size: {}x{}",
-                    width, height
-                );
+                info!("Layer surface configured with compositor size: {width}x{height}");
                 layer_surface.ack_configure(serial);
 
                 let output_width = state.output_size().width;
@@ -112,19 +109,19 @@ impl Dispatch<WlOutput, ()> for WindowState {
     ) {
         match event {
             wl_output::Event::Mode { width, height, .. } => {
-                info!("WlOutput size changed to {}x{}", width, height);
+                info!("WlOutput size changed to {width}x{height}");
                 let width = width.try_into().unwrap_or_default();
                 let height = height.try_into().unwrap_or_default();
                 state.set_output_size(PhysicalSize::new(width, height));
             }
             wl_output::Event::Description { ref description } => {
-                info!("WlOutput description: {:?}", description);
+                info!("WlOutput description: {description:?}");
             }
             wl_output::Event::Scale { ref factor } => {
-                info!("WlOutput factor scale: {:?}", factor);
+                info!("WlOutput factor scale: {factor:?}");
             }
             wl_output::Event::Name { ref name } => {
-                info!("WlOutput name: {:?}", name);
+                info!("WlOutput name: {name:?}");
             }
             wl_output::Event::Geometry {
                 x,
@@ -136,7 +133,7 @@ impl Dispatch<WlOutput, ()> for WindowState {
                 model,
                 transform,
             } => {
-                info!("WlOutput geometry: x={}, y={}, physical_width={}, physical_height={}, subpixel={:?}, make={:?}, model={:?}, transform={:?}", x, y, physical_width, physical_height, subpixel, make, model, transform);
+                info!("WlOutput geometry: x={x}, y={y}, physical_width={physical_width}, physical_height={physical_height}, subpixel={subpixel:?}, make={make:?}, model={model:?}, transform={transform:?}");
             }
             wl_output::Event::Done => {
                 info!("WlOutput done");

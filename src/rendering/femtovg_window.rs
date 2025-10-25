@@ -47,13 +47,13 @@ impl FemtoVGWindow {
     }
 
     pub fn set_scale_factor(&self, scale_factor: f32) {
-        info!("Setting scale factor to {}", scale_factor);
+        info!("Setting scale factor to {scale_factor}");
         self.scale_factor.set(scale_factor);
         self.window()
             .dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor });
     }
 
-    pub fn scale_factor(&self) -> f32 {
+    pub const fn scale_factor(&self) -> f32 {
         self.scale_factor.get()
     }
 }

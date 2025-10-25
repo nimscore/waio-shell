@@ -11,13 +11,13 @@ pub struct CustomSlintPlatform {
 }
 
 impl CustomSlintPlatform {
-    pub fn new(window: Rc<FemtoVGWindow>) -> Self {
+    pub const fn new(window: Rc<FemtoVGWindow>) -> Self {
         Self { window }
     }
 }
 
 impl Platform for CustomSlintPlatform {
-    fn create_window_adapter(&self) -> Result<Rc<(dyn WindowAdapter + 'static)>, PlatformError> {
+    fn create_window_adapter(&self) -> Result<Rc<dyn WindowAdapter + 'static>, PlatformError> {
         Result::Ok(Rc::clone(&self.window) as Rc<dyn WindowAdapter>)
     }
 }
