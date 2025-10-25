@@ -26,8 +26,8 @@ use std::{
 use wayland_client::backend::ObjectId;
 
 pub struct EGLContext {
-    context: PossiblyCurrentContext,
     surface: Surface<WindowSurface>,
+    context: PossiblyCurrentContext,
 }
 
 #[derive(Default)]
@@ -105,7 +105,7 @@ impl EGLContextBuilder {
             .make_current(&surface)
             .map_err(|e| LayerShikaError::EGLContextCreation(format!("Unable to activate EGL context: {e}. This may indicate a problem with the graphics drivers.")))?;
 
-        Ok(EGLContext { context, surface })
+        Ok(EGLContext { surface, context })
     }
 }
 
@@ -121,6 +121,18 @@ impl EGLContext {
             })?;
         }
         Ok(())
+    }
+}
+
+impl Drop for EGLContext {
+    fn drop(&mut self) {
+        if self.context.is_current() {
+            if let Err(e) = self.context.make_not_current_in_place() {
+                log::error!("Failed to make EGL context not current during cleanup: {e}");
+            } else {
+                log::debug!("Successfully made EGL context not current during cleanup");
+            }
+        }
     }
 }
 
