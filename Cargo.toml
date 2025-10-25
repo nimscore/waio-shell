@@ -20,16 +20,22 @@ module_name_repetitions = "allow"
 unwrap_used = "warn"
 
 [dependencies]
-glutin = { version = "0.32.0", default-features = false, features = [
+glutin = { version = "0.32.3", default-features = false, features = [
     "wayland",
 ] }
-log = "0.4.22"
+log = "0.4.28"
 raw-window-handle = "0.6.2"
-slint = { version = "1.7.2", default-features = false, features = [
+# slint = { version = "1.14.1", default-features = false, features = [
+#     "compat-1-2",
+#     "renderer-femtovg",
+# ] }
+slint = { path = "../slint/api/rs/slint", default-features = false, features = [
     "compat-1-2",
     "renderer-femtovg",
+    "backend-winit-wayland",
 ] }
-slint-interpreter = "1.7.2"
-smithay-client-toolkit = "0.19.2"
-thiserror = "1.0.63"
-wayland-client = "0.31.5"
+slint-interpreter = { path = "../slint/internal/interpreter", default-features = false, features = ["compat-1-2"] }
+smithay-client-toolkit = "0.20.0"
+thiserror = "2.0.17"
+wayland-client = "0.31.11"
+wayland-protocols = { version = "0.32.6", features = ["client", "staging"] }

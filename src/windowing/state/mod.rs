@@ -72,6 +72,7 @@ impl WindowState {
 
         self.surface.commit();
         self.size = new_size;
+        self.window.request_redraw();
     }
 
     #[allow(clippy::cast_possible_truncation)]
