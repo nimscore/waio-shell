@@ -1,7 +1,7 @@
 use self::state::WindowState;
 use crate::{
     bind_globals,
-    errors::LayerShikaError,
+    errors::{LayerShikaError, Result},
     rendering::{egl_context::EGLContext, femtovg_window::FemtoVGWindow},
 };
 use config::WindowConfig;
@@ -61,7 +61,7 @@ pub struct WindowingSystem {
 }
 
 impl WindowingSystem {
-    fn new(config: &mut WindowConfig) -> Result<Self, LayerShikaError> {
+    fn new(config: &mut WindowConfig) -> Result<Self> {
         info!("Initializing WindowingSystem");
         let connection =
             Rc::new(Connection::connect_to_env().map_err(LayerShikaError::WaylandConnection)?);
@@ -124,7 +124,7 @@ impl WindowingSystem {
     fn initialize_globals(
         connection: &Connection,
         queue_handle: &QueueHandle<WindowState>,
-    ) -> Result<GlobalObjects, LayerShikaError> {
+    ) -> Result<GlobalObjects> {
         let global_list = registry_queue_init::<WindowState>(connection)
             .map(|(global_list, _)| global_list)
             .map_err(|e| LayerShikaError::GlobalInitialization(e.to_string()))?;
@@ -223,7 +223,7 @@ impl WindowingSystem {
         surface: &Rc<WlSurface>,
         display: &WlDisplay,
         config: &WindowConfig,
-    ) -> Result<Rc<FemtoVGWindow>, LayerShikaError> {
+    ) -> Result<Rc<FemtoVGWindow>> {
         let init_size = PhysicalSize::new(1, 1);
 
         let context = EGLContext::builder()
@@ -248,7 +248,7 @@ impl WindowingSystem {
         self.event_loop.handle()
     }
 
-    pub fn run(&mut self) -> Result<(), LayerShikaError> {
+    pub fn run(&mut self) -> Result<()> {
         info!("Starting WindowingSystem main loop");
 
         while self
@@ -280,7 +280,7 @@ impl WindowingSystem {
             .map_err(|e| LayerShikaError::EventLoop(e.to_string()))
     }
 
-    fn setup_wayland_event_source(&self) -> Result<(), LayerShikaError> {
+    fn setup_wayland_event_source(&self) -> Result<()> {
         debug!("Setting up Wayland event source");
 
         let connection = Rc::clone(&self.connection);
@@ -300,7 +300,7 @@ impl WindowingSystem {
         connection: &Connection,
         event_queue: &mut EventQueue<WindowState>,
         shared_data: &mut WindowState,
-    ) -> Result<(), LayerShikaError> {
+    ) -> Result<()> {
         if let Some(guard) = event_queue.prepare_read() {
             guard
                 .read()

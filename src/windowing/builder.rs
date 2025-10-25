@@ -4,7 +4,7 @@ use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_surface_v1::{Anchor, KeyboardInteractivity},
 };
 
-use crate::errors::LayerShikaError;
+use crate::errors::{LayerShikaError, Result};
 
 use super::{config::WindowConfig, WindowingSystem};
 
@@ -85,7 +85,7 @@ impl WindowingSystemBuilder {
     }
 
     #[allow(clippy::missing_errors_doc)]
-    pub fn build(&mut self) -> Result<WindowingSystem, LayerShikaError> {
+    pub fn build(&mut self) -> Result<WindowingSystem> {
         match self.config.component_definition {
             Some(_) => WindowingSystem::new(&mut self.config),
             None => Err(LayerShikaError::InvalidInput(

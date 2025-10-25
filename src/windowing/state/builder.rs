@@ -5,7 +5,7 @@ use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::z
 use wayland_client::protocol::{wl_pointer::WlPointer, wl_surface::WlSurface};
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
-use crate::{errors::LayerShikaError, rendering::{femtovg_window::FemtoVGWindow, slint_platform::CustomSlintPlatform}};
+use crate::{errors::{LayerShikaError, Result}, rendering::{femtovg_window::FemtoVGWindow, slint_platform::CustomSlintPlatform}};
 
 use super::WindowState;
 
@@ -102,7 +102,7 @@ impl WindowStateBuilder {
         self
     }
 
-    pub fn build(self) -> Result<WindowState, LayerShikaError> {
+    pub fn build(self) -> Result<WindowState> {
         let platform = CustomSlintPlatform::new(Rc::clone(
             self.window
                 .as_ref()

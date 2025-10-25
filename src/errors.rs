@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+pub type Result<T> = std::result::Result<T, LayerShikaError>;
+
 #[derive(Error, Debug)]
 pub enum LayerShikaError {
     #[error("Failed to connect to Wayland: {0}")]

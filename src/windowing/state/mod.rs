@@ -8,7 +8,7 @@ use wayland_client::protocol::wl_surface::WlSurface;
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use crate::rendering::femtovg_window::FemtoVGWindow;
-use crate::errors::LayerShikaError;
+use crate::errors::{LayerShikaError, Result};
 
 pub mod builder;
 pub mod dispatches;
@@ -30,7 +30,7 @@ pub struct WindowState {
 }
 
 impl WindowState {
-    pub fn new(builder: WindowStateBuilder) -> Result<Self, LayerShikaError> {
+    pub fn new(builder: WindowStateBuilder) -> Result<Self> {
         let component_definition = builder.component_definition.ok_or_else(|| {
             LayerShikaError::InvalidInput("Component definition is required".into())
         })?;

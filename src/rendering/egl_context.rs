@@ -1,4 +1,4 @@
-use crate::errors::LayerShikaError;
+use crate::errors::{LayerShikaError, Result};
 use glutin::{
     api::egl::{context::PossiblyCurrentContext, display::Display, surface::Surface},
     config::ConfigTemplateBuilder,
@@ -67,7 +67,7 @@ impl EGLContextBuilder {
         self
     }
 
-    pub fn build(self) -> Result<EGLContext, LayerShikaError> {
+    pub fn build(self) -> Result<EGLContext> {
         let display_id = self
             .display_id
             .ok_or_else(|| LayerShikaError::InvalidInput("Display ID is required".into()))?;
@@ -107,7 +107,7 @@ impl EGLContext {
         EGLContextBuilder::new()
     }
 
-    fn ensure_current(&self) -> Result<(), LayerShikaError> {
+    fn ensure_current(&self) -> Result<()> {
         if !self.context.is_current() {
             self.context.make_current(&self.surface).map_err(|e| {
                 LayerShikaError::EGLContextCreation(format!("Failed to make context current: {e}"))
@@ -117,9 +117,7 @@ impl EGLContext {
     }
 }
 
-fn create_wayland_display_handle(
-    display_id: &ObjectId,
-) -> Result<RawDisplayHandle, LayerShikaError> {
+fn create_wayland_display_handle(display_id: &ObjectId) -> Result<RawDisplayHandle> {
     let display = NonNull::new(display_id.as_ptr().cast::<c_void>()).ok_or_else(|| {
         LayerShikaError::InvalidInput("Failed to create NonNull pointer for display".into())
     })?;
@@ -130,7 +128,7 @@ fn create_wayland_display_handle(
 fn select_config(
     glutin_display: &Display,
     config_template: ConfigTemplateBuilder,
-) -> Result<glutin::api::egl::config::Config, LayerShikaError> {
+) -> Result<glutin::api::egl::config::Config> {
     let mut configs = unsafe { glutin_display.find_configs(config_template.build()) }
         .map_err(|e| LayerShikaError::EGLContextCreation(format!("Failed to find configs: {e}")))?;
     configs.next().ok_or_else(|| {
@@ -142,12 +140,12 @@ fn create_context(
     glutin_display: &Display,
     config: &glutin::api::egl::config::Config,
     context_attributes: ContextAttributesBuilder,
-) -> Result<glutin::api::egl::context::NotCurrentContext, LayerShikaError> {
+) -> Result<glutin::api::egl::context::NotCurrentContext> {
     unsafe { glutin_display.create_context(config, &context_attributes.build(None)) }
         .map_err(|e| LayerShikaError::EGLContextCreation(format!("Failed to create context: {e}")))
 }
 
-fn create_surface_handle(surface_id: &ObjectId) -> Result<RawWindowHandle, LayerShikaError> {
+fn create_surface_handle(surface_id: &ObjectId) -> Result<RawWindowHandle> {
     let surface = NonNull::new(surface_id.as_ptr().cast::<c_void>()).ok_or_else(|| {
         LayerShikaError::InvalidInput("Failed to create NonNull pointer for surface".into())
     })?;
@@ -160,7 +158,7 @@ fn create_surface(
     config: &glutin::api::egl::config::Config,
     surface_handle: RawWindowHandle,
     size: PhysicalSize,
-) -> Result<Surface<WindowSurface>, LayerShikaError> {
+) -> Result<Surface<WindowSurface>> {
     let width = NonZeroU32::new(size.width)
         .ok_or_else(|| LayerShikaError::InvalidInput("Width cannot be zero".into()))?;
 
@@ -176,12 +174,12 @@ fn create_surface(
 }
 
 unsafe impl OpenGLInterface for EGLContext {
-    fn ensure_current(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    fn ensure_current(&self) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.ensure_current()
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
 
-    fn swap_buffers(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    fn swap_buffers(&self) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.surface.swap_buffers(&self.context).map_err(|e| {
             LayerShikaError::EGLContextCreation(format!("Failed to swap buffers: {e}")).into()
         })
@@ -191,7 +189,7 @@ unsafe impl OpenGLInterface for EGLContext {
         &self,
         width: NonZeroU32,
         height: NonZeroU32,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.ensure_current()?;
         self.surface.resize(&self.context, width, height);
         Ok(())

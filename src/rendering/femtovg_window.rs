@@ -1,4 +1,4 @@
-use crate::errors::LayerShikaError;
+use crate::errors::{LayerShikaError, Result};
 use log::info;
 use slint::{
     platform::{femtovg_renderer::FemtoVGRenderer, Renderer, WindowAdapter, WindowEvent},
@@ -34,7 +34,7 @@ impl FemtoVGWindow {
         })
     }
 
-    pub fn render_frame_if_dirty(&self) -> Result<(), LayerShikaError> {
+    pub fn render_frame_if_dirty(&self) -> Result<()> {
         if matches!(
             self.render_state.replace(RenderState::Clean),
             RenderState::Dirty
