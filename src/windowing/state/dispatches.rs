@@ -1,3 +1,4 @@
+use super::WindowState;
 use crate::impl_empty_dispatch;
 use log::info;
 use slint::{
@@ -28,8 +29,12 @@ use wayland_protocols::wp::fractional_scale::v1::client::{
 use wayland_protocols::wp::viewporter::client::{
     wp_viewport::WpViewport, wp_viewporter::WpViewporter,
 };
-
-use super::WindowState;
+use wayland_protocols::xdg::shell::client::{
+    xdg_popup::{self, XdgPopup},
+    xdg_positioner::XdgPositioner,
+    xdg_surface::{self, XdgSurface},
+    xdg_wm_base::{self, XdgWmBase},
+};
 
 impl Dispatch<ZwlrLayerSurfaceV1, ()> for WindowState {
     #[allow(clippy::cast_possible_truncation)]
@@ -154,41 +159,56 @@ impl Dispatch<WlPointer, ()> for WindowState {
     ) {
         match event {
             wl_pointer::Event::Enter {
+                serial,
+                surface,
                 surface_x,
                 surface_y,
-                ..
+            } => {
+                info!("Pointer entered surface {:?}", surface.id());
+                state.set_last_pointer_serial(serial);
+                state.set_current_pointer_position(surface_x, surface_y);
+
+                state.find_window_for_surface(&surface);
+                let position = *state.current_pointer_position();
+
+                state.dispatch_to_active_window(WindowEvent::PointerMoved { position });
             }
-            | wl_pointer::Event::Motion {
+
+            wl_pointer::Event::Motion {
                 surface_x,
                 surface_y,
                 ..
             } => {
                 state.set_current_pointer_position(surface_x, surface_y);
-                let logical_position = state.current_pointer_position();
-                state.window().dispatch_event(WindowEvent::PointerMoved {
-                    position: *logical_position,
-                });
+                let position = *state.current_pointer_position();
+
+                state.dispatch_to_active_window(WindowEvent::PointerMoved { position });
             }
 
             wl_pointer::Event::Leave { .. } => {
-                state.window().dispatch_event(WindowEvent::PointerExited);
+                state.dispatch_to_active_window(WindowEvent::PointerExited);
+                state.active_window = None;
             }
 
             wl_pointer::Event::Button {
+                serial,
                 state: button_state,
                 ..
             } => {
+                state.set_last_pointer_serial(serial);
+                let position = *state.current_pointer_position();
                 let event = match button_state {
                     WEnum::Value(wl_pointer::ButtonState::Pressed) => WindowEvent::PointerPressed {
                         button: PointerEventButton::Left,
-                        position: *state.current_pointer_position(),
+                        position,
                     },
                     _ => WindowEvent::PointerReleased {
                         button: PointerEventButton::Left,
-                        position: *state.current_pointer_position(),
+                        position,
                     },
                 };
-                state.window().dispatch_event(event);
+
+                state.dispatch_to_active_window(event);
             }
             _ => {}
         }
@@ -213,6 +233,72 @@ impl Dispatch<WpFractionalScaleV1, ()> for WindowState {
     }
 }
 
+impl Dispatch<XdgWmBase, ()> for WindowState {
+    fn event(
+        _state: &mut Self,
+        xdg_wm_base: &XdgWmBase,
+        event: xdg_wm_base::Event,
+        _data: &(),
+        _conn: &Connection,
+        _qhandle: &QueueHandle<Self>,
+    ) {
+        if let xdg_wm_base::Event::Ping { serial } = event {
+            info!("XdgWmBase ping received, sending pong with serial {serial}");
+            xdg_wm_base.pong(serial);
+        }
+    }
+}
+
+impl Dispatch<XdgPopup, ()> for WindowState {
+    fn event(
+        _state: &mut Self,
+        _xdg_popup: &XdgPopup,
+        event: xdg_popup::Event,
+        _data: &(),
+        _conn: &Connection,
+        _qhandle: &QueueHandle<Self>,
+    ) {
+        match event {
+            xdg_popup::Event::Configure {
+                x,
+                y,
+                width,
+                height,
+            } => {
+                info!("XdgPopup Configure: position=({x}, {y}), size=({width}x{height})");
+            }
+            xdg_popup::Event::PopupDone => {
+                info!("XdgPopup dismissed");
+            }
+            xdg_popup::Event::Repositioned { token } => {
+                info!("XdgPopup repositioned with token {token}");
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Dispatch<XdgSurface, ()> for WindowState {
+    fn event(
+        state: &mut Self,
+        xdg_surface: &XdgSurface,
+        event: xdg_surface::Event,
+        _data: &(),
+        _conn: &Connection,
+        _qhandle: &QueueHandle<Self>,
+    ) {
+        if let xdg_surface::Event::Configure { serial } = event {
+            info!("XdgSurface Configure received, sending ack with serial {serial}");
+            xdg_surface.ack_configure(serial);
+
+            if let Some(popup_manager) = &state.popup_manager {
+                info!("Marking all popups as dirty after Configure");
+                popup_manager.mark_all_popups_dirty();
+            }
+        }
+    }
+}
+
 impl_empty_dispatch!(
     (WlRegistry, GlobalListContents),
     (WlCompositor, ()),
@@ -221,5 +307,6 @@ impl_empty_dispatch!(
     (WlSeat, ()),
     (WpFractionalScaleManagerV1, ()),
     (WpViewporter, ()),
-    (WpViewport, ())
+    (WpViewport, ()),
+    (XdgPositioner, ())
 );

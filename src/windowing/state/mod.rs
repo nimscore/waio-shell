@@ -2,12 +2,14 @@ use std::rc::Rc;
 use builder::WindowStateBuilder;
 use log::info;
 use slint::{LogicalPosition, PhysicalSize, ComponentHandle};
+use slint::platform::{WindowAdapter, WindowEvent};
 use slint_interpreter::ComponentInstance;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
-use wayland_client::protocol::{wl_output::WlOutput, wl_surface::WlSurface};
+use wayland_client::{protocol::{wl_output::WlOutput, wl_surface::WlSurface}, Proxy};
 use crate::rendering::femtovg_window::FemtoVGWindow;
 use crate::errors::{LayerShikaError, Result};
 use crate::windowing::surface_dimensions::SurfaceDimensions;
+use crate::windowing::popup_manager::PopupManager;
 use crate::windowing::proxies::{
     ManagedWlPointer, ManagedWlSurface, ManagedZwlrLayerSurfaceV1,
     ManagedWpFractionalScaleV1, ManagedWpViewport,
@@ -21,6 +23,12 @@ enum ScalingMode {
     FractionalWithViewport,
     FractionalOnly,
     Integer,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ActiveWindow {
+    Main,
+    Popup(usize),
 }
 
 pub struct WindowState {
@@ -38,9 +46,12 @@ pub struct WindowState {
     output_size: PhysicalSize,
     window: Rc<FemtoVGWindow>,
     current_pointer_position: LogicalPosition,
+    last_pointer_serial: u32,
     scale_factor: f32,
     height: u32,
     exclusive_zone: i32,
+    popup_manager: Option<Rc<PopupManager>>,
+    active_window: Option<ActiveWindow>,
 }
 
 impl WindowState {
@@ -100,9 +111,12 @@ impl WindowState {
             output_size: builder.output_size.unwrap_or_default(),
             window,
             current_pointer_position: LogicalPosition::default(),
+            last_pointer_serial: 0,
             scale_factor: builder.scale_factor,
             height: builder.height,
             exclusive_zone: builder.exclusive_zone,
+            popup_manager: None,
+            active_window: None,
         })
     }
 
@@ -263,5 +277,51 @@ impl WindowState {
 
     pub const fn scale_factor(&self) -> f32 {
         self.scale_factor
+    }
+
+    pub const fn last_pointer_serial(&self) -> u32 {
+        self.last_pointer_serial
+    }
+
+    pub const fn set_last_pointer_serial(&mut self, serial: u32) {
+        self.last_pointer_serial = serial;
+    }
+
+    pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager>) {
+        self.popup_manager = Some(popup_manager);
+    }
+
+    pub fn find_window_for_surface(&mut self, surface: &WlSurface) {
+        let surface_id = surface.id();
+
+        if (**self.surface.inner()).id() == surface_id {
+            self.active_window = Some(ActiveWindow::Main);
+            return;
+        }
+
+        if let Some(popup_manager) = &self.popup_manager {
+            if let Some(popup_index) = popup_manager.find_popup_index_by_surface_id(&surface_id) {
+                self.active_window = Some(ActiveWindow::Popup(popup_index));
+                return;
+            }
+        }
+
+        self.active_window = None;
+    }
+
+    pub fn dispatch_to_active_window(&self, event: WindowEvent) {
+        match self.active_window {
+            Some(ActiveWindow::Main) => {
+                self.window.window().dispatch_event(event);
+            }
+            Some(ActiveWindow::Popup(index)) => {
+                if let Some(popup_manager) = &self.popup_manager {
+                    if let Some(popup_window) = popup_manager.get_popup_window(index) {
+                        popup_window.dispatch_event(event);
+                    }
+                }
+            }
+            None => {}
+        }
     }
 }

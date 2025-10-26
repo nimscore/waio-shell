@@ -1,17 +1,20 @@
 use super::{
     config::{LayerSurfaceParams, WindowConfig},
     globals::GlobalCtx,
+    popup_manager::{PopupContext, PopupManager},
     state::{builder::WindowStateBuilder, WindowState},
     surface::{SurfaceCtx, SurfaceSetupParams},
 };
 use crate::{
     errors::{LayerShikaError, Result},
-    rendering::{egl_context::EGLContext, femtovg_window::FemtoVGWindow},
+    rendering::{
+        egl_context::EGLContext, femtovg_window::FemtoVGWindow, slint_platform::CustomSlintPlatform,
+    },
 };
 use log::{error, info};
 use slint::{
-    platform::{femtovg_renderer::FemtoVGRenderer, update_timers_and_animations},
-    LogicalPosition, PhysicalSize,
+    platform::{femtovg_renderer::FemtoVGRenderer, update_timers_and_animations, WindowAdapter},
+    LogicalPosition, PhysicalSize, PlatformError, WindowPosition,
 };
 use slint_interpreter::ComponentInstance;
 use smithay_client_toolkit::reexports::calloop::{
@@ -28,21 +31,43 @@ pub struct WindowingSystem {
     connection: Rc<Connection>,
     event_queue: EventQueue<WindowState>,
     event_loop: EventLoop<'static, WindowState>,
+    popup_manager: Rc<PopupManager>,
 }
 
 impl WindowingSystem {
     pub(super) fn new(config: WindowConfig) -> Result<Self> {
         info!("Initializing WindowingSystem");
         let (connection, event_queue) = Self::init_wayland_connection()?;
-        let state = Self::init_state(config, &connection, &event_queue)?;
+        let (state, global_ctx, platform) = Self::init_state(config, &connection, &event_queue)?;
         let event_loop =
             EventLoop::try_new().map_err(|e| LayerShikaError::EventLoop(e.to_string()))?;
+
+        let popup_context = PopupContext::new(
+            global_ctx.compositor,
+            global_ctx.xdg_wm_base,
+            global_ctx.seat,
+            global_ctx.fractional_scale_manager,
+            global_ctx.viewporter,
+            connection.display(),
+            Rc::clone(&connection),
+        );
+
+        let popup_manager = Rc::new(PopupManager::new(popup_context));
+
+        Self::setup_popup_creator(&popup_manager, &platform, &state, &event_queue);
 
         Ok(Self {
             state,
             connection,
             event_queue,
             event_loop,
+            popup_manager,
+        })
+        .map(|mut system| {
+            system
+                .state
+                .set_popup_manager(Rc::clone(&system.popup_manager));
+            system
         })
     }
 
@@ -57,7 +82,7 @@ impl WindowingSystem {
         config: WindowConfig,
         connection: &Connection,
         event_queue: &EventQueue<WindowState>,
-    ) -> Result<WindowState> {
+    ) -> Result<(WindowState, GlobalCtx, Rc<CustomSlintPlatform>)> {
         let global_ctx = GlobalCtx::initialize(connection, &event_queue.handle())
             .map_err(|e| LayerShikaError::GlobalInitialization(e.to_string()))?;
 
@@ -83,7 +108,7 @@ impl WindowingSystem {
         let surface_ctx = SurfaceCtx::setup(&setup_params, &layer_surface_params);
 
         let pointer = Rc::new(global_ctx.seat.get_pointer(&event_queue.handle(), ()));
-        let output = Rc::new(global_ctx.output);
+        let output = Rc::new(global_ctx.output.clone());
         let window =
             Self::initialize_renderer(&surface_ctx.surface, &connection.display(), &config)
                 .map_err(|e| LayerShikaError::EGLContextCreation(e.to_string()))?;
@@ -108,9 +133,47 @@ impl WindowingSystem {
             builder = builder.with_viewport(Rc::clone(vp));
         }
 
-        builder
+        let (state, platform) = builder
             .build()
-            .map_err(|e| LayerShikaError::WindowConfiguration(e.to_string()))
+            .map_err(|e| LayerShikaError::WindowConfiguration(e.to_string()))?;
+
+        Ok((state, global_ctx, platform))
+    }
+
+    fn setup_popup_creator(
+        popup_manager: &Rc<PopupManager>,
+        platform: &Rc<CustomSlintPlatform>,
+        state: &WindowState,
+        event_queue: &EventQueue<WindowState>,
+    ) {
+        if !popup_manager.has_xdg_shell() {
+            info!("xdg-shell not available, popups will not be supported");
+            return;
+        }
+
+        info!("Setting up popup creator with xdg-shell support");
+
+        let popup_manager_clone = Rc::clone(popup_manager);
+        let layer_surface = state.layer_surface();
+        let queue_handle = event_queue.handle();
+        let scale_factor = state.scale_factor();
+        let last_serial = state.last_pointer_serial();
+
+        platform.set_popup_creator(move || {
+            info!("Popup creator called! Creating popup window...");
+
+            let result = popup_manager_clone
+                .create_popup(&queue_handle, &layer_surface, last_serial, scale_factor)
+                .map(|w| w as Rc<dyn WindowAdapter>)
+                .map_err(|e| PlatformError::Other(format!("Failed to create popup: {e}")));
+
+            match &result {
+                Ok(_) => info!("Popup created successfully"),
+                Err(e) => info!("Popup creation failed: {e:?}"),
+            }
+
+            result
+        });
     }
 
     fn initialize_renderer(
@@ -133,7 +196,7 @@ impl WindowingSystem {
         let femtovg_window = FemtoVGWindow::new(renderer);
         femtovg_window.set_size(slint::WindowSize::Physical(init_size));
         femtovg_window.set_scale_factor(config.scale_factor);
-        femtovg_window.set_position(LogicalPosition::new(0., 0.));
+        femtovg_window.set_position(WindowPosition::Logical(LogicalPosition::new(0., 0.)));
 
         Ok(femtovg_window)
     }
@@ -145,10 +208,6 @@ impl WindowingSystem {
     pub fn run(&mut self) -> Result<()> {
         info!("Starting WindowingSystem main loop");
 
-        // Process all initial configuration events by repeatedly dispatching until queue is empty.
-        // After each batch, flush and render to allow compositor to respond with additional
-        // configure events (e.g., after fractional scale is applied).
-        // This ensures proper initialization.
         info!("Processing initial Wayland configuration events");
         while self
             .event_queue
@@ -156,12 +215,10 @@ impl WindowingSystem {
             .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?
             > 0
         {
-            // Flush requests to compositor after processing each event batch
             self.connection
                 .flush()
                 .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?;
 
-            // Render if window was marked dirty by the configure events
             update_timers_and_animations();
             self.state
                 .window()
@@ -169,17 +226,17 @@ impl WindowingSystem {
                 .map_err(|e| LayerShikaError::Rendering(e.to_string()))?;
         }
 
-        // Setup Wayland file descriptor as event source for ongoing events
         self.setup_wayland_event_source()?;
 
         let event_queue = &mut self.event_queue;
         let connection = &self.connection;
+        let popup_manager = Rc::clone(&self.popup_manager);
 
-        // Enter the main event loop with consistent event processing:
-        // read -> dispatch -> animate -> render -> flush
         self.event_loop
             .run(None, &mut self.state, move |shared_data| {
-                if let Err(e) = Self::process_events(connection, event_queue, shared_data) {
+                if let Err(e) =
+                    Self::process_events(connection, event_queue, shared_data, &popup_manager)
+                {
                     error!("Error processing events: {e}");
                 }
             })
@@ -204,29 +261,29 @@ impl WindowingSystem {
         connection: &Connection,
         event_queue: &mut EventQueue<WindowState>,
         shared_data: &mut WindowState,
+        popup_manager: &PopupManager,
     ) -> Result<()> {
-        // 1. READ: Read pending events from Wayland socket if available
         if let Some(guard) = event_queue.prepare_read() {
             guard
                 .read()
                 .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?;
         }
 
-        // 2. DISPATCH: Process all queued Wayland events
         event_queue
             .dispatch_pending(shared_data)
             .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?;
 
-        // 3. ANIMATE: Update Slint timers and animations
         update_timers_and_animations();
 
-        // 4. RENDER: Render frame if window was marked dirty
         shared_data
             .window()
             .render_frame_if_dirty()
             .map_err(|e| LayerShikaError::Rendering(e.to_string()))?;
 
-        // 5. FLUSH: Send buffered Wayland requests to compositor
+        popup_manager
+            .render_popups()
+            .map_err(|e| LayerShikaError::Rendering(e.to_string()))?;
+
         connection
             .flush()
             .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?;

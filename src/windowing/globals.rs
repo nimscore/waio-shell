@@ -8,6 +8,7 @@ use wayland_client::{
 };
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1;
 use wayland_protocols::wp::viewporter::client::wp_viewporter::WpViewporter;
+use wayland_protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
 
 use super::state::WindowState;
 
@@ -16,6 +17,8 @@ pub struct GlobalCtx {
     pub output: WlOutput,
     pub layer_shell: ZwlrLayerShellV1,
     pub seat: WlSeat,
+    #[allow(dead_code)]
+    pub xdg_wm_base: Option<XdgWmBase>,
     pub fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
     pub viewporter: Option<WpViewporter>,
 }
@@ -38,6 +41,10 @@ impl GlobalCtx {
             (WlSeat, seat, 1..=9)
         )?;
 
+        let xdg_wm_base = global_list
+            .bind::<XdgWmBase, _, _>(queue_handle, 1..=6, ())
+            .ok();
+
         let fractional_scale_manager = global_list
             .bind::<WpFractionalScaleManagerV1, _, _>(queue_handle, 1..=1, ())
             .ok();
@@ -45,6 +52,10 @@ impl GlobalCtx {
         let viewporter = global_list
             .bind::<WpViewporter, _, _>(queue_handle, 1..=1, ())
             .ok();
+
+        if xdg_wm_base.is_none() {
+            info!("xdg-shell protocol not available, popup support disabled");
+        }
 
         if fractional_scale_manager.is_none() {
             info!("Fractional scale protocol not available, using integer scaling");
@@ -59,6 +70,7 @@ impl GlobalCtx {
             output,
             layer_shell,
             seat,
+            xdg_wm_base,
             fractional_scale_manager,
             viewporter,
         })

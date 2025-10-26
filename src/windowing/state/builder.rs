@@ -1,5 +1,8 @@
 use std::rc::Rc;
-use slint::{platform::set_platform, PhysicalSize};
+use slint::{
+    platform::{set_platform, Platform, WindowAdapter},
+    PhysicalSize, PlatformError,
+};
 use slint_interpreter::ComponentDefinition;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use wayland_client::{protocol::{wl_output::WlOutput, wl_pointer::WlPointer, wl_surface::WlSurface}, Connection};
@@ -8,6 +11,15 @@ use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use crate::{errors::{LayerShikaError, Result}, rendering::{femtovg_window::FemtoVGWindow, slint_platform::CustomSlintPlatform}};
 
 use super::WindowState;
+
+struct PlatformWrapper(Rc<CustomSlintPlatform>);
+
+impl Platform for PlatformWrapper {
+    #[allow(clippy::absolute_paths)]
+    fn create_window_adapter(&self) -> std::result::Result<Rc<dyn WindowAdapter>, PlatformError> {
+        self.0.create_window_adapter()
+    }
+}
 
 pub struct WindowStateBuilder {
     pub component_definition: Option<ComponentDefinition>,
@@ -116,17 +128,17 @@ impl WindowStateBuilder {
         self
     }
 
-    pub fn build(self) -> Result<WindowState> {
-        let platform = CustomSlintPlatform::new(
-            self.window
-                .as_ref()
-                .ok_or_else(|| LayerShikaError::InvalidInput("Window is required".into()))?,
-        );
-        set_platform(Box::new(platform)).map_err(|e| {
+    pub fn build(self) -> Result<(WindowState, Rc<CustomSlintPlatform>)> {
+        let platform =
+            Rc::new(CustomSlintPlatform::new(self.window.as_ref().ok_or_else(
+                || LayerShikaError::InvalidInput("Window is required".into()),
+            )?));
+        set_platform(Box::new(PlatformWrapper(Rc::clone(&platform)))).map_err(|e| {
             LayerShikaError::PlatformSetup(format!("Failed to set platform: {e:?}"))
         })?;
 
-        WindowState::new(self)
+        let state = WindowState::new(self)?;
+        Ok((state, platform))
     }
 }
 
