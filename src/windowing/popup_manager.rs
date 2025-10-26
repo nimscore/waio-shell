@@ -58,6 +58,7 @@ pub struct PopupManager {
     context: PopupContext,
     popups: RefCell<Vec<ActivePopup>>,
     current_scale_factor: RefCell<f32>,
+    current_output_size: RefCell<PhysicalSize>,
 }
 
 impl PopupManager {
@@ -66,11 +67,16 @@ impl PopupManager {
             context,
             popups: RefCell::new(Vec::new()),
             current_scale_factor: RefCell::new(initial_scale_factor),
+            current_output_size: RefCell::new(PhysicalSize::new(0, 0)),
         }
     }
 
     pub fn update_scale_factor(&self, scale_factor: f32) {
         *self.current_scale_factor.borrow_mut() = scale_factor;
+    }
+
+    pub fn update_output_size(&self, output_size: PhysicalSize) {
+        *self.current_output_size.borrow_mut() = output_size;
     }
 
     pub fn create_popup(
@@ -84,9 +90,14 @@ impl PopupManager {
         })?;
 
         let scale_factor = *self.current_scale_factor.borrow();
-        info!("Creating popup window with scale factor {scale_factor}");
+        let output_size = *self.current_output_size.borrow();
+        info!("Creating popup window with scale factor {scale_factor} and output size {output_size:?}");
 
-        let logical_size = slint::LogicalSize::new(360.0, 524.0);
+        #[allow(clippy::cast_precision_loss)]
+        let logical_size = slint::LogicalSize::new(
+            output_size.width as f32 / scale_factor,
+            output_size.height as f32 / scale_factor,
+        );
         #[allow(clippy::cast_possible_truncation)]
         #[allow(clippy::cast_sign_loss)]
         let popup_size = PhysicalSize::new(

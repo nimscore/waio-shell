@@ -249,8 +249,11 @@ impl WindowState {
         self.height
     }
 
-    pub const fn set_output_size(&mut self, output_size: PhysicalSize) {
+    pub fn set_output_size(&mut self, output_size: PhysicalSize) {
         self.output_size = output_size;
+        if let Some(popup_manager) = &self.popup_manager {
+            popup_manager.update_output_size(output_size);
+        }
     }
 
     pub const fn output_size(&self) -> &PhysicalSize {
