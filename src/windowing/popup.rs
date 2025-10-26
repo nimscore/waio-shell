@@ -72,6 +72,23 @@ impl PopupSurface {
             Rc::new(vp.get_viewport(&surface, params.queue_handle, ()))
         });
 
+        #[allow(clippy::cast_possible_wrap)]
+        #[allow(clippy::cast_precision_loss)]
+        #[allow(clippy::cast_possible_truncation)]
+        if let Some(ref vp) = viewport {
+            let logical_width = (params.size.width as f32 / params.scale_factor) as i32;
+            let logical_height = (params.size.height as f32 / params.scale_factor) as i32;
+            info!(
+                "Setting viewport destination to logical size: {}x{} (physical: {}x{}, scale: {})",
+                logical_width,
+                logical_height,
+                params.size.width,
+                params.size.height,
+                params.scale_factor
+            );
+            vp.set_destination(logical_width, logical_height);
+        }
+
         surface.set_buffer_scale(1);
         surface.commit();
 

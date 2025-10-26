@@ -218,7 +218,7 @@ impl Dispatch<WlPointer, ()> for WindowState {
 impl Dispatch<WpFractionalScaleV1, ()> for WindowState {
     fn event(
         state: &mut Self,
-        _proxy: &WpFractionalScaleV1,
+        proxy: &WpFractionalScaleV1,
         event: wp_fractional_scale_v1::Event,
         _data: &(),
         _conn: &Connection,
@@ -228,7 +228,7 @@ impl Dispatch<WpFractionalScaleV1, ()> for WindowState {
             #[allow(clippy::cast_precision_loss)]
             let scale_float = scale as f32 / 120.0;
             info!("Fractional scale received: {scale_float} ({scale}x)");
-            state.update_scale_factor(scale);
+            state.update_scale_for_fractional_scale_object(proxy, scale);
         }
     }
 }

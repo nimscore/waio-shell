@@ -57,14 +57,20 @@ struct ActivePopup {
 pub struct PopupManager {
     context: PopupContext,
     popups: RefCell<Vec<ActivePopup>>,
+    current_scale_factor: RefCell<f32>,
 }
 
 impl PopupManager {
-    pub const fn new(context: PopupContext) -> Self {
+    pub const fn new(context: PopupContext, initial_scale_factor: f32) -> Self {
         Self {
             context,
             popups: RefCell::new(Vec::new()),
+            current_scale_factor: RefCell::new(initial_scale_factor),
         }
+    }
+
+    pub fn update_scale_factor(&self, scale_factor: f32) {
+        *self.current_scale_factor.borrow_mut() = scale_factor;
     }
 
     pub fn create_popup(
@@ -72,15 +78,23 @@ impl PopupManager {
         queue_handle: &QueueHandle<WindowState>,
         parent_layer_surface: &ZwlrLayerSurfaceV1,
         last_pointer_serial: u32,
-        scale_factor: f32,
     ) -> Result<Rc<PopupWindow>> {
         let xdg_wm_base = self.context.xdg_wm_base.as_ref().ok_or_else(|| {
             LayerShikaError::WaylandProtocol("xdg-shell not available for popups".into())
         })?;
 
-        info!("Creating popup window");
+        let scale_factor = *self.current_scale_factor.borrow();
+        info!("Creating popup window with scale factor {scale_factor}");
 
-        let popup_size = PhysicalSize::new(360, 524);
+        let logical_size = slint::LogicalSize::new(360.0, 524.0);
+        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss)]
+        let popup_size = PhysicalSize::new(
+            (logical_size.width * scale_factor) as u32,
+            (logical_size.height * scale_factor) as u32,
+        );
+
+        info!("Popup logical size: {logical_size:?}, physical size: {popup_size:?}");
 
         let popup_surface = PopupSurface::create(&super::popup::PopupSurfaceParams {
             compositor: &self.context.compositor,
@@ -107,8 +121,8 @@ impl PopupManager {
             .map_err(|e| LayerShikaError::FemtoVGRendererCreation(e.to_string()))?;
 
         let popup_window = PopupWindow::new(renderer);
-        popup_window.set_size(WindowSize::Physical(popup_size));
         popup_window.set_scale_factor(scale_factor);
+        popup_window.set_size(WindowSize::Logical(logical_size));
 
         info!("Popup window created successfully");
 
@@ -146,6 +160,20 @@ impl PopupManager {
         for (index, popup) in self.popups.borrow().iter().enumerate() {
             if popup.surface.surface.id() == *surface_id {
                 return Some(index);
+            }
+        }
+        None
+    }
+
+    pub fn find_popup_index_by_fractional_scale_id(
+        &self,
+        fractional_scale_id: &ObjectId,
+    ) -> Option<usize> {
+        for (index, popup) in self.popups.borrow().iter().enumerate() {
+            if let Some(ref fs) = popup.surface.fractional_scale {
+                if fs.id() == *fractional_scale_id {
+                    return Some(index);
+                }
             }
         }
         None

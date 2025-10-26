@@ -52,7 +52,7 @@ impl WindowingSystem {
             Rc::clone(&connection),
         );
 
-        let popup_manager = Rc::new(PopupManager::new(popup_context));
+        let popup_manager = Rc::new(PopupManager::new(popup_context, state.scale_factor()));
 
         Self::setup_popup_creator(&popup_manager, &platform, &state, &event_queue);
 
@@ -156,14 +156,12 @@ impl WindowingSystem {
         let popup_manager_clone = Rc::clone(popup_manager);
         let layer_surface = state.layer_surface();
         let queue_handle = event_queue.handle();
-        let scale_factor = state.scale_factor();
-        let last_serial = state.last_pointer_serial();
 
         platform.set_popup_creator(move || {
             info!("Popup creator called! Creating popup window...");
 
             let result = popup_manager_clone
-                .create_popup(&queue_handle, &layer_surface, last_serial, scale_factor)
+                .create_popup(&queue_handle, &layer_surface, 0)
                 .map(|w| w as Rc<dyn WindowAdapter>)
                 .map_err(|e| PlatformError::Other(format!("Failed to create popup: {e}")));
 

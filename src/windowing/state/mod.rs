@@ -6,6 +6,7 @@ use slint::platform::{WindowAdapter, WindowEvent};
 use slint_interpreter::ComponentInstance;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use wayland_client::{protocol::{wl_output::WlOutput, wl_surface::WlSurface}, Proxy};
+use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 use crate::rendering::femtovg_window::FemtoVGWindow;
 use crate::errors::{LayerShikaError, Result};
 use crate::windowing::surface_dimensions::SurfaceDimensions;
@@ -269,6 +270,10 @@ impl WindowState {
         );
         self.scale_factor = new_scale_factor;
 
+        if let Some(popup_manager) = &self.popup_manager {
+            popup_manager.update_scale_factor(new_scale_factor);
+        }
+
         let current_logical_size = self.logical_size;
         if current_logical_size.width > 0 && current_logical_size.height > 0 {
             self.update_size(current_logical_size.width, current_logical_size.height);
@@ -322,6 +327,35 @@ impl WindowState {
                 }
             }
             None => {}
+        }
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    pub fn update_scale_for_fractional_scale_object(
+        &mut self,
+        fractional_scale_proxy: &WpFractionalScaleV1,
+        scale_120ths: u32,
+    ) {
+        let fractional_scale_id = fractional_scale_proxy.id();
+
+        if let Some(ref main_fractional_scale) = self.fractional_scale {
+            if (**main_fractional_scale.inner()).id() == fractional_scale_id {
+                self.update_scale_factor(scale_120ths);
+                return;
+            }
+        }
+
+        if let Some(popup_manager) = &self.popup_manager {
+            if let Some(popup_index) =
+                popup_manager.find_popup_index_by_fractional_scale_id(&fractional_scale_id)
+            {
+                if let Some(popup_window) = popup_manager.get_popup_window(popup_index) {
+                    let new_scale_factor = scale_120ths as f32 / 120.0;
+                    info!("Updating popup scale factor to {new_scale_factor} ({scale_120ths}x)");
+                    popup_window.set_scale_factor(new_scale_factor);
+                    popup_window.request_redraw();
+                }
+            }
         }
     }
 }
