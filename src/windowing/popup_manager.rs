@@ -185,4 +185,21 @@ impl PopupManager {
             .get(index)
             .map(|popup| Rc::clone(&popup.window))
     }
+
+    pub fn destroy_popup(&self, index: usize) {
+        let mut popups = self.popups.borrow_mut();
+        if index < popups.len() {
+            info!("Destroying popup at index {index}");
+            popups.remove(index);
+        }
+    }
+
+    pub fn find_popup_index_by_xdg_popup_id(&self, xdg_popup_id: &ObjectId) -> Option<usize> {
+        for (index, popup) in self.popups.borrow().iter().enumerate() {
+            if popup.surface.xdg_popup.id() == *xdg_popup_id {
+                return Some(index);
+            }
+        }
+        None
+    }
 }

@@ -358,4 +358,14 @@ impl WindowState {
             }
         }
     }
+
+    pub(super) const fn clear_active_window(&mut self) {
+        self.active_window = None;
+    }
+
+    pub(super) fn clear_active_window_if_popup(&mut self, popup_index: usize) {
+        if self.active_window == Some(ActiveWindow::Popup(popup_index)) {
+            self.active_window = None;
+        }
+    }
 }

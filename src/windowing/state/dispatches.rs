@@ -187,7 +187,7 @@ impl Dispatch<WlPointer, ()> for WindowState {
 
             wl_pointer::Event::Leave { .. } => {
                 state.dispatch_to_active_window(WindowEvent::PointerExited);
-                state.active_window = None;
+                state.clear_active_window();
             }
 
             wl_pointer::Event::Button {
@@ -251,8 +251,8 @@ impl Dispatch<XdgWmBase, ()> for WindowState {
 
 impl Dispatch<XdgPopup, ()> for WindowState {
     fn event(
-        _state: &mut Self,
-        _xdg_popup: &XdgPopup,
+        state: &mut Self,
+        xdg_popup: &XdgPopup,
         event: xdg_popup::Event,
         _data: &(),
         _conn: &Connection,
@@ -268,7 +268,20 @@ impl Dispatch<XdgPopup, ()> for WindowState {
                 info!("XdgPopup Configure: position=({x}, {y}), size=({width}x{height})");
             }
             xdg_popup::Event::PopupDone => {
-                info!("XdgPopup dismissed");
+                info!("XdgPopup dismissed by compositor");
+                let popup_id = xdg_popup.id();
+                let popup_index = state
+                    .popup_manager
+                    .as_ref()
+                    .and_then(|pm| pm.find_popup_index_by_xdg_popup_id(&popup_id));
+
+                if let Some(index) = popup_index {
+                    info!("Destroying popup at index {index}");
+                    state.clear_active_window_if_popup(index);
+                    if let Some(popup_manager) = &state.popup_manager {
+                        popup_manager.destroy_popup(index);
+                    }
+                }
             }
             xdg_popup::Event::Repositioned { token } => {
                 info!("XdgPopup repositioned with token {token}");
