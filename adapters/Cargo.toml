@@ -1,0 +1,29 @@
+[package]
+name = "layer-shika-adapters"
+version = "0.1.0"
+edition = "2021"
+description = "Adapters layer for layer-shika"
+license = "AGPL-3.0-or-later"
+
+[lints]
+workspace = true
+
+[dependencies]
+glutin = { version = "0.32.3", default-features = false, features = [
+    "wayland",
+] }
+layer-shika-domain = { version = "0.1.0", path = "../domain" }
+log = "0.4.28"
+raw-window-handle = "0.6.2"
+slint = { version = "1.14.1", default-features = false, features = [
+    "compat-1-2",
+    "renderer-femtovg",
+    "backend-winit-wayland",
+] }
+slint-interpreter = { version = "1.14.1", default-features = false, features = [
+    "compat-1-2",
+] }
+smithay-client-toolkit = "0.20.0"
+thiserror = "2.0.17"
+wayland-client = "0.31.11"
+wayland-protocols = { version = "0.32.9", features = ["client", "staging"] }
