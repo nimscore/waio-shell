@@ -1,18 +1,19 @@
 [package]
 name = "layer-shika"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "A layer shell library crate with Slint UI"
-license = "AGPL-3.0-or-later"
-repository = "https://codeberg.org/waydeer/layer-shika"
 readme = "../README.md"
-keywords = ["layer-shell", "wayland", "slint", "femtovg", "smithay"]
-categories = ["gui"]
 
 [lints]
 workspace = true
 
 [dependencies]
-layer-shika-adapters = { path = "../adapters" }
-layer-shika-domain = { path = "../domain" }
-thiserror = "2.0"
+layer-shika-adapters.workspace = true
+layer-shika-domain.workspace = true
+thiserror.workspace = true
