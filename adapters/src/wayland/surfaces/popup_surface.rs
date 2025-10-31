@@ -108,23 +108,23 @@ impl PopupSurface {
             .xdg_wm_base
             .create_positioner(params.queue_handle, ());
 
-        let x = (params.position.x * params.scale_factor) as i32;
-        let y = (params.position.y * params.scale_factor) as i32;
-        let width = params.size.width as i32;
-        let height = params.size.height as i32;
+        let x = params.position.x as i32;
+        let y = params.position.y as i32;
+
+        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss)]
+        #[allow(clippy::cast_precision_loss)]
+        let logical_width = (params.size.width as f32 / params.scale_factor) as i32;
+        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss)]
+        #[allow(clippy::cast_precision_loss)]
+        let logical_height = (params.size.height as f32 / params.scale_factor) as i32;
 
         positioner.set_anchor_rect(x, y, 1, 1);
-        positioner.set_size(width, height);
+        positioner.set_size(logical_width, logical_height);
         positioner.set_anchor(Anchor::TopLeft);
         positioner.set_gravity(Gravity::BottomRight);
-        positioner.set_constraint_adjustment(
-            ConstraintAdjustment::SlideX
-                | ConstraintAdjustment::SlideY
-                | ConstraintAdjustment::FlipX
-                | ConstraintAdjustment::FlipY
-                | ConstraintAdjustment::ResizeX
-                | ConstraintAdjustment::ResizeY,
-        );
+        positioner.set_constraint_adjustment(ConstraintAdjustment::None);
 
         positioner
     }

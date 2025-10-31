@@ -1,6 +1,9 @@
 use crate::errors::{LayerShikaError, Result};
 use crate::rendering::egl::context::EGLContext;
 use crate::rendering::femtovg::popup_window::PopupWindow;
+use crate::rendering::slint_integration::platform::{
+    clear_popup_position_override, get_popup_position_override,
+};
 use log::info;
 use slab::Slab;
 use slint::{platform::femtovg_renderer::FemtoVGRenderer, PhysicalSize, WindowSize};
@@ -93,6 +96,15 @@ impl PopupManager {
             }
         })?;
 
+        let pointer_position = if let Some((x, y)) = get_popup_position_override() {
+            info!("Using explicit popup position: ({}, {})", x, y);
+            clear_popup_position_override();
+            slint::LogicalPosition::new(x, y)
+        } else {
+            log::error!("No popup position provided - using (0, 0) as fallback");
+            slint::LogicalPosition::new(0.0, 0.0)
+        };
+
         let scale_factor = *self.current_scale_factor.borrow();
         let output_size = *self.current_output_size.borrow();
         info!(
@@ -120,7 +132,7 @@ impl PopupManager {
             fractional_scale_manager: self.context.fractional_scale_manager.as_ref(),
             viewporter: self.context.viewporter.as_ref(),
             queue_handle,
-            position: slint::LogicalPosition::new(0.0, 0.0),
+            position: pointer_position,
             size: popup_size,
             scale_factor,
         });

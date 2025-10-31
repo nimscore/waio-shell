@@ -24,11 +24,41 @@ pub fn close_current_popup() {
     });
 }
 
+pub fn set_popup_position_override(x: f32, y: f32) {
+    CURRENT_PLATFORM.with(|platform| {
+        if let Some(weak_platform) = platform.borrow().as_ref() {
+            if let Some(strong_platform) = weak_platform.upgrade() {
+                strong_platform.set_popup_position(x, y);
+            }
+        }
+    });
+}
+
+#[must_use]
+pub fn get_popup_position_override() -> Option<(f32, f32)> {
+    CURRENT_PLATFORM.with(|platform| {
+        platform.borrow().as_ref()
+            .and_then(Weak::upgrade)
+            .and_then(|strong| strong.get_popup_position())
+    })
+}
+
+pub fn clear_popup_position_override() {
+    CURRENT_PLATFORM.with(|platform| {
+        if let Some(weak_platform) = platform.borrow().as_ref() {
+            if let Some(strong_platform) = weak_platform.upgrade() {
+                strong_platform.clear_popup_position();
+            }
+        }
+    });
+}
+
 pub struct CustomSlintPlatform {
     main_window: Weak<FemtoVGWindow>,
     popup_creator: RefCell<Option<Rc<PopupCreator>>>,
     first_call: Cell<bool>,
     last_popup: RefCell<Option<Weak<PopupWindow>>>,
+    popup_position: RefCell<Option<(f32, f32)>>,
 }
 
 impl CustomSlintPlatform {
@@ -39,6 +69,7 @@ impl CustomSlintPlatform {
             popup_creator: RefCell::new(None),
             first_call: Cell::new(true),
             last_popup: RefCell::new(None),
+            popup_position: RefCell::new(None),
         });
 
         CURRENT_PLATFORM.with(|current| {
@@ -67,6 +98,19 @@ impl CustomSlintPlatform {
             }
         }
         *self.last_popup.borrow_mut() = None;
+    }
+
+    pub fn set_popup_position(&self, x: f32, y: f32) {
+        *self.popup_position.borrow_mut() = Some((x, y));
+    }
+
+    #[must_use]
+    pub fn get_popup_position(&self) -> Option<(f32, f32)> {
+        *self.popup_position.borrow()
+    }
+
+    pub fn clear_popup_position(&self) {
+        *self.popup_position.borrow_mut() = None;
     }
 }
 
