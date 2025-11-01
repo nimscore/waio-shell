@@ -174,25 +174,25 @@ impl WindowState {
     fn configure_slint_window(&self, dimensions: &SurfaceDimensions, mode: ScalingMode) {
         match mode {
             ScalingMode::FractionalWithViewport => {
+                self.window.set_scale_factor(self.scale_factor);
                 self.window
                     .set_size(slint::WindowSize::Logical(slint::LogicalSize::new(
                         dimensions.logical_width as f32,
                         dimensions.logical_height as f32,
                     )));
-                self.window.set_scale_factor(self.scale_factor);
             }
             ScalingMode::FractionalOnly => {
+                self.window.set_scale_factor(dimensions.buffer_scale as f32);
                 self.window
                     .set_size(slint::WindowSize::Logical(slint::LogicalSize::new(
                         dimensions.logical_width as f32,
                         dimensions.logical_height as f32,
                     )));
-                self.window.set_scale_factor(dimensions.buffer_scale as f32);
             }
             ScalingMode::Integer => {
+                self.window.set_scale_factor(self.scale_factor);
                 self.window
                     .set_size(slint::WindowSize::Physical(dimensions.physical_size()));
-                self.window.set_scale_factor(self.scale_factor);
             }
         }
     }
