@@ -90,7 +90,6 @@ impl PopupSurface {
         }
 
         surface.set_buffer_scale(1);
-        surface.commit();
 
         Self {
             surface,
