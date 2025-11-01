@@ -13,6 +13,7 @@ pub use layer_shika_adapters::close_current_popup;
 pub use layer_shika_adapters::platform::{calloop, slint, slint_interpreter};
 pub use layer_shika_adapters::{
     clear_popup_position_override, get_popup_position_override, set_popup_position_override,
+    clear_popup_size_override, get_popup_size_override, set_popup_size_override,
 };
 pub use layer_shika_domain::value_objects::anchor::AnchorEdges;
 

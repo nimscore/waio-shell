@@ -34,10 +34,11 @@ pub fn set_popup_position_override(x: f32, y: f32) {
     });
 }
 
-#[must_use]
 pub fn get_popup_position_override() -> Option<(f32, f32)> {
     CURRENT_PLATFORM.with(|platform| {
-        platform.borrow().as_ref()
+        platform
+            .borrow()
+            .as_ref()
             .and_then(Weak::upgrade)
             .and_then(|strong| strong.get_popup_position())
     })
@@ -53,12 +54,43 @@ pub fn clear_popup_position_override() {
     });
 }
 
+pub fn set_popup_size_override(width: f32, height: f32) {
+    CURRENT_PLATFORM.with(|platform| {
+        if let Some(weak_platform) = platform.borrow().as_ref() {
+            if let Some(strong_platform) = weak_platform.upgrade() {
+                strong_platform.set_popup_size(width, height);
+            }
+        }
+    });
+}
+
+pub fn get_popup_size_override() -> Option<(f32, f32)> {
+    CURRENT_PLATFORM.with(|platform| {
+        platform
+            .borrow()
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .and_then(|strong| strong.get_popup_size())
+    })
+}
+
+pub fn clear_popup_size_override() {
+    CURRENT_PLATFORM.with(|platform| {
+        if let Some(weak_platform) = platform.borrow().as_ref() {
+            if let Some(strong_platform) = weak_platform.upgrade() {
+                strong_platform.clear_popup_size();
+            }
+        }
+    });
+}
+
 pub struct CustomSlintPlatform {
     main_window: Weak<FemtoVGWindow>,
     popup_creator: RefCell<Option<Rc<PopupCreator>>>,
     first_call: Cell<bool>,
     last_popup: RefCell<Option<Weak<PopupWindow>>>,
     popup_position: RefCell<Option<(f32, f32)>>,
+    popup_size: RefCell<Option<(f32, f32)>>,
 }
 
 impl CustomSlintPlatform {
@@ -70,6 +102,7 @@ impl CustomSlintPlatform {
             first_call: Cell::new(true),
             last_popup: RefCell::new(None),
             popup_position: RefCell::new(None),
+            popup_size: RefCell::new(None),
         });
 
         CURRENT_PLATFORM.with(|current| {
@@ -111,6 +144,18 @@ impl CustomSlintPlatform {
 
     pub fn clear_popup_position(&self) {
         *self.popup_position.borrow_mut() = None;
+    }
+
+    pub fn set_popup_size(&self, width: f32, height: f32) {
+        *self.popup_size.borrow_mut() = Some((width, height));
+    }
+
+    pub fn get_popup_size(&self) -> Option<(f32, f32)> {
+        *self.popup_size.borrow()
+    }
+
+    pub fn clear_popup_size(&self) {
+        *self.popup_size.borrow_mut() = None;
     }
 }
 

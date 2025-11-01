@@ -3,6 +3,7 @@ use crate::rendering::egl::context::EGLContext;
 use crate::rendering::femtovg::popup_window::PopupWindow;
 use crate::rendering::slint_integration::platform::{
     clear_popup_position_override, get_popup_position_override,
+    clear_popup_size_override, get_popup_size_override,
 };
 use log::info;
 use slab::Slab;
@@ -112,10 +113,17 @@ impl PopupManager {
         );
 
         #[allow(clippy::cast_precision_loss)]
-        let logical_size = slint::LogicalSize::new(
-            output_size.width as f32 / scale_factor,
-            output_size.height as f32 / scale_factor,
-        );
+        let logical_size = if let Some((width, height)) = get_popup_size_override() {
+            info!("Using explicit popup size: ({}, {})", width, height);
+            clear_popup_size_override();
+            slint::LogicalSize::new(width, height)
+        } else {
+            info!("No popup size override - using full output size");
+            slint::LogicalSize::new(
+                output_size.width as f32 / scale_factor,
+                output_size.height as f32 / scale_factor,
+            )
+        };
         #[allow(clippy::cast_possible_truncation)]
         #[allow(clippy::cast_sign_loss)]
         let popup_size = PhysicalSize::new(

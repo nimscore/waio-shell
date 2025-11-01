@@ -7,7 +7,8 @@ pub mod wayland;
 pub use rendering::femtovg::popup_window::PopupWindow;
 pub use rendering::slint_integration::platform::{
     clear_popup_position_override, close_current_popup, get_popup_position_override,
-    set_popup_position_override,
+    set_popup_position_override, clear_popup_size_override, get_popup_size_override,
+    set_popup_size_override,
 };
 
 pub mod platform {
