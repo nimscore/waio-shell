@@ -1,7 +1,7 @@
-use crate::system::WindowingSystem;
 use crate::Result;
+use crate::system::WindowingSystem;
 use layer_shika_adapters::platform::slint_interpreter::ComponentDefinition;
-use layer_shika_domain::config::{AnchorEdges, Layer, Margins, WindowConfig};
+use layer_shika_domain::prelude::{AnchorEdges, Layer, Margins, WindowConfig};
 
 pub struct NeedsComponent;
 pub struct HasComponent {

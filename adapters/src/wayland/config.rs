@@ -1,4 +1,6 @@
-use layer_shika_domain::config::{AnchorEdges, Layer, Margins, WindowConfig as DomainWindowConfig};
+use layer_shika_domain::prelude::{
+    AnchorEdges, Layer, Margins, WindowConfig as DomainWindowConfig,
+};
 use slint_interpreter::ComponentDefinition;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::{self},

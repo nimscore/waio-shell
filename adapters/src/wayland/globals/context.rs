@@ -29,7 +29,7 @@ impl GlobalContext {
     ) -> Result<Self, LayerShikaError> {
         let global_list = registry_queue_init::<WindowState>(connection)
             .map(|(global_list, _)| global_list)
-            .map_err(|e| LayerShikaError::GlobalInitialization(e.to_string()))?;
+            .map_err(|e| LayerShikaError::GlobalInitialization { source: e })?;
 
         let (compositor, output, layer_shell, seat) = bind_globals!(
             &global_list,

@@ -1,51 +1,172 @@
 use layer_shika_domain::errors::DomainError;
+use slint::{PlatformError, platform::SetPlatformError};
+use smithay_client_toolkit::reexports::calloop;
+use std::error::Error;
 use std::result::Result as StdResult;
 use thiserror::Error;
 use wayland_client::backend::WaylandError;
+use wayland_client::{
+    ConnectError, DispatchError,
+    globals::{BindError, GlobalError},
+};
 
 pub type Result<T> = StdResult<T, LayerShikaError>;
 
 #[derive(Error, Debug)]
+pub enum RenderingError {
+    #[error("failed to swap buffers")]
+    SwapBuffers {
+        #[source]
+        source: Box<dyn Error + Send + Sync>,
+    },
+
+    #[error("failed to ensure context current")]
+    EnsureContextCurrent {
+        #[source]
+        source: Box<dyn Error + Send + Sync>,
+    },
+
+    #[error("rendering operation failed: {message}")]
+    Operation { message: String },
+}
+
+#[derive(Error, Debug)]
+pub enum EGLError {
+    #[error("failed to create EGL display")]
+    DisplayCreation {
+        #[source]
+        source: Box<dyn Error + Send + Sync>,
+    },
+
+    #[error("failed to find EGL configurations")]
+    ConfigSelection {
+        #[source]
+        source: Box<dyn Error + Send + Sync>,
+    },
+
+    #[error("no compatible EGL configurations found")]
+    NoCompatibleConfig,
+
+    #[error("failed to create EGL context")]
+    ContextCreation {
+        #[source]
+        source: Box<dyn Error + Send + Sync>,
+    },
+
+    #[error("failed to create window surface")]
+    SurfaceCreation {
+        #[source]
+        source: Box<dyn Error + Send + Sync>,
+    },
+
+    #[error("failed to make context current")]
+    MakeCurrent {
+        #[source]
+        source: Box<dyn Error + Send + Sync>,
+    },
+
+    #[error("failed to swap buffers")]
+    SwapBuffers {
+        #[source]
+        source: Box<dyn Error + Send + Sync>,
+    },
+}
+
+#[derive(Error, Debug)]
+pub enum EventLoopError {
+    #[error("failed to create event loop")]
+    Creation {
+        #[source]
+        source: calloop::Error,
+    },
+
+    #[error("failed to insert event source: {message}")]
+    InsertSource { message: String },
+
+    #[error("event loop execution failed")]
+    Execution {
+        #[source]
+        source: calloop::Error,
+    },
+}
+
+#[derive(Error, Debug)]
 pub enum LayerShikaError {
-    #[error("Domain error: {0}")]
-    Domain(#[from] DomainError),
+    #[error("domain error")]
+    Domain {
+        #[from]
+        source: DomainError,
+    },
 
-    #[error("Failed to connect to Wayland: {0}")]
-    WaylandConnection(#[from] wayland_client::ConnectError),
+    #[error("failed to connect to Wayland display")]
+    WaylandConnection {
+        #[from]
+        source: ConnectError,
+    },
 
-    #[error("Failed to initialize Wayland globals: {0}")]
-    GlobalInitialization(String),
+    #[error("failed to initialize Wayland globals")]
+    GlobalInitialization {
+        #[source]
+        source: GlobalError,
+    },
 
-    #[error("Failed to dispatch Wayland event: {0}")]
-    WaylandDispatch(String),
+    #[error("Wayland dispatch error")]
+    WaylandDispatch {
+        #[from]
+        source: DispatchError,
+    },
 
-    #[error("Failed to create EGL context: {0}")]
-    EGLContextCreation(String),
+    #[error("failed to bind Wayland global")]
+    GlobalBind {
+        #[from]
+        source: BindError,
+    },
 
-    #[error("Failed to create FemtoVG renderer: {0}")]
-    FemtoVGRendererCreation(String),
+    #[error("EGL context error")]
+    EGLContext {
+        #[from]
+        source: EGLError,
+    },
 
-    #[error("Failed to create Slint component: {0}")]
-    SlintComponentCreation(String),
+    #[error("failed to create FemtoVG renderer")]
+    FemtoVGRendererCreation {
+        #[source]
+        source: PlatformError,
+    },
 
-    #[error("Failed to run event loop: {0}")]
-    EventLoop(String),
+    #[error("failed to create Slint component")]
+    SlintComponentCreation {
+        #[source]
+        source: PlatformError,
+    },
 
-    #[error("Window configuration error: {0}")]
-    WindowConfiguration(String),
+    #[error("event loop error")]
+    EventLoop {
+        #[from]
+        source: EventLoopError,
+    },
 
-    #[error("Rendering error: {0}")]
-    Rendering(String),
+    #[error("window configuration error: {message}")]
+    WindowConfiguration { message: String },
 
-    #[error("Invalid input: {0}")]
-    InvalidInput(String),
+    #[error("rendering error")]
+    Rendering {
+        #[from]
+        source: RenderingError,
+    },
 
-    #[error("Wayland protocol error: {0}")]
-    WaylandProtocol(String),
+    #[error("invalid input: {message}")]
+    InvalidInput { message: String },
 
-    #[error("Failed to set platform: {0}")]
-    PlatformSetup(String),
+    #[error("Wayland protocol error")]
+    WaylandProtocol {
+        #[source]
+        source: WaylandError,
+    },
 
-    #[error("Failed to flush connection: {0}")]
-    ConnectionFlush(#[from] WaylandError),
+    #[error("failed to set up Slint platform")]
+    PlatformSetup {
+        #[source]
+        source: SetPlatformError,
+    },
 }

@@ -6,8 +6,8 @@ use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
 };
 use std::rc::Rc;
 use wayland_client::{
-    protocol::{wl_compositor::WlCompositor, wl_output::WlOutput, wl_surface::WlSurface},
     QueueHandle,
+    protocol::{wl_compositor::WlCompositor, wl_output::WlOutput, wl_surface::WlSurface},
 };
 use wayland_protocols::wp::fractional_scale::v1::client::{
     wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,

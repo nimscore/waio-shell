@@ -133,4 +133,11 @@ impl PopupSurface {
         info!("Grabbing popup with serial {serial}");
         self.xdg_popup.grab(seat, serial);
     }
+
+    pub fn destroy(&self) {
+        info!("Destroying popup surface");
+        self.xdg_popup.destroy();
+        self.xdg_surface.destroy();
+        self.surface.destroy();
+    }
 }

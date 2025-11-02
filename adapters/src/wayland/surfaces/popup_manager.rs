@@ -2,6 +2,7 @@ use crate::errors::{LayerShikaError, Result};
 use crate::rendering::egl::context::EGLContext;
 use crate::rendering::femtovg::popup_window::PopupWindow;
 use log::info;
+use slab::Slab;
 use slint::{platform::femtovg_renderer::FemtoVGRenderer, PhysicalSize, WindowSize};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use std::cell::RefCell;
@@ -25,20 +26,18 @@ pub struct PopupContext {
     fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
     viewporter: Option<WpViewporter>,
     display: WlDisplay,
-    #[allow(dead_code)]
-    connection: Rc<Connection>,
 }
 
 impl PopupContext {
     #[must_use]
-    pub const fn new(
+    pub fn new(
         compositor: WlCompositor,
         xdg_wm_base: Option<XdgWmBase>,
         seat: WlSeat,
         fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
         viewporter: Option<WpViewporter>,
         display: WlDisplay,
-        connection: Rc<Connection>,
+        _connection: Rc<Connection>,
     ) -> Self {
         Self {
             compositor,
@@ -47,7 +46,6 @@ impl PopupContext {
             fractional_scale_manager,
             viewporter,
             display,
-            connection,
         }
     }
 }
@@ -59,7 +57,7 @@ struct ActivePopup {
 
 pub struct PopupManager {
     context: PopupContext,
-    popups: RefCell<Vec<ActivePopup>>,
+    popups: RefCell<Slab<ActivePopup>>,
     current_scale_factor: RefCell<f32>,
     current_output_size: RefCell<PhysicalSize>,
 }
@@ -69,7 +67,7 @@ impl PopupManager {
     pub const fn new(context: PopupContext, initial_scale_factor: f32) -> Self {
         Self {
             context,
-            popups: RefCell::new(Vec::new()),
+            popups: RefCell::new(Slab::new()),
             current_scale_factor: RefCell::new(initial_scale_factor),
             current_output_size: RefCell::new(PhysicalSize::new(0, 0)),
         }
@@ -84,18 +82,22 @@ impl PopupManager {
     }
 
     pub fn create_popup(
-        &self,
+        self: &Rc<Self>,
         queue_handle: &QueueHandle<WindowState>,
         parent_layer_surface: &ZwlrLayerSurfaceV1,
         last_pointer_serial: u32,
     ) -> Result<Rc<PopupWindow>> {
         let xdg_wm_base = self.context.xdg_wm_base.as_ref().ok_or_else(|| {
-            LayerShikaError::WaylandProtocol("xdg-shell not available for popups".into())
+            LayerShikaError::WindowConfiguration {
+                message: "xdg-shell not available for popups".into(),
+            }
         })?;
 
         let scale_factor = *self.current_scale_factor.borrow();
         let output_size = *self.current_output_size.borrow();
-        info!("Creating popup window with scale factor {scale_factor} and output size {output_size:?}");
+        info!(
+            "Creating popup window with scale factor {scale_factor} and output size {output_size:?}"
+        );
 
         #[allow(clippy::cast_precision_loss)]
         let logical_size = slint::LogicalSize::new(
@@ -129,28 +131,28 @@ impl PopupManager {
             .with_display_id(self.context.display.id())
             .with_surface_id(popup_surface.surface.id())
             .with_size(popup_size)
-            .build()
-            .map_err(|e| LayerShikaError::EGLContextCreation(e.to_string()))?;
+            .build()?;
 
         let renderer = FemtoVGRenderer::new(context)
-            .map_err(|e| LayerShikaError::FemtoVGRendererCreation(e.to_string()))?;
+            .map_err(|e| LayerShikaError::FemtoVGRendererCreation { source: e })?;
 
         let popup_window = PopupWindow::new(renderer);
         popup_window.set_scale_factor(scale_factor);
         popup_window.set_size(WindowSize::Logical(logical_size));
 
-        info!("Popup window created successfully");
-
-        self.popups.borrow_mut().push(ActivePopup {
+        let key = self.popups.borrow_mut().insert(ActivePopup {
             surface: popup_surface,
             window: Rc::clone(&popup_window),
         });
+        popup_window.set_popup_manager(Rc::downgrade(self), key);
+
+        info!("Popup window created successfully with key {key}");
 
         Ok(popup_window)
     }
 
     pub fn render_popups(&self) -> Result<()> {
-        for popup in self.popups.borrow().iter() {
+        for (_key, popup) in self.popups.borrow().iter() {
             popup.window.render_frame_if_dirty()?;
         }
         Ok(())
@@ -160,61 +162,51 @@ impl PopupManager {
         self.context.xdg_wm_base.is_some()
     }
 
-    #[allow(dead_code)]
-    pub fn popup_count(&self) -> usize {
-        self.popups.borrow().len()
-    }
-
     pub fn mark_all_popups_dirty(&self) {
-        for popup in self.popups.borrow().iter() {
+        for (_key, popup) in self.popups.borrow().iter() {
             popup.window.request_redraw();
         }
     }
 
-    pub fn find_popup_index_by_surface_id(&self, surface_id: &ObjectId) -> Option<usize> {
-        for (index, popup) in self.popups.borrow().iter().enumerate() {
-            if popup.surface.surface.id() == *surface_id {
-                return Some(index);
-            }
-        }
-        None
+    pub fn find_popup_key_by_surface_id(&self, surface_id: &ObjectId) -> Option<usize> {
+        self.popups
+            .borrow()
+            .iter()
+            .find_map(|(key, popup)| (popup.surface.surface.id() == *surface_id).then_some(key))
     }
 
-    pub fn find_popup_index_by_fractional_scale_id(
+    pub fn find_popup_key_by_fractional_scale_id(
         &self,
         fractional_scale_id: &ObjectId,
     ) -> Option<usize> {
-        for (index, popup) in self.popups.borrow().iter().enumerate() {
-            if let Some(ref fs) = popup.surface.fractional_scale {
-                if fs.id() == *fractional_scale_id {
-                    return Some(index);
-                }
-            }
-        }
-        None
+        self.popups.borrow().iter().find_map(|(key, popup)| {
+            popup
+                .surface
+                .fractional_scale
+                .as_ref()
+                .filter(|fs| fs.id() == *fractional_scale_id)
+                .map(|_| key)
+        })
     }
 
-    pub fn get_popup_window(&self, index: usize) -> Option<Rc<PopupWindow>> {
+    pub fn get_popup_window(&self, key: usize) -> Option<Rc<PopupWindow>> {
         self.popups
             .borrow()
-            .get(index)
+            .get(key)
             .map(|popup| Rc::clone(&popup.window))
     }
 
-    pub fn destroy_popup(&self, index: usize) {
-        let mut popups = self.popups.borrow_mut();
-        if index < popups.len() {
-            info!("Destroying popup at index {index}");
-            popups.remove(index);
+    pub fn destroy_popup(&self, key: usize) {
+        if let Some(popup) = self.popups.borrow_mut().try_remove(key) {
+            info!("Destroying popup with key {key}");
+            popup.surface.destroy();
         }
     }
 
-    pub fn find_popup_index_by_xdg_popup_id(&self, xdg_popup_id: &ObjectId) -> Option<usize> {
-        for (index, popup) in self.popups.borrow().iter().enumerate() {
-            if popup.surface.xdg_popup.id() == *xdg_popup_id {
-                return Some(index);
-            }
-        }
-        None
+    pub fn find_popup_key_by_xdg_popup_id(&self, xdg_popup_id: &ObjectId) -> Option<usize> {
+        self.popups
+            .borrow()
+            .iter()
+            .find_map(|(key, popup)| (popup.surface.xdg_popup.id() == *xdg_popup_id).then_some(key))
     }
 }

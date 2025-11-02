@@ -1,11 +1,12 @@
-use crate::errors::{LayerShikaError, Result};
+use crate::errors::{RenderingError, Result};
+use crate::wayland::surfaces::popup_manager::PopupManager;
 use core::ops::Deref;
 use log::info;
 use slint::{
-    platform::{femtovg_renderer::FemtoVGRenderer, Renderer, WindowAdapter, WindowEvent},
     PhysicalSize, Window, WindowSize,
+    platform::{Renderer, WindowAdapter, WindowEvent, femtovg_renderer::FemtoVGRenderer},
 };
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
 use super::main_window::RenderState;
@@ -17,6 +18,8 @@ pub struct PopupWindow {
     render_state: Cell<RenderState>,
     size: Cell<PhysicalSize>,
     scale_factor: Cell<f32>,
+    popup_manager: RefCell<Weak<PopupManager>>,
+    popup_key: Cell<Option<usize>>,
 }
 
 #[allow(dead_code)]
@@ -31,8 +34,35 @@ impl PopupWindow {
                 render_state: Cell::new(RenderState::Clean),
                 size: Cell::new(PhysicalSize::default()),
                 scale_factor: Cell::new(1.),
+                popup_manager: RefCell::new(Weak::new()),
+                popup_key: Cell::new(None),
             }
         })
+    }
+
+    pub fn set_popup_manager(&self, popup_manager: Weak<PopupManager>, key: usize) {
+        *self.popup_manager.borrow_mut() = popup_manager;
+        self.popup_key.set(Some(key));
+    }
+
+    pub fn close_popup(&self) {
+        info!("Closing popup window - cleaning up resources");
+
+        if let Err(e) = self.window.hide() {
+            info!("Failed to hide popup window: {e}");
+        }
+
+        if let Some(popup_manager) = self.popup_manager.borrow().upgrade() {
+            if let Some(key) = self.popup_key.get() {
+                info!("Destroying popup with key {key}");
+                popup_manager.destroy_popup(key);
+            }
+        }
+
+        *self.popup_manager.borrow_mut() = Weak::new();
+        self.popup_key.set(None);
+
+        info!("Popup window cleanup complete");
     }
 
     pub fn render_frame_if_dirty(&self) -> Result<()> {
@@ -45,9 +75,11 @@ impl PopupWindow {
                 self.size.get(),
                 self.scale_factor.get()
             );
-            self.renderer.render().map_err(|e| {
-                LayerShikaError::Rendering(format!("Error rendering popup frame: {e}"))
-            })?;
+            self.renderer
+                .render()
+                .map_err(|e| RenderingError::Operation {
+                    message: format!("Error rendering popup frame: {e}"),
+                })?;
             info!("Popup frame rendered successfully");
         }
         Ok(())
@@ -94,5 +126,11 @@ impl Deref for PopupWindow {
     type Target = Window;
     fn deref(&self) -> &Self::Target {
         &self.window
+    }
+}
+
+impl Drop for PopupWindow {
+    fn drop(&mut self) {
+        info!("PopupWindow being dropped - resources will be released");
     }
 }

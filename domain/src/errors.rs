@@ -1,19 +1,26 @@
+use std::error::Error;
 use std::result::Result as StdResult;
-use thiserror::Error;
+use thiserror::Error as ThisError;
 
 pub type Result<T> = StdResult<T, DomainError>;
 
-#[derive(Error, Debug)]
+#[derive(ThisError, Debug)]
 pub enum DomainError {
-    #[error("Configuration error: {0}")]
-    Configuration(String),
+    #[error("invalid configuration: {message}")]
+    Configuration { message: String },
 
-    #[error("Invalid dimensions: {0}")]
-    InvalidDimensions(String),
+    #[error("invalid dimensions {width}x{height}")]
+    InvalidDimensions { width: u32, height: u32 },
 
-    #[error("Invalid input: {0}")]
-    InvalidInput(String),
+    #[error("invalid input: {message}")]
+    InvalidInput { message: String },
 
-    #[error("Calculation error: {0}")]
-    Calculation(String),
+    #[error("calculation error: {operation} failed - {reason}")]
+    Calculation { operation: String, reason: String },
+
+    #[error("adapter error")]
+    Adapter {
+        #[source]
+        source: Box<dyn Error + Send + Sync>,
+    },
 }

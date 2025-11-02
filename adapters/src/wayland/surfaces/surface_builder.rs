@@ -6,7 +6,7 @@ use slint::{
 };
 use slint_interpreter::ComponentDefinition;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
-use wayland_client::{protocol::{wl_output::WlOutput, wl_pointer::WlPointer, wl_surface::WlSurface}, Connection};
+use wayland_client::{protocol::{wl_pointer::WlPointer, wl_surface::WlSurface}, Connection};
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use crate::errors::{LayerShikaError, Result};
@@ -32,7 +32,6 @@ pub struct WindowStateBuilder {
     pub size: Option<PhysicalSize>,
     pub output_size: Option<PhysicalSize>,
     pub pointer: Option<Rc<WlPointer>>,
-    pub output: Option<Rc<WlOutput>>,
     pub window: Option<Rc<FemtoVGWindow>>,
     pub connection: Option<Rc<Connection>>,
     pub scale_factor: f32,
@@ -73,12 +72,6 @@ impl WindowStateBuilder {
     #[must_use]
     pub fn with_pointer(mut self, pointer: Rc<WlPointer>) -> Self {
         self.pointer = Some(pointer);
-        self
-    }
-
-    #[must_use]
-    pub fn with_output(mut self, output: Rc<WlOutput>) -> Self {
-        self.output = Some(output);
         self
     }
 
@@ -131,13 +124,13 @@ impl WindowStateBuilder {
     }
 
     pub fn build(self) -> Result<(WindowState, Rc<CustomSlintPlatform>)> {
-        let platform =
-            Rc::new(CustomSlintPlatform::new(self.window.as_ref().ok_or_else(
-                || LayerShikaError::InvalidInput("Window is required".into()),
-            )?));
-        set_platform(Box::new(PlatformWrapper(Rc::clone(&platform)))).map_err(|e| {
-            LayerShikaError::PlatformSetup(format!("Failed to set platform: {e:?}"))
-        })?;
+        let platform = CustomSlintPlatform::new(self.window.as_ref().ok_or_else(|| {
+            LayerShikaError::InvalidInput {
+                message: "Window is required".into(),
+            }
+        })?);
+        set_platform(Box::new(PlatformWrapper(Rc::clone(&platform))))
+            .map_err(|e| LayerShikaError::PlatformSetup { source: e })?;
 
         let state = WindowState::new(self)?;
         Ok((state, platform))
@@ -155,7 +148,6 @@ impl Default for WindowStateBuilder {
             size: None,
             output_size: None,
             pointer: None,
-            output: None,
             window: None,
             connection: None,
             scale_factor: 1.0,

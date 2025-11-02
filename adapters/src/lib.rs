@@ -1,9 +1,11 @@
 #![allow(clippy::pub_use)]
 
 pub mod errors;
-pub mod event_loop;
 pub mod rendering;
 pub mod wayland;
+
+pub use rendering::femtovg::popup_window::PopupWindow;
+pub use rendering::slint_integration::platform::close_current_popup;
 
 pub mod platform {
     pub use slint;

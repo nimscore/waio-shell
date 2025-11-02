@@ -1,9 +1,9 @@
-use crate::wayland::surfaces::surface_state::WindowState;
 use crate::impl_empty_dispatch;
+use crate::wayland::surfaces::surface_state::WindowState;
 use log::info;
 use slint::{
-    platform::{PointerEventButton, WindowEvent},
     PhysicalSize,
+    platform::{PointerEventButton, WindowEvent},
 };
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::ZwlrLayerShellV1,
@@ -11,6 +11,7 @@ use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
 };
 use wayland_client::WEnum;
 use wayland_client::{
+    Connection, Dispatch, Proxy, QueueHandle,
     globals::GlobalListContents,
     protocol::{
         wl_compositor::WlCompositor,
@@ -20,7 +21,6 @@ use wayland_client::{
         wl_seat::WlSeat,
         wl_surface::WlSurface,
     },
-    Connection, Dispatch, Proxy, QueueHandle,
 };
 use wayland_protocols::wp::fractional_scale::v1::client::{
     wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
@@ -138,7 +138,9 @@ impl Dispatch<WlOutput, ()> for WindowState {
                 model,
                 transform,
             } => {
-                info!("WlOutput geometry: x={x}, y={y}, physical_width={physical_width}, physical_height={physical_height}, subpixel={subpixel:?}, make={make:?}, model={model:?}, transform={transform:?}");
+                info!(
+                    "WlOutput geometry: x={x}, y={y}, physical_width={physical_width}, physical_height={physical_height}, subpixel={subpixel:?}, make={make:?}, model={model:?}, transform={transform:?}"
+                );
             }
             wl_output::Event::Done => {
                 info!("WlOutput done");
@@ -270,16 +272,16 @@ impl Dispatch<XdgPopup, ()> for WindowState {
             xdg_popup::Event::PopupDone => {
                 info!("XdgPopup dismissed by compositor");
                 let popup_id = xdg_popup.id();
-                let popup_index = state
+                let popup_key = state
                     .popup_manager()
                     .as_ref()
-                    .and_then(|pm| pm.find_popup_index_by_xdg_popup_id(&popup_id));
+                    .and_then(|pm| pm.find_popup_key_by_xdg_popup_id(&popup_id));
 
-                if let Some(index) = popup_index {
-                    info!("Destroying popup at index {index}");
-                    state.clear_active_window_if_popup(index);
+                if let Some(key) = popup_key {
+                    info!("Destroying popup with key {key}");
+                    state.clear_active_window_if_popup(key);
                     if let Some(popup_manager) = &state.popup_manager() {
-                        popup_manager.destroy_popup(index);
+                        popup_manager.destroy_popup(key);
                     }
                 }
             }

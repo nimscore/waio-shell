@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::cell::RefCell;
 use super::surface_builder::WindowStateBuilder;
 use super::dimensions::SurfaceDimensionsExt;
 use super::popup_manager::PopupManager;
@@ -8,16 +9,45 @@ use crate::wayland::managed_proxies::{
 };
 use crate::rendering::femtovg::main_window::FemtoVGWindow;
 use crate::errors::{LayerShikaError, Result};
+use core::result::Result as CoreResult;
+use layer_shika_domain::errors::DomainError;
+use layer_shika_domain::ports::windowing::RuntimeStatePort;
 use layer_shika_domain::surface_dimensions::SurfaceDimensions;
 use log::info;
 use slint::{LogicalPosition, PhysicalSize, ComponentHandle};
 use slint::platform::{WindowAdapter, WindowEvent};
 use slint_interpreter::ComponentInstance;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
-use wayland_client::{protocol::{wl_output::WlOutput, wl_surface::WlSurface}, Proxy};
+use wayland_client::{protocol::wl_surface::WlSurface, Proxy};
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 
-#[derive(Debug)]
+pub struct SharedPointerSerial {
+    serial: RefCell<u32>,
+}
+
+impl Default for SharedPointerSerial {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SharedPointerSerial {
+    pub const fn new() -> Self {
+        Self {
+            serial: RefCell::new(0),
+        }
+    }
+
+    pub fn update(&self, serial: u32) {
+        *self.serial.borrow_mut() = serial;
+    }
+
+    pub fn get(&self) -> u32 {
+        *self.serial.borrow()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ScalingMode {
     FractionalWithViewport,
     FractionalOnly,
@@ -38,14 +68,13 @@ pub struct WindowState {
     surface: ManagedWlSurface,
     #[allow(dead_code)]
     pointer: ManagedWlPointer,
-    #[allow(dead_code)]
-    output: Rc<WlOutput>,
     size: PhysicalSize,
     logical_size: PhysicalSize,
     output_size: PhysicalSize,
     window: Rc<FemtoVGWindow>,
     current_pointer_position: LogicalPosition,
     last_pointer_serial: u32,
+    shared_pointer_serial: Option<Rc<SharedPointerSerial>>,
     scale_factor: f32,
     height: u32,
     exclusive_zone: i32,
@@ -55,34 +84,48 @@ pub struct WindowState {
 
 impl WindowState {
     pub fn new(builder: WindowStateBuilder) -> Result<Self> {
-        let component_definition = builder.component_definition.ok_or_else(|| {
-            LayerShikaError::InvalidInput("Component definition is required".into())
-        })?;
+        let component_definition =
+            builder
+                .component_definition
+                .ok_or_else(|| LayerShikaError::InvalidInput {
+                    message: "Component definition is required".into(),
+                })?;
         let window = builder
             .window
-            .ok_or_else(|| LayerShikaError::InvalidInput("Window is required".into()))?;
+            .ok_or_else(|| LayerShikaError::InvalidInput {
+                message: "Window is required".into(),
+            })?;
         let component_instance = component_definition
             .create()
-            .map_err(|e| LayerShikaError::SlintComponentCreation(e.to_string()))?;
+            .map_err(|e| LayerShikaError::SlintComponentCreation { source: e })?;
         component_instance
             .show()
-            .map_err(|e| LayerShikaError::SlintComponentCreation(e.to_string()))?;
+            .map_err(|e| LayerShikaError::SlintComponentCreation { source: e })?;
 
         window.request_redraw();
 
         let connection = builder
             .connection
-            .ok_or_else(|| LayerShikaError::InvalidInput("Connection is required".into()))?;
+            .ok_or_else(|| LayerShikaError::InvalidInput {
+                message: "Connection is required".into(),
+            })?;
 
         let surface_rc = builder
             .surface
-            .ok_or_else(|| LayerShikaError::InvalidInput("Surface is required".into()))?;
-        let layer_surface_rc = builder
-            .layer_surface
-            .ok_or_else(|| LayerShikaError::InvalidInput("Layer surface is required".into()))?;
+            .ok_or_else(|| LayerShikaError::InvalidInput {
+                message: "Surface is required".into(),
+            })?;
+        let layer_surface_rc =
+            builder
+                .layer_surface
+                .ok_or_else(|| LayerShikaError::InvalidInput {
+                    message: "Layer surface is required".into(),
+                })?;
         let pointer_rc = builder
             .pointer
-            .ok_or_else(|| LayerShikaError::InvalidInput("Pointer is required".into()))?;
+            .ok_or_else(|| LayerShikaError::InvalidInput {
+                message: "Pointer is required".into(),
+            })?;
 
         let viewport = builder
             .viewport
@@ -102,15 +145,13 @@ impl WindowState {
             layer_surface,
             surface,
             pointer,
-            output: builder
-                .output
-                .ok_or_else(|| LayerShikaError::InvalidInput("Output is required".into()))?,
             size: builder.size.unwrap_or_default(),
             logical_size: PhysicalSize::default(),
             output_size: builder.output_size.unwrap_or_default(),
             window,
             current_pointer_position: LogicalPosition::default(),
             last_pointer_serial: 0,
+            shared_pointer_serial: None,
             scale_factor: builder.scale_factor,
             height: builder.height,
             exclusive_zone: builder.exclusive_zone,
@@ -130,7 +171,7 @@ impl WindowState {
     }
 
     #[allow(clippy::cast_precision_loss)]
-    fn configure_slint_window(&self, dimensions: &SurfaceDimensions, mode: &ScalingMode) {
+    fn configure_slint_window(&self, dimensions: &SurfaceDimensions, mode: ScalingMode) {
         match mode {
             ScalingMode::FractionalWithViewport => {
                 self.window
@@ -157,7 +198,7 @@ impl WindowState {
     }
 
     #[allow(clippy::cast_possible_wrap)]
-    fn configure_wayland_surface(&self, dimensions: &SurfaceDimensions, mode: &ScalingMode) {
+    fn configure_wayland_surface(&self, dimensions: &SurfaceDimensions, mode: ScalingMode) {
         match mode {
             ScalingMode::FractionalWithViewport => {
                 self.surface.set_buffer_scale(1);
@@ -199,8 +240,8 @@ impl WindowState {
             scaling_mode
         );
 
-        self.configure_slint_window(&dimensions, &scaling_mode);
-        self.configure_wayland_surface(&dimensions, &scaling_mode);
+        self.configure_slint_window(&dimensions, scaling_mode);
+        self.configure_wayland_surface(&dimensions, scaling_mode);
 
         info!("Window physical size: {:?}", self.window.size());
 
@@ -289,8 +330,15 @@ impl WindowState {
         self.last_pointer_serial
     }
 
-    pub const fn set_last_pointer_serial(&mut self, serial: u32) {
+    pub fn set_last_pointer_serial(&mut self, serial: u32) {
         self.last_pointer_serial = serial;
+        if let Some(ref shared_serial) = self.shared_pointer_serial {
+            shared_serial.update(serial);
+        }
+    }
+
+    pub fn set_shared_pointer_serial(&mut self, shared_serial: Rc<SharedPointerSerial>) {
+        self.shared_pointer_serial = Some(shared_serial);
     }
 
     pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager>) {
@@ -306,8 +354,8 @@ impl WindowState {
         }
 
         if let Some(popup_manager) = &self.popup_manager {
-            if let Some(popup_index) = popup_manager.find_popup_index_by_surface_id(&surface_id) {
-                self.active_window = Some(ActiveWindow::Popup(popup_index));
+            if let Some(popup_key) = popup_manager.find_popup_key_by_surface_id(&surface_id) {
+                self.active_window = Some(ActiveWindow::Popup(popup_key));
                 return;
             }
         }
@@ -347,10 +395,10 @@ impl WindowState {
         }
 
         if let Some(popup_manager) = &self.popup_manager {
-            if let Some(popup_index) =
-                popup_manager.find_popup_index_by_fractional_scale_id(&fractional_scale_id)
+            if let Some(popup_key) =
+                popup_manager.find_popup_key_by_fractional_scale_id(&fractional_scale_id)
             {
-                if let Some(popup_window) = popup_manager.get_popup_window(popup_index) {
+                if let Some(popup_window) = popup_manager.get_popup_window(popup_key) {
                     let new_scale_factor = scale_120ths as f32 / 120.0;
                     info!("Updating popup scale factor to {new_scale_factor} ({scale_120ths}x)");
                     popup_window.set_scale_factor(new_scale_factor);
@@ -364,13 +412,21 @@ impl WindowState {
         self.active_window = None;
     }
 
-    pub fn clear_active_window_if_popup(&mut self, popup_index: usize) {
-        if self.active_window == Some(ActiveWindow::Popup(popup_index)) {
+    pub fn clear_active_window_if_popup(&mut self, popup_key: usize) {
+        if self.active_window == Some(ActiveWindow::Popup(popup_key)) {
             self.active_window = None;
         }
     }
 
     pub const fn popup_manager(&self) -> &Option<Rc<PopupManager>> {
         &self.popup_manager
+    }
+}
+
+impl RuntimeStatePort for WindowState {
+    fn render_frame_if_dirty(&self) -> CoreResult<(), DomainError> {
+        WindowState::render_frame_if_dirty(self).map_err(|e| DomainError::Adapter {
+            source: Box::new(e),
+        })
     }
 }

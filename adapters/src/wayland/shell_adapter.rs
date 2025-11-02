@@ -1,29 +1,36 @@
 use crate::wayland::{
     config::{LayerSurfaceParams, WaylandWindowConfig},
     globals::context::GlobalContext,
-    surfaces::popup_manager::{PopupContext, PopupManager},
-    surfaces::{surface_builder::WindowStateBuilder, surface_state::WindowState},
     surfaces::layer_surface::{SurfaceCtx, SurfaceSetupParams},
-};
-use crate::{
-    errors::{LayerShikaError, Result},
-    rendering::{
-        egl::context::EGLContext, femtovg::main_window::FemtoVGWindow, slint_integration::platform::CustomSlintPlatform,
+    surfaces::popup_manager::{PopupContext, PopupManager},
+    surfaces::{
+        surface_builder::WindowStateBuilder,
+        surface_state::{SharedPointerSerial, WindowState},
     },
 };
+use crate::{
+    errors::{EventLoopError, LayerShikaError, RenderingError, Result},
+    rendering::{
+        egl::context::EGLContext, femtovg::main_window::FemtoVGWindow,
+        slint_integration::platform::CustomSlintPlatform,
+    },
+};
+use core::result::Result as CoreResult;
+use layer_shika_domain::errors::DomainError;
+use layer_shika_domain::ports::windowing::WindowingSystemPort;
 use log::{error, info};
 use slint::{
-    platform::{femtovg_renderer::FemtoVGRenderer, update_timers_and_animations, WindowAdapter},
     LogicalPosition, PhysicalSize, PlatformError, WindowPosition,
+    platform::{WindowAdapter, femtovg_renderer::FemtoVGRenderer, update_timers_and_animations},
 };
 use slint_interpreter::ComponentInstance;
 use smithay_client_toolkit::reexports::calloop::{
-    generic::Generic, EventLoop, Interest, LoopHandle, Mode, PostAction,
+    EventLoop, Interest, LoopHandle, Mode, PostAction, generic::Generic,
 };
 use std::rc::Rc;
 use wayland_client::{
-    protocol::{wl_display::WlDisplay, wl_surface::WlSurface},
     Connection, EventQueue, Proxy,
+    protocol::{wl_display::WlDisplay, wl_surface::WlSurface},
 };
 
 pub struct WaylandWindowingSystem {
@@ -40,7 +47,7 @@ impl WaylandWindowingSystem {
         let (connection, event_queue) = Self::init_wayland_connection()?;
         let (state, global_ctx, platform) = Self::init_state(config, &connection, &event_queue)?;
         let event_loop =
-            EventLoop::try_new().map_err(|e| LayerShikaError::EventLoop(e.to_string()))?;
+            EventLoop::try_new().map_err(|e| EventLoopError::Creation { source: e })?;
 
         let popup_context = PopupContext::new(
             global_ctx.compositor,
@@ -53,8 +60,15 @@ impl WaylandWindowingSystem {
         );
 
         let popup_manager = Rc::new(PopupManager::new(popup_context, state.scale_factor()));
+        let shared_serial = Rc::new(SharedPointerSerial::new());
 
-        Self::setup_popup_creator(&popup_manager, &platform, &state, &event_queue);
+        Self::setup_popup_creator(
+            &popup_manager,
+            &platform,
+            &state,
+            &event_queue,
+            &shared_serial,
+        );
 
         Ok(Self {
             state,
@@ -67,13 +81,13 @@ impl WaylandWindowingSystem {
             system
                 .state
                 .set_popup_manager(Rc::clone(&system.popup_manager));
+            system.state.set_shared_pointer_serial(shared_serial);
             system
         })
     }
 
     fn init_wayland_connection() -> Result<(Rc<Connection>, EventQueue<WindowState>)> {
-        let connection =
-            Rc::new(Connection::connect_to_env().map_err(LayerShikaError::WaylandConnection)?);
+        let connection = Rc::new(Connection::connect_to_env()?);
         let event_queue = connection.new_event_queue();
         Ok((connection, event_queue))
     }
@@ -83,8 +97,7 @@ impl WaylandWindowingSystem {
         connection: &Connection,
         event_queue: &EventQueue<WindowState>,
     ) -> Result<(WindowState, GlobalContext, Rc<CustomSlintPlatform>)> {
-        let global_ctx = GlobalContext::initialize(connection, &event_queue.handle())
-            .map_err(|e| LayerShikaError::GlobalInitialization(e.to_string()))?;
+        let global_ctx = GlobalContext::initialize(connection, &event_queue.handle())?;
 
         let layer_surface_params = LayerSurfaceParams {
             anchor: config.anchor,
@@ -107,22 +120,20 @@ impl WaylandWindowingSystem {
 
         let surface_ctx = SurfaceCtx::setup(&setup_params, &layer_surface_params);
 
-        let pointer = Rc::new(global_ctx.seat.get_pointer(&event_queue.handle(), ()));
-        let output = Rc::new(global_ctx.output.clone());
         let window =
-            Self::initialize_renderer(&surface_ctx.surface, &connection.display(), &config)
-                .map_err(|e| LayerShikaError::EGLContextCreation(e.to_string()))?;
+            Self::initialize_renderer(&surface_ctx.surface, &connection.display(), &config)?;
+
+        let pointer = Rc::new(global_ctx.seat.get_pointer(&event_queue.handle(), ()));
 
         let mut builder = WindowStateBuilder::new()
             .with_component_definition(config.component_definition)
             .with_surface(Rc::clone(&surface_ctx.surface))
             .with_layer_surface(Rc::clone(&surface_ctx.layer_surface))
-            .with_pointer(Rc::clone(&pointer))
-            .with_output(Rc::clone(&output))
             .with_scale_factor(config.scale_factor)
             .with_height(config.height)
             .with_exclusive_zone(config.exclusive_zone)
             .with_connection(Rc::new(connection.clone()))
+            .with_pointer(Rc::clone(&pointer))
             .with_window(window);
 
         if let Some(fs) = &surface_ctx.fractional_scale {
@@ -133,9 +144,12 @@ impl WaylandWindowingSystem {
             builder = builder.with_viewport(Rc::clone(vp));
         }
 
-        let (state, platform) = builder
-            .build()
-            .map_err(|e| LayerShikaError::WindowConfiguration(e.to_string()))?;
+        let (state, platform) =
+            builder
+                .build()
+                .map_err(|e| LayerShikaError::WindowConfiguration {
+                    message: e.to_string(),
+                })?;
 
         Ok((state, global_ctx, platform))
     }
@@ -145,6 +159,7 @@ impl WaylandWindowingSystem {
         platform: &Rc<CustomSlintPlatform>,
         state: &WindowState,
         event_queue: &EventQueue<WindowState>,
+        shared_serial: &Rc<SharedPointerSerial>,
     ) {
         if !popup_manager.has_xdg_shell() {
             info!("xdg-shell not available, popups will not be supported");
@@ -154,16 +169,25 @@ impl WaylandWindowingSystem {
         info!("Setting up popup creator with xdg-shell support");
 
         let popup_manager_clone = Rc::clone(popup_manager);
+        let platform_weak = Rc::downgrade(platform);
         let layer_surface = state.layer_surface();
         let queue_handle = event_queue.handle();
+        let serial_holder = Rc::clone(shared_serial);
 
         platform.set_popup_creator(move || {
             info!("Popup creator called! Creating popup window...");
 
-            let result = popup_manager_clone
-                .create_popup(&queue_handle, &layer_surface, 0)
-                .map(|w| w as Rc<dyn WindowAdapter>)
-                .map_err(|e| PlatformError::Other(format!("Failed to create popup: {e}")));
+            let serial = serial_holder.get();
+
+            let popup_window = popup_manager_clone
+                .create_popup(&queue_handle, &layer_surface, serial)
+                .map_err(|e| PlatformError::Other(format!("Failed to create popup: {e}")))?;
+
+            if let Some(platform) = platform_weak.upgrade() {
+                platform.set_last_popup(&popup_window);
+            }
+
+            let result = Ok(popup_window as Rc<dyn WindowAdapter>);
 
             match &result {
                 Ok(_) => info!("Popup created successfully"),
@@ -185,11 +209,10 @@ impl WaylandWindowingSystem {
             .with_display_id(display.id())
             .with_surface_id(surface.id())
             .with_size(init_size)
-            .build()
-            .map_err(|e| LayerShikaError::EGLContextCreation(e.to_string()))?;
+            .build()?;
 
         let renderer = FemtoVGRenderer::new(context)
-            .map_err(|e| LayerShikaError::FemtoVGRendererCreation(e.to_string()))?;
+            .map_err(|e| LayerShikaError::FemtoVGRendererCreation { source: e })?;
 
         let femtovg_window = FemtoVGWindow::new(renderer);
         femtovg_window.set_size(slint::WindowSize::Physical(init_size));
@@ -207,21 +230,18 @@ impl WaylandWindowingSystem {
         info!("Starting WindowingSystem main loop");
 
         info!("Processing initial Wayland configuration events");
-        while self
-            .event_queue
-            .blocking_dispatch(&mut self.state)
-            .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?
-            > 0
-        {
+        while self.event_queue.blocking_dispatch(&mut self.state)? > 0 {
             self.connection
                 .flush()
-                .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?;
+                .map_err(|e| LayerShikaError::WaylandProtocol { source: e })?;
 
             update_timers_and_animations();
             self.state
                 .window()
                 .render_frame_if_dirty()
-                .map_err(|e| LayerShikaError::Rendering(e.to_string()))?;
+                .map_err(|e| RenderingError::Operation {
+                    message: e.to_string(),
+                })?;
         }
 
         self.setup_wayland_event_source()?;
@@ -238,7 +258,9 @@ impl WaylandWindowingSystem {
                     error!("Error processing events: {e}");
                 }
             })
-            .map_err(|e| LayerShikaError::EventLoop(e.to_string()))
+            .map_err(|e| EventLoopError::Execution { source: e })?;
+
+        Ok(())
     }
 
     fn setup_wayland_event_source(&self) -> Result<()> {
@@ -250,7 +272,9 @@ impl WaylandWindowingSystem {
                 Generic::new(connection, Interest::READ, Mode::Level),
                 move |_, _connection, _shared_data| Ok(PostAction::Continue),
             )
-            .map_err(|e| LayerShikaError::EventLoop(e.to_string()))?;
+            .map_err(|e| EventLoopError::InsertSource {
+                message: format!("{e:?}"),
+            })?;
 
         Ok(())
     }
@@ -264,27 +288,29 @@ impl WaylandWindowingSystem {
         if let Some(guard) = event_queue.prepare_read() {
             guard
                 .read()
-                .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?;
+                .map_err(|e| LayerShikaError::WaylandProtocol { source: e })?;
         }
 
-        event_queue
-            .dispatch_pending(shared_data)
-            .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?;
+        event_queue.dispatch_pending(shared_data)?;
 
         update_timers_and_animations();
 
         shared_data
             .window()
             .render_frame_if_dirty()
-            .map_err(|e| LayerShikaError::Rendering(e.to_string()))?;
+            .map_err(|e| RenderingError::Operation {
+                message: e.to_string(),
+            })?;
 
         popup_manager
             .render_popups()
-            .map_err(|e| LayerShikaError::Rendering(e.to_string()))?;
+            .map_err(|e| RenderingError::Operation {
+                message: e.to_string(),
+            })?;
 
         connection
             .flush()
-            .map_err(|e| LayerShikaError::WaylandProtocol(e.to_string()))?;
+            .map_err(|e| LayerShikaError::WaylandProtocol { source: e })?;
 
         Ok(())
     }
@@ -293,12 +319,15 @@ impl WaylandWindowingSystem {
         self.state.component_instance()
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn window(&self) -> Rc<FemtoVGWindow> {
-        self.state.window()
-    }
-
     pub const fn state(&self) -> &WindowState {
         &self.state
+    }
+}
+
+impl WindowingSystemPort for WaylandWindowingSystem {
+    fn run(&mut self) -> CoreResult<(), DomainError> {
+        WaylandWindowingSystem::run(self).map_err(|e| DomainError::Adapter {
+            source: Box::new(e),
+        })
     }
 }

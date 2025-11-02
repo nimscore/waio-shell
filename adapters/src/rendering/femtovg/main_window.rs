@@ -1,9 +1,9 @@
-use crate::errors::{LayerShikaError, Result};
+use crate::errors::{RenderingError, Result};
 use core::ops::Deref;
 use log::info;
 use slint::{
-    platform::{femtovg_renderer::FemtoVGRenderer, Renderer, WindowAdapter, WindowEvent},
     PhysicalSize, Window, WindowSize,
+    platform::{Renderer, WindowAdapter, WindowEvent, femtovg_renderer::FemtoVGRenderer},
 };
 use std::cell::Cell;
 use std::rc::{Rc, Weak};
@@ -43,7 +43,9 @@ impl FemtoVGWindow {
         ) {
             self.renderer
                 .render()
-                .map_err(|e| LayerShikaError::Rendering(format!("Error rendering frame: {e}")))?;
+                .map_err(|e| RenderingError::Operation {
+                    message: format!("Error rendering frame: {e}"),
+                })?;
         }
         Ok(())
     }

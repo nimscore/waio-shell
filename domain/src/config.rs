@@ -1,10 +1,6 @@
-#![allow(clippy::pub_use)]
-
-pub use crate::entities::component::UiComponentHandle;
-pub use crate::value_objects::anchor::AnchorEdges;
-pub use crate::value_objects::dimensions::WindowHeight;
-pub use crate::value_objects::layer::Layer;
-pub use crate::value_objects::margins::Margins;
+use crate::value_objects::anchor::AnchorEdges;
+use crate::value_objects::layer::Layer;
+use crate::value_objects::margins::Margins;
 
 #[derive(Debug, Clone)]
 pub struct WindowConfig {

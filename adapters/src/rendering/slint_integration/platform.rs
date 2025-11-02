@@ -1,28 +1,51 @@
 use slint::{
-    platform::{Platform, WindowAdapter},
     PlatformError,
+    platform::{Platform, WindowAdapter},
 };
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
 use crate::rendering::femtovg::main_window::FemtoVGWindow;
+use crate::rendering::femtovg::popup_window::PopupWindow;
 
 type PopupCreator = dyn Fn() -> Result<Rc<dyn WindowAdapter>, PlatformError>;
+
+thread_local! {
+    static CURRENT_PLATFORM: RefCell<Option<Weak<CustomSlintPlatform>>> = const { RefCell::new(None) };
+}
+
+pub fn close_current_popup() {
+    CURRENT_PLATFORM.with(|platform| {
+        if let Some(weak_platform) = platform.borrow().as_ref() {
+            if let Some(strong_platform) = weak_platform.upgrade() {
+                strong_platform.close_current_popup();
+            }
+        }
+    });
+}
 
 pub struct CustomSlintPlatform {
     main_window: Weak<FemtoVGWindow>,
     popup_creator: RefCell<Option<Rc<PopupCreator>>>,
     first_call: Cell<bool>,
+    last_popup: RefCell<Option<Weak<PopupWindow>>>,
 }
 
 impl CustomSlintPlatform {
     #[must_use]
-    pub fn new(window: &Rc<FemtoVGWindow>) -> Self {
-        Self {
+    pub fn new(window: &Rc<FemtoVGWindow>) -> Rc<Self> {
+        let platform = Rc::new(Self {
             main_window: Rc::downgrade(window),
             popup_creator: RefCell::new(None),
             first_call: Cell::new(true),
-        }
+            last_popup: RefCell::new(None),
+        });
+
+        CURRENT_PLATFORM.with(|current| {
+            *current.borrow_mut() = Some(Rc::downgrade(&platform));
+        });
+
+        platform
     }
 
     #[allow(dead_code)]
@@ -31,6 +54,19 @@ impl CustomSlintPlatform {
         F: Fn() -> Result<Rc<dyn WindowAdapter>, PlatformError> + 'static,
     {
         *self.popup_creator.borrow_mut() = Some(Rc::new(creator));
+    }
+
+    pub fn set_last_popup(&self, popup: &Rc<PopupWindow>) {
+        *self.last_popup.borrow_mut() = Some(Rc::downgrade(popup));
+    }
+
+    pub fn close_current_popup(&self) {
+        if let Some(weak_popup) = self.last_popup.borrow().as_ref() {
+            if let Some(popup) = weak_popup.upgrade() {
+                popup.close_popup();
+            }
+        }
+        *self.last_popup.borrow_mut() = None;
     }
 }
 
