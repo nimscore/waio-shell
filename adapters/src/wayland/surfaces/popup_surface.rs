@@ -1,5 +1,6 @@
+use layer_shika_domain::value_objects::popup_config::PopupConfig;
 use log::info;
-use slint::{LogicalPosition, PhysicalSize};
+use slint::PhysicalSize;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use std::rc::Rc;
 use wayland_client::{
@@ -30,8 +31,8 @@ pub struct PopupSurfaceParams<'a> {
     pub fractional_scale_manager: Option<&'a WpFractionalScaleManagerV1>,
     pub viewporter: Option<&'a WpViewporter>,
     pub queue_handle: &'a QueueHandle<WindowState>,
-    pub position: LogicalPosition,
-    pub size: PhysicalSize,
+    pub popup_config: PopupConfig,
+    pub physical_size: PhysicalSize,
     pub scale_factor: f32,
 }
 
@@ -76,14 +77,14 @@ impl PopupSurface {
         #[allow(clippy::cast_precision_loss)]
         #[allow(clippy::cast_possible_truncation)]
         if let Some(ref vp) = viewport {
-            let logical_width = (params.size.width as f32 / params.scale_factor) as i32;
-            let logical_height = (params.size.height as f32 / params.scale_factor) as i32;
+            let logical_width = (params.physical_size.width as f32 / params.scale_factor) as i32;
+            let logical_height = (params.physical_size.height as f32 / params.scale_factor) as i32;
             info!(
                 "Setting viewport destination to logical size: {}x{} (physical: {}x{}, scale: {})",
                 logical_width,
                 logical_height,
-                params.size.width,
-                params.size.height,
+                params.physical_size.width,
+                params.physical_size.height,
                 params.scale_factor
             );
             vp.set_destination(logical_width, logical_height);
@@ -102,24 +103,29 @@ impl PopupSurface {
 
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_possible_wrap)]
+    #[allow(clippy::cast_sign_loss)]
+    #[allow(clippy::cast_precision_loss)]
     fn create_positioner(params: &PopupSurfaceParams<'_>) -> XdgPositioner {
         let positioner = params
             .xdg_wm_base
             .create_positioner(params.queue_handle, ());
 
-        let x = params.position.x as i32;
-        let y = params.position.y as i32;
+        let calculated_x = params.popup_config.calculated_top_left_x() as i32;
+        let calculated_y = params.popup_config.calculated_top_left_y() as i32;
 
-        #[allow(clippy::cast_possible_truncation)]
-        #[allow(clippy::cast_sign_loss)]
-        #[allow(clippy::cast_precision_loss)]
-        let logical_width = (params.size.width as f32 / params.scale_factor) as i32;
-        #[allow(clippy::cast_possible_truncation)]
-        #[allow(clippy::cast_sign_loss)]
-        #[allow(clippy::cast_precision_loss)]
-        let logical_height = (params.size.height as f32 / params.scale_factor) as i32;
+        info!(
+            "Popup positioning: reference=({}, {}), mode={:?}, calculated_top_left=({}, {})",
+            params.popup_config.reference_x(),
+            params.popup_config.reference_y(),
+            params.popup_config.positioning_mode(),
+            calculated_x,
+            calculated_y
+        );
 
-        positioner.set_anchor_rect(x, y, 1, 1);
+        let logical_width = (params.physical_size.width as f32 / params.scale_factor) as i32;
+        let logical_height = (params.physical_size.height as f32 / params.scale_factor) as i32;
+
+        positioner.set_anchor_rect(calculated_x, calculated_y, 1, 1);
         positioner.set_size(logical_width, logical_height);
         positioner.set_anchor(Anchor::TopLeft);
         positioner.set_gravity(Gravity::BottomRight);

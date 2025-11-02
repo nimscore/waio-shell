@@ -1,10 +1,8 @@
 use crate::errors::{LayerShikaError, Result};
 use crate::rendering::egl::context::EGLContext;
 use crate::rendering::femtovg::popup_window::PopupWindow;
-use crate::rendering::slint_integration::platform::{
-    clear_popup_position_override, get_popup_position_override,
-    clear_popup_size_override, get_popup_size_override,
-};
+use layer_shika_domain::value_objects::popup_config::PopupConfig;
+use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use log::info;
 use slab::Slab;
 use slint::{platform::femtovg_renderer::FemtoVGRenderer, PhysicalSize, WindowSize};
@@ -22,6 +20,16 @@ use wayland_protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
 
 use super::popup_surface::PopupSurface;
 use super::surface_state::WindowState;
+
+#[derive(Debug, Clone, Copy)]
+pub struct CreatePopupParams {
+    pub last_pointer_serial: u32,
+    pub reference_x: f32,
+    pub reference_y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub positioning_mode: PopupPositioningMode,
+}
 
 pub struct PopupContext {
     compositor: WlCompositor,
@@ -89,7 +97,7 @@ impl PopupManager {
         self: &Rc<Self>,
         queue_handle: &QueueHandle<WindowState>,
         parent_layer_surface: &ZwlrLayerSurfaceV1,
-        last_pointer_serial: u32,
+        params: CreatePopupParams,
     ) -> Result<Rc<PopupWindow>> {
         let xdg_wm_base = self.context.xdg_wm_base.as_ref().ok_or_else(|| {
             LayerShikaError::WindowConfiguration {
@@ -97,41 +105,32 @@ impl PopupManager {
             }
         })?;
 
-        let pointer_position = if let Some((x, y)) = get_popup_position_override() {
-            info!("Using explicit popup position: ({}, {})", x, y);
-            clear_popup_position_override();
-            slint::LogicalPosition::new(x, y)
-        } else {
-            log::error!("No popup position provided - using (0, 0) as fallback");
-            slint::LogicalPosition::new(0.0, 0.0)
-        };
-
         let scale_factor = *self.current_scale_factor.borrow();
-        let output_size = *self.current_output_size.borrow();
         info!(
-            "Creating popup window with scale factor {scale_factor} and output size {output_size:?}"
+            "Creating popup window with scale factor {scale_factor}, reference=({}, {}), size=({} x {}), mode={:?}",
+            params.reference_x,
+            params.reference_y,
+            params.width,
+            params.height,
+            params.positioning_mode
         );
 
-        #[allow(clippy::cast_precision_loss)]
-        let logical_size = if let Some((width, height)) = get_popup_size_override() {
-            info!("Using explicit popup size: ({}, {})", width, height);
-            clear_popup_size_override();
-            slint::LogicalSize::new(width, height)
-        } else {
-            info!("No popup size override - using full output size");
-            slint::LogicalSize::new(
-                output_size.width as f32 / scale_factor,
-                output_size.height as f32 / scale_factor,
-            )
-        };
+        let popup_config = PopupConfig::new(
+            params.reference_x,
+            params.reference_y,
+            params.width,
+            params.height,
+            params.positioning_mode,
+        );
+
         #[allow(clippy::cast_possible_truncation)]
         #[allow(clippy::cast_sign_loss)]
         let popup_size = PhysicalSize::new(
-            (logical_size.width * scale_factor) as u32,
-            (logical_size.height * scale_factor) as u32,
+            (params.width * scale_factor) as u32,
+            (params.height * scale_factor) as u32,
         );
 
-        info!("Popup logical size: {logical_size:?}, physical size: {popup_size:?}");
+        info!("Popup physical size: {popup_size:?}");
 
         let popup_surface = PopupSurface::create(&super::popup_surface::PopupSurfaceParams {
             compositor: &self.context.compositor,
@@ -140,12 +139,12 @@ impl PopupManager {
             fractional_scale_manager: self.context.fractional_scale_manager.as_ref(),
             viewporter: self.context.viewporter.as_ref(),
             queue_handle,
-            position: pointer_position,
-            size: popup_size,
+            popup_config,
+            physical_size: popup_size,
             scale_factor,
         });
 
-        popup_surface.grab(&self.context.seat, last_pointer_serial);
+        popup_surface.grab(&self.context.seat, params.last_pointer_serial);
 
         let context = EGLContext::builder()
             .with_display_id(self.context.display.id())
@@ -158,7 +157,10 @@ impl PopupManager {
 
         let popup_window = PopupWindow::new(renderer);
         popup_window.set_scale_factor(scale_factor);
-        popup_window.set_size(WindowSize::Logical(logical_size));
+        popup_window.set_size(WindowSize::Logical(slint::LogicalSize::new(
+            params.width,
+            params.height,
+        )));
 
         let key = self.popups.borrow_mut().insert(ActivePopup {
             surface: popup_surface,

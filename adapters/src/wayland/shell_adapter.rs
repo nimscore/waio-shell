@@ -2,7 +2,7 @@ use crate::wayland::{
     config::{LayerSurfaceParams, WaylandWindowConfig},
     globals::context::GlobalContext,
     surfaces::layer_surface::{SurfaceCtx, SurfaceSetupParams},
-    surfaces::popup_manager::{PopupContext, PopupManager},
+    surfaces::popup_manager::{CreatePopupParams, PopupContext, PopupManager},
     surfaces::{
         surface_builder::WindowStateBuilder,
         surface_state::{SharedPointerSerial, WindowState},
@@ -11,13 +11,15 @@ use crate::wayland::{
 use crate::{
     errors::{EventLoopError, LayerShikaError, RenderingError, Result},
     rendering::{
-        egl::context::EGLContext, femtovg::main_window::FemtoVGWindow,
-        slint_integration::platform::CustomSlintPlatform,
+        egl::context::EGLContext,
+        femtovg::main_window::FemtoVGWindow,
+        slint_integration::platform::{CustomSlintPlatform, clear_popup_config, get_popup_config},
     },
 };
 use core::result::Result as CoreResult;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::ports::windowing::WindowingSystemPort;
+use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use log::{error, info};
 use slint::{
     LogicalPosition, PhysicalSize, PlatformError, WindowPosition,
@@ -173,14 +175,45 @@ impl WaylandWindowingSystem {
         let layer_surface = state.layer_surface();
         let queue_handle = event_queue.handle();
         let serial_holder = Rc::clone(shared_serial);
+        let output_size = *state.output_size();
+
+        #[allow(clippy::cast_precision_loss)]
+        let default_width = output_size.width as f32;
+        #[allow(clippy::cast_precision_loss)]
+        let default_height = output_size.height as f32;
 
         platform.set_popup_creator(move || {
             info!("Popup creator called! Creating popup window...");
 
             let serial = serial_holder.get();
 
+            let (reference_x, reference_y, width, height, positioning_mode) = get_popup_config()
+                .unwrap_or_else(|| {
+                    log::warn!("No popup config provided, using output size as defaults");
+                    (
+                        0.0,
+                        0.0,
+                        default_width,
+                        default_height,
+                        PopupPositioningMode::TopLeft,
+                    )
+                });
+
+            clear_popup_config();
+
             let popup_window = popup_manager_clone
-                .create_popup(&queue_handle, &layer_surface, serial)
+                .create_popup(
+                    &queue_handle,
+                    &layer_surface,
+                    CreatePopupParams {
+                        last_pointer_serial: serial,
+                        reference_x,
+                        reference_y,
+                        width,
+                        height,
+                        positioning_mode,
+                    },
+                )
                 .map_err(|e| PlatformError::Other(format!("Failed to create popup: {e}")))?;
 
             if let Some(platform) = platform_weak.upgrade() {

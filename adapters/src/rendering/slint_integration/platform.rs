@@ -1,3 +1,4 @@
+use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use slint::{
     PlatformError,
     platform::{Platform, WindowAdapter},
@@ -9,6 +10,7 @@ use crate::rendering::femtovg::main_window::FemtoVGWindow;
 use crate::rendering::femtovg::popup_window::PopupWindow;
 
 type PopupCreator = dyn Fn() -> Result<Rc<dyn WindowAdapter>, PlatformError>;
+type PopupConfigData = (f32, f32, f32, f32, PopupPositioningMode);
 
 thread_local! {
     static CURRENT_PLATFORM: RefCell<Option<Weak<CustomSlintPlatform>>> = const { RefCell::new(None) };
@@ -24,61 +26,43 @@ pub fn close_current_popup() {
     });
 }
 
-pub fn set_popup_position_override(x: f32, y: f32) {
+pub fn set_popup_config(
+    reference_x: f32,
+    reference_y: f32,
+    width: f32,
+    height: f32,
+    positioning_mode: PopupPositioningMode,
+) {
     CURRENT_PLATFORM.with(|platform| {
         if let Some(weak_platform) = platform.borrow().as_ref() {
             if let Some(strong_platform) = weak_platform.upgrade() {
-                strong_platform.set_popup_position(x, y);
+                strong_platform.set_popup_config(
+                    reference_x,
+                    reference_y,
+                    width,
+                    height,
+                    positioning_mode,
+                );
             }
         }
     });
 }
 
-pub fn get_popup_position_override() -> Option<(f32, f32)> {
+pub fn get_popup_config() -> Option<PopupConfigData> {
     CURRENT_PLATFORM.with(|platform| {
         platform
             .borrow()
             .as_ref()
             .and_then(Weak::upgrade)
-            .and_then(|strong| strong.get_popup_position())
+            .and_then(|strong| strong.get_popup_config())
     })
 }
 
-pub fn clear_popup_position_override() {
+pub fn clear_popup_config() {
     CURRENT_PLATFORM.with(|platform| {
         if let Some(weak_platform) = platform.borrow().as_ref() {
             if let Some(strong_platform) = weak_platform.upgrade() {
-                strong_platform.clear_popup_position();
-            }
-        }
-    });
-}
-
-pub fn set_popup_size_override(width: f32, height: f32) {
-    CURRENT_PLATFORM.with(|platform| {
-        if let Some(weak_platform) = platform.borrow().as_ref() {
-            if let Some(strong_platform) = weak_platform.upgrade() {
-                strong_platform.set_popup_size(width, height);
-            }
-        }
-    });
-}
-
-pub fn get_popup_size_override() -> Option<(f32, f32)> {
-    CURRENT_PLATFORM.with(|platform| {
-        platform
-            .borrow()
-            .as_ref()
-            .and_then(Weak::upgrade)
-            .and_then(|strong| strong.get_popup_size())
-    })
-}
-
-pub fn clear_popup_size_override() {
-    CURRENT_PLATFORM.with(|platform| {
-        if let Some(weak_platform) = platform.borrow().as_ref() {
-            if let Some(strong_platform) = weak_platform.upgrade() {
-                strong_platform.clear_popup_size();
+                strong_platform.clear_popup_config();
             }
         }
     });
@@ -89,8 +73,7 @@ pub struct CustomSlintPlatform {
     popup_creator: RefCell<Option<Rc<PopupCreator>>>,
     first_call: Cell<bool>,
     last_popup: RefCell<Option<Weak<PopupWindow>>>,
-    popup_position: RefCell<Option<(f32, f32)>>,
-    popup_size: RefCell<Option<(f32, f32)>>,
+    popup_config: RefCell<Option<PopupConfigData>>,
 }
 
 impl CustomSlintPlatform {
@@ -101,8 +84,7 @@ impl CustomSlintPlatform {
             popup_creator: RefCell::new(None),
             first_call: Cell::new(true),
             last_popup: RefCell::new(None),
-            popup_position: RefCell::new(None),
-            popup_size: RefCell::new(None),
+            popup_config: RefCell::new(None),
         });
 
         CURRENT_PLATFORM.with(|current| {
@@ -133,29 +115,25 @@ impl CustomSlintPlatform {
         *self.last_popup.borrow_mut() = None;
     }
 
-    pub fn set_popup_position(&self, x: f32, y: f32) {
-        *self.popup_position.borrow_mut() = Some((x, y));
+    pub fn set_popup_config(
+        &self,
+        reference_x: f32,
+        reference_y: f32,
+        width: f32,
+        height: f32,
+        positioning_mode: PopupPositioningMode,
+    ) {
+        *self.popup_config.borrow_mut() =
+            Some((reference_x, reference_y, width, height, positioning_mode));
     }
 
     #[must_use]
-    pub fn get_popup_position(&self) -> Option<(f32, f32)> {
-        *self.popup_position.borrow()
+    pub fn get_popup_config(&self) -> Option<PopupConfigData> {
+        *self.popup_config.borrow()
     }
 
-    pub fn clear_popup_position(&self) {
-        *self.popup_position.borrow_mut() = None;
-    }
-
-    pub fn set_popup_size(&self, width: f32, height: f32) {
-        *self.popup_size.borrow_mut() = Some((width, height));
-    }
-
-    pub fn get_popup_size(&self) -> Option<(f32, f32)> {
-        *self.popup_size.borrow()
-    }
-
-    pub fn clear_popup_size(&self) {
-        *self.popup_size.borrow_mut() = None;
+    pub fn clear_popup_config(&self) {
+        *self.popup_config.borrow_mut() = None;
     }
 }
 
