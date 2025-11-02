@@ -175,21 +175,21 @@ impl WaylandWindowingSystem {
         let layer_surface = state.layer_surface();
         let queue_handle = event_queue.handle();
         let serial_holder = Rc::clone(shared_serial);
-        let output_size = *state.output_size();
-
-        #[allow(clippy::cast_precision_loss)]
-        let default_width = output_size.width as f32;
-        #[allow(clippy::cast_precision_loss)]
-        let default_height = output_size.height as f32;
 
         platform.set_popup_creator(move || {
             info!("Popup creator called! Creating popup window...");
 
             let serial = serial_holder.get();
 
+            let output_size = popup_manager_clone.output_size();
+            #[allow(clippy::cast_precision_loss)]
+            let default_width = output_size.width as f32;
+            #[allow(clippy::cast_precision_loss)]
+            let default_height = output_size.height as f32;
+
             let (reference_x, reference_y, width, height, positioning_mode) = get_popup_config()
                 .unwrap_or_else(|| {
-                    log::warn!("No popup config provided, using output size as defaults");
+                    log::warn!("No popup config provided, using output size ({default_width}x{default_height}) as defaults");
                     (
                         0.0,
                         0.0,

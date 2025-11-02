@@ -93,6 +93,10 @@ impl PopupManager {
         *self.current_output_size.borrow_mut() = output_size;
     }
 
+    pub fn output_size(&self) -> PhysicalSize {
+        *self.current_output_size.borrow()
+    }
+
     pub fn create_popup(
         self: &Rc<Self>,
         queue_handle: &QueueHandle<WindowState>,
