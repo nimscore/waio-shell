@@ -15,8 +15,10 @@ pub mod platform {
 
     pub mod calloop {
         pub use smithay_client_toolkit::reexports::calloop::channel;
+        pub use smithay_client_toolkit::reexports::calloop::generic::Generic;
+        pub use smithay_client_toolkit::reexports::calloop::timer::{TimeoutAction, Timer};
         pub use smithay_client_toolkit::reexports::calloop::{
-            EventSource, InsertError, PostAction, RegistrationToken,
+            EventSource, InsertError, Interest, Mode, PostAction, RegistrationToken,
         };
     }
 }
