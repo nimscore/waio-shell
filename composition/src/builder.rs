@@ -1,7 +1,9 @@
 use crate::Result;
 use crate::system::WindowingSystem;
 use layer_shika_adapters::platform::slint_interpreter::ComponentDefinition;
-use layer_shika_domain::prelude::{AnchorEdges, Layer, Margins, WindowConfig};
+use layer_shika_domain::prelude::{
+    AnchorEdges, KeyboardInteractivity, Layer, Margins, WindowConfig,
+};
 
 pub struct NeedsComponent;
 pub struct HasComponent {
@@ -70,6 +72,12 @@ impl LayerShika<HasComponent> {
     #[must_use]
     pub const fn with_scale_factor(mut self, scale_factor: f32) -> Self {
         self.config.scale_factor = scale_factor;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_keyboard_interactivity(mut self, mode: KeyboardInteractivity) -> Self {
+        self.config.keyboard_interactivity = mode;
         self
     }
 

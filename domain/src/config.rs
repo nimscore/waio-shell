@@ -1,4 +1,5 @@
 use crate::value_objects::anchor::AnchorEdges;
+use crate::value_objects::keyboard_interactivity::KeyboardInteractivity;
 use crate::value_objects::layer::Layer;
 use crate::value_objects::margins::Margins;
 
@@ -11,6 +12,7 @@ pub struct WindowConfig {
     pub namespace: String,
     pub layer: Layer,
     pub anchor: AnchorEdges,
+    pub keyboard_interactivity: KeyboardInteractivity,
 }
 
 impl WindowConfig {
@@ -24,6 +26,7 @@ impl WindowConfig {
             scale_factor: 1.0,
             layer: Layer::default(),
             anchor: AnchorEdges::default(),
+            keyboard_interactivity: KeyboardInteractivity::default(),
         }
     }
 }

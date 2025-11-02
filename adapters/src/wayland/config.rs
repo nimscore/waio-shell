@@ -1,10 +1,11 @@
 use layer_shika_domain::prelude::{
-    AnchorEdges, Layer, Margins, WindowConfig as DomainWindowConfig,
+    AnchorEdges, KeyboardInteractivity as DomainKeyboardInteractivity, Layer, Margins,
+    WindowConfig as DomainWindowConfig,
 };
 use slint_interpreter::ComponentDefinition;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::{self},
-    zwlr_layer_surface_v1::{Anchor, KeyboardInteractivity},
+    zwlr_layer_surface_v1::{Anchor, KeyboardInteractivity as WaylandKeyboardInteractivity},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -12,7 +13,7 @@ pub(crate) struct LayerSurfaceParams {
     pub anchor: Anchor,
     pub margin: Margins,
     pub exclusive_zone: i32,
-    pub keyboard_interactivity: KeyboardInteractivity,
+    pub keyboard_interactivity: WaylandKeyboardInteractivity,
     pub height: u32,
 }
 
@@ -22,7 +23,7 @@ pub struct WaylandWindowConfig {
     pub layer: zwlr_layer_shell_v1::Layer,
     pub margin: Margins,
     pub anchor: Anchor,
-    pub keyboard_interactivity: KeyboardInteractivity,
+    pub keyboard_interactivity: WaylandKeyboardInteractivity,
     pub exclusive_zone: i32,
     pub scale_factor: f32,
     pub namespace: String,
@@ -40,7 +41,9 @@ impl WaylandWindowConfig {
             layer: convert_layer(domain_config.layer),
             margin: domain_config.margin,
             anchor: convert_anchor(domain_config.anchor),
-            keyboard_interactivity: KeyboardInteractivity::OnDemand,
+            keyboard_interactivity: convert_keyboard_interactivity(
+                domain_config.keyboard_interactivity,
+            ),
             exclusive_zone: domain_config.exclusive_zone,
             scale_factor: domain_config.scale_factor,
             namespace: domain_config.namespace,
@@ -75,4 +78,14 @@ const fn convert_anchor(anchor: AnchorEdges) -> Anchor {
     }
 
     result
+}
+
+const fn convert_keyboard_interactivity(
+    mode: DomainKeyboardInteractivity,
+) -> WaylandKeyboardInteractivity {
+    match mode {
+        DomainKeyboardInteractivity::None => WaylandKeyboardInteractivity::None,
+        DomainKeyboardInteractivity::Exclusive => WaylandKeyboardInteractivity::Exclusive,
+        DomainKeyboardInteractivity::OnDemand => WaylandKeyboardInteractivity::OnDemand,
+    }
 }
