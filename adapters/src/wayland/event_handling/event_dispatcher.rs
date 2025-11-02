@@ -171,7 +171,7 @@ impl Dispatch<WlPointer, ()> for WindowState {
                 state.set_current_pointer_position(surface_x, surface_y);
 
                 state.find_window_for_surface(&surface);
-                let position = *state.current_pointer_position();
+                let position = state.current_pointer_position();
 
                 state.dispatch_to_active_window(WindowEvent::PointerMoved { position });
             }
@@ -182,7 +182,7 @@ impl Dispatch<WlPointer, ()> for WindowState {
                 ..
             } => {
                 state.set_current_pointer_position(surface_x, surface_y);
-                let position = *state.current_pointer_position();
+                let position = state.current_pointer_position();
 
                 state.dispatch_to_active_window(WindowEvent::PointerMoved { position });
             }
@@ -198,7 +198,7 @@ impl Dispatch<WlPointer, ()> for WindowState {
                 ..
             } => {
                 state.set_last_pointer_serial(serial);
-                let position = *state.current_pointer_position();
+                let position = state.current_pointer_position();
                 let event = match button_state {
                     WEnum::Value(wl_pointer::ButtonState::Pressed) => WindowEvent::PointerPressed {
                         button: PointerEventButton::Left,
