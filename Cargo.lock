@@ -1857,6 +1857,7 @@ version = "0.1.0"
 dependencies = [
  "layer-shika-adapters",
  "layer-shika-domain",
+ "spin_on",
  "thiserror 2.0.17",
 ]
 

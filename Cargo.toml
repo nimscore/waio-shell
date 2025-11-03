@@ -15,6 +15,7 @@ categories = ["gui"]
 glutin = { version = "0.32.3", default-features = false, features = [
     "wayland",
 ] }
+spin_on = "0.1"
 log = "0.4.28"
 raw-window-handle = "0.6.2"
 slab = "0.4"

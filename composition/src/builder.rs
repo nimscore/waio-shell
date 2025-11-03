@@ -1,9 +1,12 @@
 use crate::Result;
 use crate::system::WindowingSystem;
-use layer_shika_adapters::platform::slint_interpreter::ComponentDefinition;
+use layer_shika_adapters::platform::slint_interpreter::{Compiler, ComponentDefinition};
+use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::prelude::{
     AnchorEdges, KeyboardInteractivity, Layer, Margins, WindowConfig,
 };
+use spin_on::spin_on;
+use std::path::{Path, PathBuf};
 
 pub struct NeedsComponent;
 pub struct HasComponent {
@@ -24,6 +27,89 @@ impl LayerShika<NeedsComponent> {
             },
             config: WindowConfig::default(),
         }
+    }
+
+    pub fn from_file(
+        path: impl AsRef<Path>,
+        component_name: Option<&str>,
+    ) -> Result<LayerShika<HasComponent>> {
+        Self::from_file_with_compiler(
+            path,
+            &mut Compiler::default(),
+            component_name.unwrap_or("Main"),
+        )
+    }
+
+    pub fn from_file_with_compiler(
+        path: impl AsRef<Path>,
+        compiler: &mut Compiler,
+        component_name: &str,
+    ) -> Result<LayerShika<HasComponent>> {
+        let compilation_result = spin_on(compiler.build_from_path(path.as_ref()));
+        let diagnostics: Vec<_> = compilation_result.diagnostics().collect();
+        if !diagnostics.is_empty() {
+            let messages: Vec<String> = diagnostics.iter().map(ToString::to_string).collect();
+            return Err(DomainError::Configuration {
+                message: format!(
+                    "Failed to compile Slint file '{}':\n{}",
+                    path.as_ref().display(),
+                    messages.join("\n")
+                ),
+            }
+            .into());
+        }
+
+        let definition = compilation_result.component(component_name).ok_or_else(|| {
+            DomainError::Configuration {
+                message: format!(
+                    "Component '{}' not found in Slint file '{}'",
+                    component_name,
+                    path.as_ref().display()
+                ),
+            }
+        })?;
+
+        Ok(Self::new(definition))
+    }
+
+    pub fn from_source(
+        source: impl AsRef<str>,
+        component_name: Option<&str>,
+    ) -> Result<LayerShika<HasComponent>> {
+        Self::from_source_with_compiler(
+            source,
+            &mut Compiler::default(),
+            component_name.unwrap_or("Main"),
+        )
+    }
+
+    pub fn from_source_with_compiler(
+        source: impl AsRef<str>,
+        compiler: &mut Compiler,
+        component_name: &str,
+    ) -> Result<LayerShika<HasComponent>> {
+        let compilation_result =
+            spin_on(compiler.build_from_source(source.as_ref().to_string(), PathBuf::default()));
+
+        let diagnostics: Vec<_> = compilation_result.diagnostics().collect();
+        if !diagnostics.is_empty() {
+            let messages: Vec<String> = diagnostics.iter().map(ToString::to_string).collect();
+            return Err(DomainError::Configuration {
+                message: format!(
+                    "Failed to compile Slint source code:\n{}",
+                    messages.join("\n")
+                ),
+            }
+            .into());
+        }
+
+        let definition = compilation_result.component(component_name).ok_or_else(|| {
+            DomainError::Configuration {
+                message: format!("Component '{}' not found in Slint source code", component_name),
+            }
+        })?;
+
+        Ok(Self::new(definition))
     }
 }
 

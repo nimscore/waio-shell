@@ -16,4 +16,5 @@ workspace = true
 [dependencies]
 layer-shika-adapters.workspace = true
 layer-shika-domain.workspace = true
+spin_on.workspace = true
 thiserror.workspace = true
