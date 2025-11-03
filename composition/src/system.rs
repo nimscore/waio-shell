@@ -9,8 +9,9 @@ use layer_shika_adapters::platform::slint_interpreter::{
     CompilationResult, ComponentDefinition, ComponentInstance, Value,
 };
 use layer_shika_adapters::wayland::{
-    config::WaylandWindowConfig, shell_adapter::WaylandWindowingSystem,
-    surfaces::surface_state::WindowState,
+    config::WaylandWindowConfig,
+    shell_adapter::WaylandWindowingSystem,
+    surfaces::{popup_manager::PopupManager, surface_state::WindowState},
 };
 use layer_shika_domain::config::WindowConfig;
 use layer_shika_domain::errors::DomainError;
@@ -135,6 +136,79 @@ impl RuntimeState<'_> {
         Ok(())
     }
 
+    fn measure_popup_dimensions(&mut self, definition: &ComponentDefinition) -> Result<(f32, f32)> {
+        log::debug!(
+            "Creating temporary popup instance to read dimensions from component properties"
+        );
+
+        let temp_instance = definition.create().map_err(|e| {
+            Error::Domain(DomainError::Configuration {
+                message: format!("Failed to create temporary popup instance: {}", e),
+            })
+        })?;
+
+        temp_instance.show().map_err(|e| {
+            Error::Domain(DomainError::Configuration {
+                message: format!("Failed to show temporary popup instance: {}", e),
+            })
+        })?;
+
+        let width: f32 = temp_instance
+            .get_property("popup-width")
+            .ok()
+            .and_then(|v| v.try_into().ok())
+            .unwrap_or(120.0);
+
+        let height: f32 = temp_instance
+            .get_property("popup-height")
+            .ok()
+            .and_then(|v| v.try_into().ok())
+            .unwrap_or(120.0);
+
+        log::debug!(
+            "Read popup dimensions from component properties: {}x{} (popup-width, popup-height)",
+            width,
+            height
+        );
+
+        drop(temp_instance);
+        self.close_current_popup()?;
+        log::debug!("Destroyed temporary popup instance");
+
+        Ok((width, height))
+    }
+
+    fn create_popup_instance(
+        definition: &ComponentDefinition,
+        popup_manager: &Rc<PopupManager>,
+    ) -> Result<ComponentInstance> {
+        let instance = definition.create().map_err(|e| {
+            Error::Domain(DomainError::Configuration {
+                message: format!("Failed to create popup instance: {}", e),
+            })
+        })?;
+
+        let popup_manager_for_callback = Rc::clone(popup_manager);
+        instance
+            .set_callback("closed", move |_| {
+                popup_manager_for_callback.close_current_popup();
+                Value::Void
+            })
+            .map_err(|e| {
+                Error::Domain(DomainError::Configuration {
+                    message: format!("Failed to set popup closed callback: {}", e),
+                })
+            })?;
+
+        instance.show().map_err(|e| {
+            Error::Domain(DomainError::Configuration {
+                message: format!("Failed to show popup instance: {}", e),
+            })
+        })?;
+
+        Ok(instance)
+    }
+
     pub fn show_popup_component(
         &mut self,
         component_name: &str,
@@ -162,45 +236,25 @@ impl RuntimeState<'_> {
         self.close_current_popup()?;
 
         let (width, height) = if let Some(explicit_size) = size {
+            log::debug!(
+                "Using explicit popup size: {}x{}",
+                explicit_size.0,
+                explicit_size.1
+            );
             explicit_size
         } else {
-            let temp_instance = definition.create().map_err(|e| {
-                Error::Domain(DomainError::Configuration {
-                    message: format!("Failed to create temporary popup instance: {}", e),
-                })
-            })?;
-
-            temp_instance.show().map_err(|e| {
-                Error::Domain(DomainError::Configuration {
-                    message: format!("Failed to show temporary popup instance: {}", e),
-                })
-            })?;
-
-            let width: f32 = temp_instance
-                .get_property("popup-width")
-                .ok()
-                .and_then(|v| v.try_into().ok())
-                .unwrap_or(120.0);
-
-            let height: f32 = temp_instance
-                .get_property("popup-height")
-                .ok()
-                .and_then(|v| v.try_into().ok())
-                .unwrap_or(120.0);
-
-            drop(temp_instance);
-            self.close_current_popup()?;
-
-            (width, height)
+            self.measure_popup_dimensions(&definition)?
         };
 
         let popup_manager = self
             .window_state
             .popup_manager()
             .as_ref()
-            .ok_or_else(|| Error::Domain(DomainError::Configuration {
-                message: "No popup manager available".to_string(),
-            }))
+            .ok_or_else(|| {
+                Error::Domain(DomainError::Configuration {
+                    message: "No popup manager available".to_string(),
+                })
+            })
             .map(Rc::clone)?;
 
         let (reference_x, reference_y) = position.unwrap_or((0.0, 0.0));
@@ -213,29 +267,16 @@ impl RuntimeState<'_> {
             positioning_mode,
         );
 
-        let instance = definition.create().map_err(|e| {
-            Error::Domain(DomainError::Configuration {
-                message: format!("Failed to create popup instance: {}", e),
-            })
-        })?;
+        log::debug!(
+            "Creating final popup instance with dimensions {}x{} at position ({}, {}), mode: {:?}",
+            width,
+            height,
+            reference_x,
+            reference_y,
+            positioning_mode
+        );
 
-        let popup_manager_for_callback = Rc::clone(&popup_manager);
-        instance
-            .set_callback("closed", move |_| {
-                popup_manager_for_callback.close_current_popup();
-                Value::Void
-            })
-            .map_err(|e| {
-                Error::Domain(DomainError::Configuration {
-                    message: format!("Failed to set popup closed callback: {}", e),
-                })
-            })?;
-
-        instance.show().map_err(|e| {
-            Error::Domain(DomainError::Configuration {
-                message: format!("Failed to show popup instance: {}", e),
-            })
-        })?;
+        Self::create_popup_instance(&definition, &popup_manager)?;
 
         Ok(())
     }
