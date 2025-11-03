@@ -1,8 +1,6 @@
 use crate::Result;
 use crate::system::WindowingSystem;
-use layer_shika_adapters::platform::slint_interpreter::{
-    CompilationResult, Compiler, ComponentDefinition,
-};
+use layer_shika_adapters::platform::slint_interpreter::{CompilationResult, Compiler};
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::prelude::{
     AnchorEdges, KeyboardInteractivity, Layer, Margins, WindowConfig,
@@ -13,8 +11,8 @@ use std::rc::Rc;
 
 pub struct NeedsComponent;
 pub struct HasComponent {
-    component_definition: ComponentDefinition,
-    compilation_result: Option<Rc<CompilationResult>>,
+    component_name: String,
+    compilation_result: Rc<CompilationResult>,
 }
 
 pub struct LayerShika<State> {
@@ -24,11 +22,14 @@ pub struct LayerShika<State> {
 
 impl LayerShika<NeedsComponent> {
     #[must_use]
-    pub fn new(component_definition: ComponentDefinition) -> LayerShika<HasComponent> {
+    pub fn new(
+        compilation_result: Rc<CompilationResult>,
+        component_name: impl Into<String>,
+    ) -> LayerShika<HasComponent> {
         LayerShika {
             state: HasComponent {
-                component_definition,
-                compilation_result: None,
+                component_name: component_name.into(),
+                compilation_result,
             },
             config: WindowConfig::default(),
         }
@@ -64,7 +65,7 @@ impl LayerShika<NeedsComponent> {
             .into());
         }
 
-        let definition = compilation_result
+        compilation_result
             .component(component_name)
             .ok_or_else(|| DomainError::Configuration {
                 message: format!(
@@ -76,8 +77,8 @@ impl LayerShika<NeedsComponent> {
 
         Ok(LayerShika {
             state: HasComponent {
-                component_definition: definition,
-                compilation_result: Some(Rc::new(compilation_result)),
+                component_name: component_name.to_string(),
+                compilation_result: Rc::new(compilation_result),
             },
             config: WindowConfig::default(),
         })
@@ -114,7 +115,7 @@ impl LayerShika<NeedsComponent> {
             .into());
         }
 
-        let definition = compilation_result
+        compilation_result
             .component(component_name)
             .ok_or_else(|| DomainError::Configuration {
                 message: format!(
@@ -125,8 +126,8 @@ impl LayerShika<NeedsComponent> {
 
         Ok(LayerShika {
             state: HasComponent {
-                component_definition: definition,
-                compilation_result: Some(Rc::new(compilation_result)),
+                component_name: component_name.to_string(),
+                compilation_result: Rc::new(compilation_result),
             },
             config: WindowConfig::default(),
         })
@@ -134,12 +135,6 @@ impl LayerShika<NeedsComponent> {
 }
 
 impl LayerShika<HasComponent> {
-    #[must_use]
-    pub fn with_compilation_result(mut self, compilation_result: Rc<CompilationResult>) -> Self {
-        self.state.compilation_result = Some(compilation_result);
-        self
-    }
-
     #[must_use]
     pub const fn with_height(mut self, height: u32) -> Self {
         self.config.height = height;
@@ -194,9 +189,20 @@ impl LayerShika<HasComponent> {
     }
 
     pub fn build(self) -> Result<WindowingSystem> {
+        let component_definition = self
+            .state
+            .compilation_result
+            .component(&self.state.component_name)
+            .ok_or_else(|| DomainError::Configuration {
+                message: format!(
+                    "Component '{}' not found in compilation result",
+                    self.state.component_name
+                ),
+            })?;
+
         WindowingSystem::new(
-            self.state.component_definition,
-            self.state.compilation_result,
+            component_definition,
+            Some(self.state.compilation_result),
             self.config,
         )
     }
