@@ -11,9 +11,8 @@ use crate::wayland::{
 use crate::{
     errors::{EventLoopError, LayerShikaError, RenderingError, Result},
     rendering::{
-        egl::context::EGLContext,
-        femtovg::main_window::FemtoVGWindow,
-        slint_integration::platform::{CustomSlintPlatform, clear_popup_config, get_popup_config},
+        egl::context::EGLContext, femtovg::main_window::FemtoVGWindow,
+        slint_integration::platform::CustomSlintPlatform,
     },
 };
 use core::result::Result as CoreResult;
@@ -172,7 +171,6 @@ impl WaylandWindowingSystem {
         info!("Setting up popup creator with xdg-shell support");
 
         let popup_manager_clone = Rc::clone(popup_manager);
-        let platform_weak = Rc::downgrade(platform);
         let layer_surface = state.layer_surface();
         let queue_handle = event_queue.handle();
         let serial_holder = Rc::clone(shared_serial);
@@ -182,44 +180,36 @@ impl WaylandWindowingSystem {
 
             let serial = serial_holder.get();
 
-            let output_size = popup_manager_clone.output_size();
-            #[allow(clippy::cast_precision_loss)]
-            let default_width = output_size.width as f32;
-            #[allow(clippy::cast_precision_loss)]
-            let default_height = output_size.height as f32;
+            let params = popup_manager_clone.take_pending_popup_config();
 
-            let (reference_x, reference_y, width, height, positioning_mode) = get_popup_config()
-                .unwrap_or_else(|| {
-                    log::warn!("No popup config provided, using output size ({default_width}x{default_height}) as defaults");
-                    (
-                        0.0,
-                        0.0,
-                        default_width,
-                        default_height,
-                        PopupPositioningMode::TopLeft,
-                    )
-                });
+            let params = if let Some(mut p) = params {
+                p.last_pointer_serial = serial;
+                p
+            } else {
+                let output_size = popup_manager_clone.output_size();
+                #[allow(clippy::cast_precision_loss)]
+                let default_width = output_size.width as f32;
+                #[allow(clippy::cast_precision_loss)]
+                let default_height = output_size.height as f32;
 
-            clear_popup_config();
+                log::warn!("No popup config provided, using output size ({default_width}x{default_height}) as defaults");
+                CreatePopupParams {
+                    last_pointer_serial: serial,
+                    reference_x: 0.0,
+                    reference_y: 0.0,
+                    width: default_width,
+                    height: default_height,
+                    positioning_mode: PopupPositioningMode::TopLeft,
+                }
+            };
 
             let popup_window = popup_manager_clone
                 .create_popup(
                     &queue_handle,
                     &layer_surface,
-                    CreatePopupParams {
-                        last_pointer_serial: serial,
-                        reference_x,
-                        reference_y,
-                        width,
-                        height,
-                        positioning_mode,
-                    },
+                    params,
                 )
                 .map_err(|e| PlatformError::Other(format!("Failed to create popup: {e}")))?;
-
-            if let Some(platform) = platform_weak.upgrade() {
-                platform.set_last_popup(&popup_window);
-            }
 
             let result = Ok(popup_window as Rc<dyn WindowAdapter>);
 

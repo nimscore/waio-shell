@@ -72,6 +72,8 @@ pub struct PopupManager {
     popups: RefCell<Slab<ActivePopup>>,
     current_scale_factor: RefCell<f32>,
     current_output_size: RefCell<PhysicalSize>,
+    pending_popup_config: RefCell<Option<CreatePopupParams>>,
+    last_popup_key: RefCell<Option<usize>>,
 }
 
 impl PopupManager {
@@ -82,6 +84,39 @@ impl PopupManager {
             popups: RefCell::new(Slab::new()),
             current_scale_factor: RefCell::new(initial_scale_factor),
             current_output_size: RefCell::new(PhysicalSize::new(0, 0)),
+            pending_popup_config: RefCell::new(None),
+            last_popup_key: RefCell::new(None),
+        }
+    }
+
+    pub fn set_pending_popup_config(
+        &self,
+        reference_x: f32,
+        reference_y: f32,
+        width: f32,
+        height: f32,
+        positioning_mode: PopupPositioningMode,
+    ) {
+        let last_pointer_serial = 0;
+        *self.pending_popup_config.borrow_mut() = Some(CreatePopupParams {
+            last_pointer_serial,
+            reference_x,
+            reference_y,
+            width,
+            height,
+            positioning_mode,
+        });
+    }
+
+    #[must_use]
+    pub fn take_pending_popup_config(&self) -> Option<CreatePopupParams> {
+        self.pending_popup_config.borrow_mut().take()
+    }
+
+    pub fn close_current_popup(&self) {
+        let key = self.last_popup_key.borrow_mut().take();
+        if let Some(key) = key {
+            self.destroy_popup(key);
         }
     }
 
@@ -171,6 +206,7 @@ impl PopupManager {
             window: Rc::clone(&popup_window),
         });
         popup_window.set_popup_manager(Rc::downgrade(self), key);
+        *self.last_popup_key.borrow_mut() = Some(key);
 
         info!("Popup window created successfully with key {key}");
 

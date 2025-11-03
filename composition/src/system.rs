@@ -12,7 +12,6 @@ use layer_shika_adapters::wayland::{
     config::WaylandWindowConfig, shell_adapter::WaylandWindowingSystem,
     surfaces::surface_state::WindowState,
 };
-use layer_shika_adapters::{clear_popup_config, close_current_popup, set_popup_config};
 use layer_shika_domain::config::WindowConfig;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
@@ -129,8 +128,15 @@ impl RuntimeState<'_> {
         self.window_state.compilation_result()
     }
 
+    pub fn close_current_popup(&mut self) -> Result<()> {
+        if let Some(popup_manager) = self.window_state.popup_manager() {
+            popup_manager.close_current_popup();
+        }
+        Ok(())
+    }
+
     pub fn show_popup_component(
-        &self,
+        &mut self,
         component_name: &str,
         position: Option<(f32, f32)>,
         size: Option<(f32, f32)>,
@@ -153,41 +159,59 @@ impl RuntimeState<'_> {
                 })
             })?;
 
-        close_current_popup();
+        self.close_current_popup()?;
 
-        let temp_instance = definition.create().map_err(|e| {
-            Error::Domain(DomainError::Configuration {
-                message: format!("Failed to create temporary popup instance: {}", e),
-            })
-        })?;
-        temp_instance.hide().map_err(|e| {
-            Error::Domain(DomainError::Configuration {
-                message: format!("Failed to hide temporary popup instance: {}", e),
-            })
-        })?;
-
-        let width: f32 = temp_instance
-            .get_property("popup-width")
-            .ok()
-            .and_then(|v| v.try_into().ok())
-            .or(size.map(|(w, _)| w))
-            .unwrap_or(300.0);
-
-        let height: f32 = temp_instance
-            .get_property("popup-height")
-            .ok()
-            .and_then(|v| v.try_into().ok())
-            .or(size.map(|(_, h)| h))
-            .unwrap_or(400.0);
-
-        drop(temp_instance);
-        close_current_popup();
-
-        if let Some((reference_x, reference_y)) = position {
-            set_popup_config(reference_x, reference_y, width, height, positioning_mode);
+        let (width, height) = if let Some(explicit_size) = size {
+            explicit_size
         } else {
-            clear_popup_config();
-        }
+            let temp_instance = definition.create().map_err(|e| {
+                Error::Domain(DomainError::Configuration {
+                    message: format!("Failed to create temporary popup instance: {}", e),
+                })
+            })?;
+
+            temp_instance.show().map_err(|e| {
+                Error::Domain(DomainError::Configuration {
+                    message: format!("Failed to show temporary popup instance: {}", e),
+                })
+            })?;
+
+            let width: f32 = temp_instance
+                .get_property("popup-width")
+                .ok()
+                .and_then(|v| v.try_into().ok())
+                .unwrap_or(120.0);
+
+            let height: f32 = temp_instance
+                .get_property("popup-height")
+                .ok()
+                .and_then(|v| v.try_into().ok())
+                .unwrap_or(120.0);
+
+            drop(temp_instance);
+            self.close_current_popup()?;
+
+            (width, height)
+        };
+
+        let popup_manager = self
+            .window_state
+            .popup_manager()
+            .as_ref()
+            .ok_or_else(|| Error::Domain(DomainError::Configuration {
+                message: "No popup manager available".to_string(),
+            }))
+            .map(Rc::clone)?;
+
+        let (reference_x, reference_y) = position.unwrap_or((0.0, 0.0));
+
+        popup_manager.set_pending_popup_config(
+            reference_x,
+            reference_y,
+            width,
+            height,
+            positioning_mode,
+        );
 
         let instance = definition.create().map_err(|e| {
             Error::Domain(DomainError::Configuration {
@@ -195,9 +219,10 @@ impl RuntimeState<'_> {
             })
         })?;
 
+        let popup_manager_for_callback = Rc::clone(&popup_manager);
         instance
             .set_callback("closed", move |_| {
-                close_current_popup();
+                popup_manager_for_callback.close_current_popup();
                 Value::Void
             })
             .map_err(|e| {
@@ -276,7 +301,7 @@ impl WindowingSystem {
         let popup_mode_for_channel = Rc::clone(&self.popup_positioning_mode);
 
         let (_token, sender) = event_loop_handle.add_channel(
-            move |(component_name, x, y): (String, f32, f32), state| {
+            move |(component_name, x, y): (String, f32, f32), mut state| {
                 let mode = *popup_mode_for_channel.borrow();
                 if let Err(e) =
                     state.show_popup_component(&component_name, Some((x, y)), None, mode)
