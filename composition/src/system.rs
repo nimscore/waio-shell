@@ -4,7 +4,9 @@ use layer_shika_adapters::platform::calloop::{
     EventSource, Generic, Interest, Mode, PostAction, RegistrationToken, TimeoutAction, Timer,
     channel,
 };
-use layer_shika_adapters::platform::slint_interpreter::{ComponentDefinition, ComponentInstance};
+use layer_shika_adapters::platform::slint_interpreter::{
+    CompilationResult, ComponentDefinition, ComponentInstance,
+};
 use layer_shika_adapters::wayland::{
     config::WaylandWindowConfig, shell_adapter::WaylandWindowingSystem,
     surfaces::surface_state::WindowState,
@@ -68,7 +70,10 @@ impl EventLoopHandle {
         })
     }
 
-    pub fn add_channel<T, F>(&self, mut callback: F) -> Result<(RegistrationToken, channel::Sender<T>)>
+    pub fn add_channel<T, F>(
+        &self,
+        mut callback: F,
+    ) -> Result<(RegistrationToken, channel::Sender<T>)>
     where
         T: 'static,
         F: FnMut(T, RuntimeState<'_>) + 'static,
@@ -82,7 +87,13 @@ impl EventLoopHandle {
         Ok((token, sender))
     }
 
-    pub fn add_fd<F, T>(&self, fd: T, interest: Interest, mode: Mode, mut callback: F) -> Result<RegistrationToken>
+    pub fn add_fd<F, T>(
+        &self,
+        fd: T,
+        interest: Interest,
+        mode: Mode,
+        mut callback: F,
+    ) -> Result<RegistrationToken>
     where
         T: AsFd + 'static,
         F: FnMut(RuntimeState<'_>) + 'static,
@@ -108,6 +119,11 @@ impl RuntimeState<'_> {
     pub fn render_frame_if_dirty(&mut self) -> Result<()> {
         Ok(self.window_state.render_frame_if_dirty()?)
     }
+
+    #[must_use]
+    pub fn compilation_result(&self) -> Option<Rc<CompilationResult>> {
+        self.window_state.compilation_result()
+    }
 }
 
 pub struct WindowingSystem {
@@ -117,9 +133,14 @@ pub struct WindowingSystem {
 impl WindowingSystem {
     pub(crate) fn new(
         component_definition: ComponentDefinition,
+        compilation_result: Option<Rc<CompilationResult>>,
         config: WindowConfig,
     ) -> Result<Self> {
-        let wayland_config = WaylandWindowConfig::from_domain_config(component_definition, config);
+        let wayland_config = WaylandWindowConfig::from_domain_config(
+            component_definition,
+            compilation_result,
+            config,
+        );
         let inner = WaylandWindowingSystem::new(wayland_config)?;
 
         Ok(Self {

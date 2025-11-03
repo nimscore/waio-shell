@@ -16,7 +16,7 @@ use layer_shika_domain::surface_dimensions::SurfaceDimensions;
 use log::info;
 use slint::{LogicalPosition, PhysicalSize, ComponentHandle};
 use slint::platform::{WindowAdapter, WindowEvent};
-use slint_interpreter::ComponentInstance;
+use slint_interpreter::{ComponentInstance, CompilationResult};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use wayland_client::{protocol::wl_surface::WlSurface, Proxy};
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
@@ -89,6 +89,7 @@ impl MutableWindowState {
 
 pub struct WindowState {
     component_instance: ComponentInstance,
+    compilation_result: Option<Rc<CompilationResult>>,
     viewport: Option<ManagedWpViewport>,
     fractional_scale: Option<ManagedWpFractionalScaleV1>,
     layer_surface: ManagedZwlrLayerSurfaceV1,
@@ -160,6 +161,7 @@ impl WindowState {
 
         Ok(Self {
             component_instance,
+            compilation_result: builder.compilation_result,
             viewport,
             fractional_scale,
             layer_surface,
@@ -315,6 +317,11 @@ impl WindowState {
 
     pub const fn component_instance(&self) -> &ComponentInstance {
         &self.component_instance
+    }
+
+    #[must_use]
+    pub fn compilation_result(&self) -> Option<Rc<CompilationResult>> {
+        self.compilation_result.as_ref().map(Rc::clone)
     }
 
     pub fn render_frame_if_dirty(&self) -> Result<()> {

@@ -2,11 +2,12 @@ use layer_shika_domain::prelude::{
     AnchorEdges, KeyboardInteractivity as DomainKeyboardInteractivity, Layer, Margins,
     WindowConfig as DomainWindowConfig,
 };
-use slint_interpreter::ComponentDefinition;
+use slint_interpreter::{ComponentDefinition, CompilationResult};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::{self},
     zwlr_layer_surface_v1::{Anchor, KeyboardInteractivity as WaylandKeyboardInteractivity},
 };
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LayerSurfaceParams {
@@ -28,12 +29,14 @@ pub struct WaylandWindowConfig {
     pub scale_factor: f32,
     pub namespace: String,
     pub component_definition: ComponentDefinition,
+    pub compilation_result: Option<Rc<CompilationResult>>,
 }
 
 impl WaylandWindowConfig {
     #[must_use]
     pub fn from_domain_config(
         component_definition: ComponentDefinition,
+        compilation_result: Option<Rc<CompilationResult>>,
         domain_config: DomainWindowConfig,
     ) -> Self {
         Self {
@@ -48,6 +51,7 @@ impl WaylandWindowConfig {
             scale_factor: domain_config.scale_factor,
             namespace: domain_config.namespace,
             component_definition,
+            compilation_result,
         }
     }
 }

@@ -1,16 +1,20 @@
 use crate::Result;
 use crate::system::WindowingSystem;
-use layer_shika_adapters::platform::slint_interpreter::{Compiler, ComponentDefinition};
+use layer_shika_adapters::platform::slint_interpreter::{
+    CompilationResult, Compiler, ComponentDefinition,
+};
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::prelude::{
     AnchorEdges, KeyboardInteractivity, Layer, Margins, WindowConfig,
 };
 use spin_on::spin_on;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 pub struct NeedsComponent;
 pub struct HasComponent {
     component_definition: ComponentDefinition,
+    compilation_result: Option<Rc<CompilationResult>>,
 }
 
 pub struct LayerShika<State> {
@@ -24,6 +28,7 @@ impl LayerShika<NeedsComponent> {
         LayerShika {
             state: HasComponent {
                 component_definition,
+                compilation_result: None,
             },
             config: WindowConfig::default(),
         }
@@ -59,17 +64,23 @@ impl LayerShika<NeedsComponent> {
             .into());
         }
 
-        let definition = compilation_result.component(component_name).ok_or_else(|| {
-            DomainError::Configuration {
+        let definition = compilation_result
+            .component(component_name)
+            .ok_or_else(|| DomainError::Configuration {
                 message: format!(
                     "Component '{}' not found in Slint file '{}'",
                     component_name,
                     path.as_ref().display()
                 ),
-            }
-        })?;
+            })?;
 
-        Ok(Self::new(definition))
+        Ok(LayerShika {
+            state: HasComponent {
+                component_definition: definition,
+                compilation_result: Some(Rc::new(compilation_result)),
+            },
+            config: WindowConfig::default(),
+        })
     }
 
     pub fn from_source(
@@ -103,17 +114,32 @@ impl LayerShika<NeedsComponent> {
             .into());
         }
 
-        let definition = compilation_result.component(component_name).ok_or_else(|| {
-            DomainError::Configuration {
-                message: format!("Component '{}' not found in Slint source code", component_name),
-            }
-        })?;
+        let definition = compilation_result
+            .component(component_name)
+            .ok_or_else(|| DomainError::Configuration {
+                message: format!(
+                    "Component '{}' not found in Slint source code",
+                    component_name
+                ),
+            })?;
 
-        Ok(Self::new(definition))
+        Ok(LayerShika {
+            state: HasComponent {
+                component_definition: definition,
+                compilation_result: Some(Rc::new(compilation_result)),
+            },
+            config: WindowConfig::default(),
+        })
     }
 }
 
 impl LayerShika<HasComponent> {
+    #[must_use]
+    pub fn with_compilation_result(mut self, compilation_result: Rc<CompilationResult>) -> Self {
+        self.state.compilation_result = Some(compilation_result);
+        self
+    }
+
     #[must_use]
     pub const fn with_height(mut self, height: u32) -> Self {
         self.config.height = height;
@@ -168,6 +194,10 @@ impl LayerShika<HasComponent> {
     }
 
     pub fn build(self) -> Result<WindowingSystem> {
-        WindowingSystem::new(self.state.component_definition, self.config)
+        WindowingSystem::new(
+            self.state.component_definition,
+            self.state.compilation_result,
+            self.config,
+        )
     }
 }

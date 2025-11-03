@@ -4,7 +4,7 @@ use slint::{
     platform::{set_platform, Platform, WindowAdapter},
     PhysicalSize, PlatformError,
 };
-use slint_interpreter::ComponentDefinition;
+use slint_interpreter::{ComponentDefinition, CompilationResult};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use wayland_client::{protocol::{wl_pointer::WlPointer, wl_surface::WlSurface}, Connection};
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
@@ -25,6 +25,7 @@ impl Platform for PlatformWrapper {
 
 pub struct WindowStateBuilder {
     pub component_definition: Option<ComponentDefinition>,
+    pub compilation_result: Option<Rc<CompilationResult>>,
     pub surface: Option<Rc<WlSurface>>,
     pub layer_surface: Option<Rc<ZwlrLayerSurfaceV1>>,
     pub fractional_scale: Option<Rc<WpFractionalScaleV1>>,
@@ -106,6 +107,12 @@ impl WindowStateBuilder {
     }
 
     #[must_use]
+    pub fn with_compilation_result(mut self, compilation_result: Option<Rc<CompilationResult>>) -> Self {
+        self.compilation_result = compilation_result;
+        self
+    }
+
+    #[must_use]
     pub fn with_fractional_scale(mut self, fractional_scale: Rc<WpFractionalScaleV1>) -> Self {
         self.fractional_scale = Some(fractional_scale);
         self
@@ -141,6 +148,7 @@ impl Default for WindowStateBuilder {
     fn default() -> Self {
         Self {
             component_definition: None,
+            compilation_result: None,
             surface: None,
             layer_surface: None,
             fractional_scale: None,

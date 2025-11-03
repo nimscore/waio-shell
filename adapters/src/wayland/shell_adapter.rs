@@ -129,6 +129,7 @@ impl WaylandWindowingSystem {
 
         let mut builder = WindowStateBuilder::new()
             .with_component_definition(config.component_definition)
+            .with_compilation_result(config.compilation_result)
             .with_surface(Rc::clone(&surface_ctx.surface))
             .with_layer_surface(Rc::clone(&surface_ctx.layer_surface))
             .with_scale_factor(config.scale_factor)
