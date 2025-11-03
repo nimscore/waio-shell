@@ -180,7 +180,7 @@ impl WaylandWindowingSystem {
 
             let serial = serial_holder.get();
 
-            let params = if let Some((request, width, height)) = popup_manager_clone.take_pending_popup_request() {
+            let params = if let Some((request, width, height)) = popup_manager_clone.take_pending_popup() {
                 log::info!(
                     "Using popup request: component='{}', position=({}, {}), size={}x{}, mode={:?}",
                     request.component,

@@ -95,6 +95,10 @@ impl PopupWindow {
     pub fn scale_factor(&self) -> f32 {
         self.scale_factor.get()
     }
+
+    pub fn popup_key(&self) -> Option<usize> {
+        self.popup_key.get()
+    }
 }
 
 impl WindowAdapter for PopupWindow {

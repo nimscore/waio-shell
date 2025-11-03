@@ -68,54 +68,84 @@ struct ActivePopup {
     window: Rc<PopupWindow>,
 }
 
+struct PopupState {
+    scale_factor: f32,
+    output_size: PhysicalSize,
+}
+
+struct PendingPopup {
+    request: PopupRequest,
+    width: f32,
+    height: f32,
+}
+
 pub struct PopupManager {
     context: PopupContext,
     popups: RefCell<Slab<ActivePopup>>,
-    current_scale_factor: RefCell<f32>,
-    current_output_size: RefCell<PhysicalSize>,
-    pending_popup_request: RefCell<Option<(PopupRequest, f32, f32)>>,
-    last_popup_key: RefCell<Option<usize>>,
+    state: RefCell<PopupState>,
+    current_popup_key: RefCell<Option<usize>>,
+    pending_popup: RefCell<Option<PendingPopup>>,
 }
 
 impl PopupManager {
     #[must_use]
-    pub const fn new(context: PopupContext, initial_scale_factor: f32) -> Self {
+    pub fn new(context: PopupContext, initial_scale_factor: f32) -> Self {
         Self {
             context,
             popups: RefCell::new(Slab::new()),
-            current_scale_factor: RefCell::new(initial_scale_factor),
-            current_output_size: RefCell::new(PhysicalSize::new(0, 0)),
-            pending_popup_request: RefCell::new(None),
-            last_popup_key: RefCell::new(None),
+            state: RefCell::new(PopupState {
+                scale_factor: initial_scale_factor,
+                output_size: PhysicalSize::new(0, 0),
+            }),
+            current_popup_key: RefCell::new(None),
+            pending_popup: RefCell::new(None),
         }
     }
 
-    pub fn set_pending_popup_request(&self, request: PopupRequest, width: f32, height: f32) {
-        *self.pending_popup_request.borrow_mut() = Some((request, width, height));
+    pub fn set_pending_popup(&self, request: PopupRequest, width: f32, height: f32) {
+        *self.pending_popup.borrow_mut() = Some(PendingPopup {
+            request,
+            width,
+            height,
+        });
     }
 
     #[must_use]
-    pub fn take_pending_popup_request(&self) -> Option<(PopupRequest, f32, f32)> {
-        self.pending_popup_request.borrow_mut().take()
+    pub fn take_pending_popup(&self) -> Option<(PopupRequest, f32, f32)> {
+        self.pending_popup
+            .borrow_mut()
+            .take()
+            .map(|p| (p.request, p.width, p.height))
+    }
+
+    #[must_use]
+    pub fn scale_factor(&self) -> f32 {
+        self.state.borrow().scale_factor
+    }
+
+    #[must_use]
+    pub fn output_size(&self) -> PhysicalSize {
+        self.state.borrow().output_size
+    }
+
+    pub fn update_scale_factor(&self, scale_factor: f32) {
+        self.state.borrow_mut().scale_factor = scale_factor;
+    }
+
+    pub fn update_output_size(&self, output_size: PhysicalSize) {
+        self.state.borrow_mut().output_size = output_size;
     }
 
     pub fn close_current_popup(&self) {
-        let key = self.last_popup_key.borrow_mut().take();
+        let key = self.current_popup_key.borrow_mut().take();
         if let Some(key) = key {
             self.destroy_popup(key);
         }
     }
 
-    pub fn update_scale_factor(&self, scale_factor: f32) {
-        *self.current_scale_factor.borrow_mut() = scale_factor;
-    }
-
-    pub fn update_output_size(&self, output_size: PhysicalSize) {
-        *self.current_output_size.borrow_mut() = output_size;
-    }
-
-    pub fn output_size(&self) -> PhysicalSize {
-        *self.current_output_size.borrow()
+    #[must_use]
+    pub fn current_popup_key(&self) -> Option<usize> {
+        *self.current_popup_key.borrow()
     }
 
     pub fn create_popup(
@@ -130,7 +160,7 @@ impl PopupManager {
             }
         })?;
 
-        let scale_factor = *self.current_scale_factor.borrow();
+        let scale_factor = self.scale_factor();
         info!(
             "Creating popup window with scale factor {scale_factor}, reference=({}, {}), size=({} x {}), mode={:?}",
             params.reference_x,
@@ -192,7 +222,7 @@ impl PopupManager {
             window: Rc::clone(&popup_window),
         });
         popup_window.set_popup_manager(Rc::downgrade(self), key);
-        *self.last_popup_key.borrow_mut() = Some(key);
+        *self.current_popup_key.borrow_mut() = Some(key);
 
         info!("Popup window created successfully with key {key}");
 

@@ -132,7 +132,7 @@ impl RuntimeState<'_> {
         self.window_state.compilation_result()
     }
 
-    pub fn show_popup(&mut self, req: PopupRequest) -> Result<()> {
+    pub fn show_popup(&mut self, req: PopupRequest) -> Result<PopupHandle> {
         let compilation_result = self.compilation_result().ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
                 message: "No compilation result available for popup creation".to_string(),
@@ -172,7 +172,7 @@ impl RuntimeState<'_> {
             .map(Rc::clone)?;
 
         log::debug!(
-            "Setting pending popup request for '{}' with dimensions {}x{} at position ({}, {}), mode: {:?}",
+            "Creating popup for '{}' with dimensions {}x{} at position ({}, {}), mode: {:?}",
             req.component,
             width,
             height,
@@ -181,11 +181,17 @@ impl RuntimeState<'_> {
             req.mode
         );
 
-        popup_manager.set_pending_popup_request(req, width, height);
+        popup_manager.set_pending_popup(req.clone(), width, height);
 
         Self::create_popup_instance(&definition, &popup_manager)?;
 
-        Ok(())
+        Ok(PopupHandle::new(
+            popup_manager.current_popup_key().ok_or_else(|| {
+                Error::Domain(DomainError::Configuration {
+                    message: "No popup key available after creation".to_string(),
+                })
+            })?,
+        ))
     }
 
     pub fn close_popup(&mut self, handle: PopupHandle) -> Result<()> {
