@@ -180,11 +180,25 @@ impl WaylandWindowingSystem {
 
             let serial = serial_holder.get();
 
-            let params = popup_manager_clone.take_pending_popup_config();
+            let params = if let Some((request, width, height)) = popup_manager_clone.take_pending_popup_request() {
+                log::info!(
+                    "Using popup request: component='{}', position=({}, {}), size={}x{}, mode={:?}",
+                    request.component,
+                    request.at.position().0,
+                    request.at.position().1,
+                    width,
+                    height,
+                    request.mode
+                );
 
-            let params = if let Some(mut p) = params {
-                p.last_pointer_serial = serial;
-                p
+                CreatePopupParams {
+                    last_pointer_serial: serial,
+                    reference_x: request.at.position().0,
+                    reference_y: request.at.position().1,
+                    width,
+                    height,
+                    positioning_mode: request.mode,
+                }
             } else {
                 let output_size = popup_manager_clone.output_size();
                 #[allow(clippy::cast_precision_loss)]
@@ -192,7 +206,7 @@ impl WaylandWindowingSystem {
                 #[allow(clippy::cast_precision_loss)]
                 let default_height = output_size.height as f32;
 
-                log::warn!("No popup config provided, using output size ({default_width}x{default_height}) as defaults");
+                log::warn!("No popup request provided, using output size ({default_width}x{default_height}) as defaults");
                 CreatePopupParams {
                     last_pointer_serial: serial,
                     reference_x: 0.0,

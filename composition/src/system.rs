@@ -16,6 +16,9 @@ use layer_shika_adapters::wayland::{
 use layer_shika_domain::config::WindowConfig;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
+use layer_shika_domain::value_objects::popup_request::{
+    PopupAt, PopupHandle, PopupRequest, PopupSize,
+};
 use std::cell::{Ref, RefCell};
 use std::os::unix::io::AsFd;
 use std::rc::{Rc, Weak};
@@ -129,6 +132,69 @@ impl RuntimeState<'_> {
         self.window_state.compilation_result()
     }
 
+    pub fn show_popup(&mut self, req: PopupRequest) -> Result<()> {
+        let compilation_result = self.compilation_result().ok_or_else(|| {
+            Error::Domain(DomainError::Configuration {
+                message: "No compilation result available for popup creation".to_string(),
+            })
+        })?;
+
+        let definition = compilation_result
+            .component(&req.component)
+            .ok_or_else(|| {
+                Error::Domain(DomainError::Configuration {
+                    message: format!(
+                        "{} component not found in compilation result",
+                        req.component
+                    ),
+                })
+            })?;
+
+        self.close_current_popup()?;
+
+        let (width, height) = match req.size {
+            PopupSize::Fixed { w, h } => {
+                log::debug!("Using fixed popup size: {}x{}", w, h);
+                (w, h)
+            }
+            PopupSize::Content => self.measure_popup_dimensions(&definition)?,
+        };
+
+        let popup_manager = self
+            .window_state
+            .popup_manager()
+            .as_ref()
+            .ok_or_else(|| {
+                Error::Domain(DomainError::Configuration {
+                    message: "No popup manager available".to_string(),
+                })
+            })
+            .map(Rc::clone)?;
+
+        log::debug!(
+            "Setting pending popup request for '{}' with dimensions {}x{} at position ({}, {}), mode: {:?}",
+            req.component,
+            width,
+            height,
+            req.at.position().0,
+            req.at.position().1,
+            req.mode
+        );
+
+        popup_manager.set_pending_popup_request(req, width, height);
+
+        Self::create_popup_instance(&definition, &popup_manager)?;
+
+        Ok(())
+    }
+
+    pub fn close_popup(&mut self, handle: PopupHandle) -> Result<()> {
+        if let Some(popup_manager) = self.window_state.popup_manager() {
+            popup_manager.destroy_popup(handle.key());
+        }
+        Ok(())
+    }
+
     pub fn close_current_popup(&mut self) -> Result<()> {
         if let Some(popup_manager) = self.window_state.popup_manager() {
             popup_manager.close_current_popup();
@@ -208,78 +274,6 @@ impl RuntimeState<'_> {
 
         Ok(instance)
     }
-
-    pub fn show_popup_component(
-        &mut self,
-        component_name: &str,
-        position: Option<(f32, f32)>,
-        size: Option<(f32, f32)>,
-        positioning_mode: PopupPositioningMode,
-    ) -> Result<()> {
-        let compilation_result = self.compilation_result().ok_or_else(|| {
-            Error::Domain(DomainError::Configuration {
-                message: "No compilation result available for popup creation".to_string(),
-            })
-        })?;
-
-        let definition = compilation_result
-            .component(component_name)
-            .ok_or_else(|| {
-                Error::Domain(DomainError::Configuration {
-                    message: format!(
-                        "{} component not found in compilation result",
-                        component_name
-                    ),
-                })
-            })?;
-
-        self.close_current_popup()?;
-
-        let (width, height) = if let Some(explicit_size) = size {
-            log::debug!(
-                "Using explicit popup size: {}x{}",
-                explicit_size.0,
-                explicit_size.1
-            );
-            explicit_size
-        } else {
-            self.measure_popup_dimensions(&definition)?
-        };
-
-        let popup_manager = self
-            .window_state
-            .popup_manager()
-            .as_ref()
-            .ok_or_else(|| {
-                Error::Domain(DomainError::Configuration {
-                    message: "No popup manager available".to_string(),
-                })
-            })
-            .map(Rc::clone)?;
-
-        let (reference_x, reference_y) = position.unwrap_or((0.0, 0.0));
-
-        popup_manager.set_pending_popup_config(
-            reference_x,
-            reference_y,
-            width,
-            height,
-            positioning_mode,
-        );
-
-        log::debug!(
-            "Creating final popup instance with dimensions {}x{} at position ({}, {}), mode: {:?}",
-            width,
-            height,
-            reference_x,
-            reference_y,
-            positioning_mode
-        );
-
-        Self::create_popup_instance(&definition, &popup_manager)?;
-
-        Ok(())
-    }
 }
 
 pub struct WindowingSystem {
@@ -344,9 +338,14 @@ impl WindowingSystem {
         let (_token, sender) = event_loop_handle.add_channel(
             move |(component_name, x, y): (String, f32, f32), mut state| {
                 let mode = *popup_mode_for_channel.borrow();
-                if let Err(e) =
-                    state.show_popup_component(&component_name, Some((x, y)), None, mode)
-                {
+
+                let request = PopupRequest::builder(component_name)
+                    .at(PopupAt::absolute(x, y))
+                    .size(PopupSize::content())
+                    .mode(mode)
+                    .build();
+
+                if let Err(e) = state.show_popup(request) {
                     log::error!("Failed to show popup: {}", e);
                 }
             },

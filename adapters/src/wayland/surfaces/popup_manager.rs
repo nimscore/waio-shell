@@ -3,6 +3,7 @@ use crate::rendering::egl::context::EGLContext;
 use crate::rendering::femtovg::popup_window::PopupWindow;
 use layer_shika_domain::value_objects::popup_config::PopupConfig;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
+use layer_shika_domain::value_objects::popup_request::PopupRequest;
 use log::info;
 use slab::Slab;
 use slint::{platform::femtovg_renderer::FemtoVGRenderer, PhysicalSize, WindowSize};
@@ -72,7 +73,7 @@ pub struct PopupManager {
     popups: RefCell<Slab<ActivePopup>>,
     current_scale_factor: RefCell<f32>,
     current_output_size: RefCell<PhysicalSize>,
-    pending_popup_config: RefCell<Option<CreatePopupParams>>,
+    pending_popup_request: RefCell<Option<(PopupRequest, f32, f32)>>,
     last_popup_key: RefCell<Option<usize>>,
 }
 
@@ -84,33 +85,18 @@ impl PopupManager {
             popups: RefCell::new(Slab::new()),
             current_scale_factor: RefCell::new(initial_scale_factor),
             current_output_size: RefCell::new(PhysicalSize::new(0, 0)),
-            pending_popup_config: RefCell::new(None),
+            pending_popup_request: RefCell::new(None),
             last_popup_key: RefCell::new(None),
         }
     }
 
-    pub fn set_pending_popup_config(
-        &self,
-        reference_x: f32,
-        reference_y: f32,
-        width: f32,
-        height: f32,
-        positioning_mode: PopupPositioningMode,
-    ) {
-        let last_pointer_serial = 0;
-        *self.pending_popup_config.borrow_mut() = Some(CreatePopupParams {
-            last_pointer_serial,
-            reference_x,
-            reference_y,
-            width,
-            height,
-            positioning_mode,
-        });
+    pub fn set_pending_popup_request(&self, request: PopupRequest, width: f32, height: f32) {
+        *self.pending_popup_request.borrow_mut() = Some((request, width, height));
     }
 
     #[must_use]
-    pub fn take_pending_popup_config(&self) -> Option<CreatePopupParams> {
-        self.pending_popup_config.borrow_mut().take()
+    pub fn take_pending_popup_request(&self) -> Option<(PopupRequest, f32, f32)> {
+        self.pending_popup_request.borrow_mut().take()
     }
 
     pub fn close_current_popup(&self) {
