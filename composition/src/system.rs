@@ -224,12 +224,6 @@ impl RuntimeState<'_> {
             })
         })?;
 
-        temp_instance.show().map_err(|e| {
-            Error::Domain(DomainError::Configuration {
-                message: format!("Failed to show temporary popup instance: {}", e),
-            })
-        })?;
-
         let width: f32 = temp_instance
             .get_property("popup-width")
             .ok()
