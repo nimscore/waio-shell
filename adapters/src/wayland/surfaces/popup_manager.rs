@@ -66,6 +66,8 @@ impl PopupContext {
 struct ActivePopup {
     surface: PopupSurface,
     window: Rc<PopupWindow>,
+    request: PopupRequest,
+    last_serial: u32,
 }
 
 impl Drop for ActivePopup {
@@ -160,6 +162,7 @@ impl PopupManager {
         queue_handle: &QueueHandle<WindowState>,
         parent_layer_surface: &ZwlrLayerSurfaceV1,
         params: CreatePopupParams,
+        request: PopupRequest,
     ) -> Result<Rc<PopupWindow>> {
         let xdg_wm_base = self.context.xdg_wm_base.as_ref().ok_or_else(|| {
             LayerShikaError::WindowConfiguration {
@@ -227,6 +230,8 @@ impl PopupManager {
         let key = self.popups.borrow_mut().insert(ActivePopup {
             surface: popup_surface,
             window: Rc::clone(&popup_window),
+            request,
+            last_serial: params.last_pointer_serial,
         });
         popup_window.set_popup_manager(Rc::downgrade(self), key);
         *self.current_popup_key.borrow_mut() = Some(key);
@@ -302,5 +307,12 @@ impl PopupManager {
         if let Some(popup) = self.popups.borrow().get(key) {
             popup.surface.update_viewport_size(logical_width, logical_height);
         }
+    }
+
+    pub fn get_popup_info(&self, key: usize) -> Option<(PopupRequest, u32)> {
+        self.popups
+            .borrow()
+            .get(key)
+            .map(|popup| (popup.request.clone(), popup.last_serial))
     }
 }

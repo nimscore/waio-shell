@@ -179,7 +179,7 @@ impl WaylandWindowingSystem {
 
             let serial = serial_holder.get();
 
-            let params = if let Some((request, width, height)) = popup_manager_clone.take_pending_popup() {
+            let (params, request) = if let Some((request, width, height)) = popup_manager_clone.take_pending_popup() {
                 log::info!(
                     "Using popup request: component='{}', position=({}, {}), size={}x{}, mode={:?}",
                     request.component,
@@ -190,14 +190,15 @@ impl WaylandWindowingSystem {
                     request.mode
                 );
 
-                CreatePopupParams {
+                let params = CreatePopupParams {
                     last_pointer_serial: serial,
                     reference_x: request.at.position().0,
                     reference_y: request.at.position().1,
                     width,
                     height,
                     positioning_mode: request.mode,
-                }
+                };
+                (params, request)
             } else {
                 log::warn!("Popup creator called without pending popup request - aborting");
                 return Err(PlatformError::Other(
@@ -210,6 +211,7 @@ impl WaylandWindowingSystem {
                     &queue_handle,
                     &layer_surface,
                     params,
+                    request,
                 )
                 .map_err(|e| PlatformError::Other(format!("Failed to create popup: {e}")))?;
 

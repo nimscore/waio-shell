@@ -72,6 +72,7 @@ impl<'a> PopupBuilder<'a> {
             self.queue_handle,
             self.parent_layer_surface,
             params,
+            request.clone(),
         )?;
 
         let instance = Self::create_component_instance(component_def, &popup_window)?;

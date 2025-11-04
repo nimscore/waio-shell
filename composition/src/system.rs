@@ -4,7 +4,7 @@ use layer_shika_adapters::platform::calloop::{
     EventSource, Generic, Interest, Mode, PostAction, RegistrationToken, TimeoutAction, Timer,
     channel,
 };
-use layer_shika_adapters::platform::slint::ComponentHandle;
+use layer_shika_adapters::platform::slint::{ComponentHandle, SharedString};
 use layer_shika_adapters::platform::slint_interpreter::{
     CompilationResult, ComponentDefinition, ComponentInstance, Value,
 };
@@ -28,6 +28,11 @@ use std::time::{Duration, Instant};
 enum PopupCommand {
     Show(PopupRequest),
     Close(PopupHandle),
+    Resize {
+        key: usize,
+        width: f32,
+        height: f32,
+    },
 }
 
 pub struct EventLoopHandle {
@@ -137,7 +142,7 @@ impl RuntimeState<'_> {
         self.window_state.compilation_result()
     }
 
-    pub fn show_popup(&mut self, req: PopupRequest) -> Result<PopupHandle> {
+    pub fn show_popup(&mut self, req: PopupRequest, resize_sender: Option<channel::Sender<PopupCommand>>) -> Result<PopupHandle> {
         let compilation_result = self.compilation_result().ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
                 message: "No compilation result available for popup creation".to_string(),
@@ -175,7 +180,7 @@ impl RuntimeState<'_> {
             }
             PopupSize::Content => {
                 log::debug!("Using content-based sizing - will measure after instance creation");
-                (600.0, 300.0)
+                (2.0, 2.0)
             }
         };
 
@@ -191,7 +196,7 @@ impl RuntimeState<'_> {
 
         popup_manager.set_pending_popup(req, initial_dimensions.0, initial_dimensions.1);
 
-        let instance = Self::create_popup_instance(&definition, &popup_manager, 0)?;
+        let instance = Self::create_popup_instance(&definition, &popup_manager, 0, resize_sender)?;
 
         let popup_key = popup_manager.current_popup_key().ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
@@ -224,10 +229,62 @@ impl RuntimeState<'_> {
         Ok(())
     }
 
+    pub fn resize_popup(&mut self, key: usize, width: f32, height: f32, resize_sender: Option<channel::Sender<PopupCommand>>) -> Result<()> {
+        let popup_manager = self
+            .window_state
+            .popup_manager()
+            .as_ref()
+            .ok_or_else(|| {
+                Error::Domain(DomainError::Configuration {
+                    message: "No popup manager available".to_string(),
+                })
+            })
+            .map(Rc::clone)?;
+
+        let (request, _serial) = popup_manager.get_popup_info(key).ok_or_else(|| {
+            Error::Domain(DomainError::Configuration {
+                message: format!("Popup with key {} not found", key),
+            })
+        })?;
+
+        let current_size = request.size.dimensions();
+        let size_changed = current_size.map_or(true, |(w, h)| {
+            (w - width).abs() > 0.01 || (h - height).abs() > 0.01
+        });
+
+        let needs_repositioning = request.mode.center_x() || request.mode.center_y();
+
+        if needs_repositioning && size_changed {
+            log::info!(
+                "Popup needs repositioning due to mode {:?} and size change - recreating with new size {}x{}",
+                request.mode,
+                width,
+                height
+            );
+
+            self.close_popup(PopupHandle::new(key))?;
+
+            let new_request = PopupRequest::builder(request.component)
+                .at(request.at)
+                .size(PopupSize::fixed(width, height))
+                .mode(request.mode)
+                .build();
+
+            self.show_popup(new_request, resize_sender)?;
+        } else if size_changed {
+            if let Some(popup_window) = popup_manager.get_popup_window(key) {
+                popup_window.request_resize(width, height);
+            }
+        }
+
+        Ok(())
+    }
+
     fn create_popup_instance(
         definition: &ComponentDefinition,
         popup_manager: &Rc<PopupManager>,
         popup_key: usize,
+        resize_sender: Option<channel::Sender<PopupCommand>>,
     ) -> Result<ComponentInstance> {
         let instance = definition.create().map_err(|e| {
             Error::Domain(DomainError::Configuration {
@@ -249,26 +306,54 @@ impl RuntimeState<'_> {
                 })
             })?;
 
-        let popup_manager_for_resize = Rc::downgrade(popup_manager);
-        let result = instance.set_callback("change_popup_size", move |args| {
-            let width: f32 = args
-                .first()
-                .and_then(|v| v.clone().try_into().ok())
-                .unwrap_or(200.0);
-            let height: f32 = args
-                .get(1)
-                .and_then(|v| v.clone().try_into().ok())
-                .unwrap_or(150.0);
+        let result = if let Some(sender) = resize_sender {
+            instance.set_callback("change_popup_size", move |args| {
+                let width: f32 = args
+                    .first()
+                    .and_then(|v| v.clone().try_into().ok())
+                    .unwrap_or(200.0);
+                let height: f32 = args
+                    .get(1)
+                    .and_then(|v| v.clone().try_into().ok())
+                    .unwrap_or(150.0);
 
-            log::info!("change_popup_size callback invoked: {}x{}", width, height);
+                log::info!("change_popup_size callback invoked: {}x{}", width, height);
 
-            if let Some(popup_mgr) = popup_manager_for_resize.upgrade() {
-                if let Some(popup_window) = popup_mgr.get_popup_window(popup_key) {
+                if sender
+                    .send(PopupCommand::Resize {
+                        key: popup_key,
+                        width,
+                        height,
+                    })
+                    .is_err()
+                {
+                    log::error!("Failed to send popup resize command through channel");
+                }
+                Value::Void
+            })
+        } else {
+            let popup_manager_for_resize = Rc::downgrade(popup_manager);
+            instance.set_callback("change_popup_size", move |args| {
+                let width: f32 = args
+                    .first()
+                    .and_then(|v| v.clone().try_into().ok())
+                    .unwrap_or(200.0);
+                let height: f32 = args
+                    .get(1)
+                    .and_then(|v| v.clone().try_into().ok())
+                    .unwrap_or(150.0);
+
+                log::info!("change_popup_size callback invoked: {}x{}", width, height);
+
+                if let Some(popup_window) = popup_manager_for_resize
+                    .upgrade()
+                    .and_then(|mgr| mgr.get_popup_window(popup_key))
+                {
                     popup_window.request_resize(width, height);
                 }
-            }
-            Value::Void
-        });
+                Value::Void
+            })
+        };
 
         if let Err(e) = result {
             log::warn!("Failed to set change_popup_size callback: {}", e);
@@ -322,21 +407,27 @@ impl WindowingSystem {
 
     fn setup_popup_command_handler(&self, receiver: channel::Channel<PopupCommand>) -> Result<()> {
         let loop_handle = self.inner.borrow().event_loop_handle();
+        let sender_for_handler = self.popup_command_sender.clone();
 
         loop_handle
-            .insert_source(receiver, |event, (), window_state| {
+            .insert_source(receiver, move |event, (), window_state| {
                 if let channel::Event::Msg(command) = event {
                     let mut runtime_state = RuntimeState { window_state };
 
                     match command {
                         PopupCommand::Show(request) => {
-                            if let Err(e) = runtime_state.show_popup(request) {
+                            if let Err(e) = runtime_state.show_popup(request, Some(sender_for_handler.clone())) {
                                 log::error!("Failed to show popup: {}", e);
                             }
                         }
                         PopupCommand::Close(handle) => {
                             if let Err(e) = runtime_state.close_popup(handle) {
                                 log::error!("Failed to close popup: {}", e);
+                            }
+                        }
+                        PopupCommand::Resize { key, width, height } => {
+                            if let Err(e) = runtime_state.resize_popup(key, width, height, Some(sender_for_handler.clone())) {
+                                log::error!("Failed to resize popup: {}", e);
                             }
                         }
                     }
@@ -371,6 +462,12 @@ impl WindowingSystem {
 
                 let mode = PopupPositioningMode::from_flags(center_x, center_y);
                 *popup_mode_clone.borrow_mut() = mode;
+                log::info!(
+                    "Popup positioning mode set to: {:?} (center_x: {}, center_y: {})",
+                    mode,
+                    center_x,
+                    center_y
+                );
                 Value::Void
             })
             .map_err(|e| {
@@ -387,8 +484,6 @@ impl WindowingSystem {
 
         component_instance
             .set_callback("show_popup", move |args| {
-                use layer_shika_adapters::platform::slint::SharedString;
-
                 let component_name: SharedString = args
                     .first()
                     .and_then(|v| v.clone().try_into().ok())
