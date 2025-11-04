@@ -25,6 +25,11 @@ use std::rc::{Rc, Weak};
 use std::result::Result as StdResult;
 use std::time::{Duration, Instant};
 
+enum PopupCommand {
+    Show(PopupRequest),
+    Close(PopupHandle),
+}
+
 pub struct EventLoopHandle {
     system: Weak<RefCell<WaylandWindowingSystem>>,
 }
@@ -181,7 +186,7 @@ impl RuntimeState<'_> {
             req.mode
         );
 
-        popup_manager.set_pending_popup(req.clone(), width, height);
+        popup_manager.set_pending_popup(req, width, height);
 
         Self::create_popup_instance(&definition, &popup_manager)?;
 
@@ -285,6 +290,7 @@ impl RuntimeState<'_> {
 pub struct WindowingSystem {
     inner: Rc<RefCell<WaylandWindowingSystem>>,
     popup_positioning_mode: Rc<RefCell<PopupPositioningMode>>,
+    popup_command_sender: channel::Sender<PopupCommand>,
 }
 
 impl WindowingSystem {
@@ -299,15 +305,54 @@ impl WindowingSystem {
             config,
         );
         let inner = WaylandWindowingSystem::new(wayland_config)?;
+        let inner_rc = Rc::new(RefCell::new(inner));
+
+        let (sender, receiver) = channel::channel();
 
         let system = Self {
-            inner: Rc::new(RefCell::new(inner)),
+            inner: Rc::clone(&inner_rc),
             popup_positioning_mode: Rc::new(RefCell::new(PopupPositioningMode::Center)),
+            popup_command_sender: sender,
         };
 
+        system.setup_popup_command_handler(receiver)?;
         system.register_popup_callbacks()?;
 
         Ok(system)
+    }
+
+    fn setup_popup_command_handler(&self, receiver: channel::Channel<PopupCommand>) -> Result<()> {
+        let loop_handle = self.inner.borrow().event_loop_handle();
+
+        loop_handle
+            .insert_source(receiver, |event, (), window_state| {
+                if let channel::Event::Msg(command) = event {
+                    let mut runtime_state = RuntimeState { window_state };
+
+                    match command {
+                        PopupCommand::Show(request) => {
+                            if let Err(e) = runtime_state.show_popup(request) {
+                                log::error!("Failed to show popup: {}", e);
+                            }
+                        }
+                        PopupCommand::Close(handle) => {
+                            if let Err(e) = runtime_state.close_popup(handle) {
+                                log::error!("Failed to close popup: {}", e);
+                            }
+                        }
+                    }
+                }
+            })
+            .map_err(|e| {
+                Error::Adapter(
+                    EventLoopError::InsertSource {
+                        message: format!("Failed to setup popup command handler: {e:?}"),
+                    }
+                    .into(),
+                )
+            })?;
+
+        Ok(())
     }
 
     fn register_popup_callbacks(&self) -> Result<()> {
@@ -338,24 +383,8 @@ impl WindowingSystem {
                 })
             })?;
 
-        let event_loop_handle = self.event_loop_handle();
-        let popup_mode_for_channel = Rc::clone(&self.popup_positioning_mode);
-
-        let (_token, sender) = event_loop_handle.add_channel(
-            move |(component_name, x, y): (String, f32, f32), mut state| {
-                let mode = *popup_mode_for_channel.borrow();
-
-                let request = PopupRequest::builder(component_name)
-                    .at(PopupAt::absolute(x, y))
-                    .size(PopupSize::content())
-                    .mode(mode)
-                    .build();
-
-                if let Err(e) = state.show_popup(request) {
-                    log::error!("Failed to show popup: {}", e);
-                }
-            },
-        )?;
+        let sender = self.popup_command_sender.clone();
+        let popup_mode_for_callback = Rc::clone(&self.popup_positioning_mode);
 
         component_instance
             .set_callback("show_popup", move |args| {
@@ -380,8 +409,16 @@ impl WindowingSystem {
                     .and_then(|v| v.clone().try_into().ok())
                     .unwrap_or(0.0);
 
-                if sender.send((component_name.to_string(), x, y)).is_err() {
-                    log::error!("Failed to send popup request through channel");
+                let mode = *popup_mode_for_callback.borrow();
+
+                let request = PopupRequest::builder(component_name.to_string())
+                    .at(PopupAt::absolute(x, y))
+                    .size(PopupSize::content())
+                    .mode(mode)
+                    .build();
+
+                if sender.send(PopupCommand::Show(request)).is_err() {
+                    log::error!("Failed to send popup show command through channel");
                 }
                 Value::Void
             })
@@ -399,6 +436,26 @@ impl WindowingSystem {
         EventLoopHandle {
             system: Rc::downgrade(&self.inner),
         }
+    }
+
+    pub fn request_show_popup(&self, request: PopupRequest) -> Result<()> {
+        self.popup_command_sender
+            .send(PopupCommand::Show(request))
+            .map_err(|_| {
+                Error::Domain(DomainError::Configuration {
+                    message: "Failed to send popup show command: channel closed".to_string(),
+                })
+            })
+    }
+
+    pub fn request_close_popup(&self, handle: PopupHandle) -> Result<()> {
+        self.popup_command_sender
+            .send(PopupCommand::Close(handle))
+            .map_err(|_| {
+                Error::Domain(DomainError::Configuration {
+                    message: "Failed to send popup close command: channel closed".to_string(),
+                })
+            })
     }
 
     pub fn run(&mut self) -> Result<()> {
