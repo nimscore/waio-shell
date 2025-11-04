@@ -137,6 +137,9 @@ impl PopupSurface {
     pub fn grab(&self, seat: &WlSeat, serial: u32) {
         info!("Grabbing popup with serial {serial}");
         self.xdg_popup.grab(seat, serial);
+
+        info!("Committing popup surface to trigger configure event");
+        self.surface.commit();
     }
 
     pub fn update_viewport_size(&self, logical_width: i32, logical_height: i32) {

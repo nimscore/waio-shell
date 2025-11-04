@@ -73,7 +73,6 @@ struct ActivePopup {
 impl Drop for ActivePopup {
     fn drop(&mut self) {
         info!("ActivePopup being dropped - cleaning up resources");
-        self.window.cleanup_component_instance();
     }
 }
 
@@ -290,8 +289,6 @@ impl PopupManager {
         if let Some(popup) = self.popups.borrow_mut().try_remove(key) {
             info!("Destroying popup with key {key}");
 
-            popup.window.cleanup_component_instance();
-
             popup.surface.destroy();
         }
     }
@@ -303,9 +300,17 @@ impl PopupManager {
             .find_map(|(key, popup)| (popup.surface.xdg_popup.id() == *xdg_popup_id).then_some(key))
     }
 
+    pub fn find_popup_key_by_xdg_surface_id(&self, xdg_surface_id: &ObjectId) -> Option<usize> {
+        self.popups.borrow().iter().find_map(|(key, popup)| {
+            (popup.surface.xdg_surface.id() == *xdg_surface_id).then_some(key)
+        })
+    }
+
     pub fn update_popup_viewport(&self, key: usize, logical_width: i32, logical_height: i32) {
         if let Some(popup) = self.popups.borrow().get(key) {
-            popup.surface.update_viewport_size(logical_width, logical_height);
+            popup
+                .surface
+                .update_viewport_size(logical_width, logical_height);
         }
     }
 
@@ -314,5 +319,11 @@ impl PopupManager {
             .borrow()
             .get(key)
             .map(|popup| (popup.request.clone(), popup.last_serial))
+    }
+
+    pub fn mark_popup_configured(&self, key: usize) {
+        if let Some(popup) = self.popups.borrow().get(key) {
+            popup.window.mark_configured();
+        }
     }
 }

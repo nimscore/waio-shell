@@ -268,6 +268,17 @@ impl Dispatch<XdgPopup, ()> for WindowState {
                 height,
             } => {
                 info!("XdgPopup Configure: position=({x}, {y}), size=({width}x{height})");
+
+                if let Some(popup_manager) = &state.popup_manager() {
+                    let popup_id = xdg_popup.id();
+                    if let Some(key) = popup_manager.find_popup_key_by_xdg_popup_id(&popup_id) {
+                        info!(
+                            "Marking popup with key {key} as configured after XdgPopup::Configure"
+                        );
+                        popup_manager.mark_popup_configured(key);
+                        popup_manager.mark_all_popups_dirty();
+                    }
+                }
             }
             xdg_popup::Event::PopupDone => {
                 info!("XdgPopup dismissed by compositor");

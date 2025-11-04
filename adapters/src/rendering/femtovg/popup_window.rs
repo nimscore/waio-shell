@@ -3,7 +3,7 @@ use crate::wayland::surfaces::popup_manager::PopupManager;
 use core::ops::Deref;
 use log::info;
 use slint::{
-    ComponentHandle, PhysicalSize, Window, WindowSize,
+    PhysicalSize, Window, WindowSize,
     platform::{Renderer, WindowAdapter, WindowEvent, femtovg_renderer::FemtoVGRenderer},
 };
 use slint_interpreter::ComponentInstance;
@@ -21,6 +21,7 @@ pub struct PopupWindow {
     scale_factor: Cell<f32>,
     popup_manager: RefCell<Weak<PopupManager>>,
     popup_key: Cell<Option<usize>>,
+    configured: Cell<bool>,
     component_instance: RefCell<Option<ComponentInstance>>,
 }
 
@@ -38,13 +39,10 @@ impl PopupWindow {
                 scale_factor: Cell::new(1.),
                 popup_manager: RefCell::new(Weak::new()),
                 popup_key: Cell::new(None),
+                configured: Cell::new(false),
                 component_instance: RefCell::new(None),
             }
         })
-    }
-
-    pub fn set_component_instance(&self, instance: ComponentInstance) {
-        *self.component_instance.borrow_mut() = Some(instance);
     }
 
     pub fn set_popup_manager(&self, popup_manager: Weak<PopupManager>, key: usize) {
@@ -54,13 +52,6 @@ impl PopupWindow {
 
     pub fn close_popup(&self) {
         info!("Closing popup window - cleaning up resources");
-
-        if let Some(instance) = self.component_instance.borrow_mut().take() {
-            info!("Hiding ComponentInstance to release strong reference from show()");
-            if let Err(e) = instance.hide() {
-                info!("Failed to hide component instance: {e}");
-            }
-        }
 
         if let Err(e) = self.window.hide() {
             info!("Failed to hide popup window: {e}");
@@ -80,6 +71,11 @@ impl PopupWindow {
     }
 
     pub fn render_frame_if_dirty(&self) -> Result<()> {
+        if !self.configured.get() {
+            info!("Popup not yet configured, skipping render");
+            return Ok(());
+        }
+
         if matches!(
             self.render_state.replace(RenderState::Clean),
             RenderState::Dirty
@@ -114,45 +110,24 @@ impl PopupWindow {
         self.popup_key.get()
     }
 
-    pub fn cleanup_component_instance(&self) {
-        if let Some(instance) = self.component_instance.borrow_mut().take() {
-            info!("Cleaning up component instance to break reference cycles");
-            if let Err(e) = instance.hide() {
-                info!("Failed to hide component instance during cleanup: {e}");
-            }
-            drop(instance);
-        }
+    pub fn mark_configured(&self) {
+        info!("Popup window marked as configured");
+        self.configured.set(true);
+    }
+
+    pub fn is_configured(&self) -> bool {
+        self.configured.get()
+    }
+
+    pub fn set_component_instance(&self, instance: ComponentInstance) {
+        info!("Setting component instance for popup window");
+        *self.component_instance.borrow_mut() = Some(instance);
     }
 
     pub fn request_resize(&self, width: f32, height: f32) {
         info!("Requesting popup resize to {}x{}", width, height);
-        let logical_size = slint::LogicalSize::new(width, height);
-        self.set_size(WindowSize::Logical(logical_size));
-
-        if let Some(popup_manager) = self.popup_manager.borrow().upgrade() {
-            if let Some(key) = self.popup_key.get() {
-                #[allow(clippy::cast_possible_truncation)]
-                #[allow(clippy::cast_possible_wrap)]
-                let logical_width = width as i32;
-                #[allow(clippy::cast_possible_truncation)]
-                #[allow(clippy::cast_possible_wrap)]
-                let logical_height = height as i32;
-                info!("Updating popup viewport to match Slint size: {}x{}", logical_width, logical_height);
-                popup_manager.update_popup_viewport(key, logical_width, logical_height);
-            }
-        }
-
+        self.set_size(WindowSize::Logical(slint::LogicalSize::new(width, height)));
         self.request_redraw();
-    }
-
-    pub fn with_component_instance<F, R>(&self, f: F) -> Option<R>
-    where
-        F: FnOnce(&ComponentInstance) -> R,
-    {
-        self.component_instance
-            .borrow()
-            .as_ref()
-            .map(f)
     }
 }
 
