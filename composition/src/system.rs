@@ -188,15 +188,23 @@ impl RuntimeState<'_> {
 
         popup_manager.set_pending_popup(req, width, height);
 
-        Self::create_popup_instance(&definition, &popup_manager)?;
+        let instance = Self::create_popup_instance(&definition, &popup_manager)?;
 
-        Ok(PopupHandle::new(
-            popup_manager.current_popup_key().ok_or_else(|| {
-                Error::Domain(DomainError::Configuration {
-                    message: "No popup key available after creation".to_string(),
-                })
-            })?,
-        ))
+        let popup_key = popup_manager.current_popup_key().ok_or_else(|| {
+            Error::Domain(DomainError::Configuration {
+                message: "No popup key available after creation".to_string(),
+            })
+        })?;
+
+        if let Some(popup_window) = popup_manager.get_popup_window(popup_key) {
+            popup_window.set_component_instance(instance);
+        } else {
+            return Err(Error::Domain(DomainError::Configuration {
+                message: "Popup window not found after creation".to_string(),
+            }));
+        }
+
+        Ok(PopupHandle::new(popup_key))
     }
 
     pub fn close_popup(&mut self, handle: PopupHandle) -> Result<()> {
@@ -259,10 +267,12 @@ impl RuntimeState<'_> {
             })
         })?;
 
-        let popup_manager_for_callback = Rc::clone(popup_manager);
+        let popup_manager_weak = Rc::downgrade(popup_manager);
         instance
             .set_callback("closed", move |_| {
-                popup_manager_for_callback.close_current_popup();
+                if let Some(popup_manager) = popup_manager_weak.upgrade() {
+                    popup_manager.close_current_popup();
+                }
                 Value::Void
             })
             .map_err(|e| {

@@ -134,6 +134,14 @@ impl<'a> PopupBuilder<'a> {
             width, height
         );
 
+        temp_instance
+            .hide()
+            .map_err(|e| LayerShikaError::WindowConfiguration {
+                message: format!("Failed to hide temporary instance: {}", e),
+            })?;
+
+        debug!("Hidden temporary instance to release strong reference");
+
         Ok(PopupDimensions::new(width, height))
     }
 

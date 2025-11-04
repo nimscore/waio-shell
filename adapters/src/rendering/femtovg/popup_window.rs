@@ -3,9 +3,10 @@ use crate::wayland::surfaces::popup_manager::PopupManager;
 use core::ops::Deref;
 use log::info;
 use slint::{
-    PhysicalSize, Window, WindowSize,
+    ComponentHandle, PhysicalSize, Window, WindowSize,
     platform::{Renderer, WindowAdapter, WindowEvent, femtovg_renderer::FemtoVGRenderer},
 };
+use slint_interpreter::ComponentInstance;
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
@@ -20,6 +21,7 @@ pub struct PopupWindow {
     scale_factor: Cell<f32>,
     popup_manager: RefCell<Weak<PopupManager>>,
     popup_key: Cell<Option<usize>>,
+    component_instance: RefCell<Option<ComponentInstance>>,
 }
 
 #[allow(dead_code)]
@@ -36,8 +38,13 @@ impl PopupWindow {
                 scale_factor: Cell::new(1.),
                 popup_manager: RefCell::new(Weak::new()),
                 popup_key: Cell::new(None),
+                component_instance: RefCell::new(None),
             }
         })
+    }
+
+    pub fn set_component_instance(&self, instance: ComponentInstance) {
+        *self.component_instance.borrow_mut() = Some(instance);
     }
 
     pub fn set_popup_manager(&self, popup_manager: Weak<PopupManager>, key: usize) {
@@ -47,6 +54,13 @@ impl PopupWindow {
 
     pub fn close_popup(&self) {
         info!("Closing popup window - cleaning up resources");
+
+        if let Some(instance) = self.component_instance.borrow_mut().take() {
+            info!("Hiding ComponentInstance to release strong reference from show()");
+            if let Err(e) = instance.hide() {
+                info!("Failed to hide component instance: {e}");
+            }
+        }
 
         if let Err(e) = self.window.hide() {
             info!("Failed to hide popup window: {e}");
