@@ -113,6 +113,47 @@ impl PopupWindow {
     pub fn popup_key(&self) -> Option<usize> {
         self.popup_key.get()
     }
+
+    pub fn cleanup_component_instance(&self) {
+        if let Some(instance) = self.component_instance.borrow_mut().take() {
+            info!("Cleaning up component instance to break reference cycles");
+            if let Err(e) = instance.hide() {
+                info!("Failed to hide component instance during cleanup: {e}");
+            }
+            drop(instance);
+        }
+    }
+
+    pub fn request_resize(&self, width: f32, height: f32) {
+        info!("Requesting popup resize to {}x{}", width, height);
+        let logical_size = slint::LogicalSize::new(width, height);
+        self.set_size(WindowSize::Logical(logical_size));
+
+        if let Some(popup_manager) = self.popup_manager.borrow().upgrade() {
+            if let Some(key) = self.popup_key.get() {
+                #[allow(clippy::cast_possible_truncation)]
+                #[allow(clippy::cast_possible_wrap)]
+                let logical_width = width as i32;
+                #[allow(clippy::cast_possible_truncation)]
+                #[allow(clippy::cast_possible_wrap)]
+                let logical_height = height as i32;
+                info!("Updating popup viewport to match Slint size: {}x{}", logical_width, logical_height);
+                popup_manager.update_popup_viewport(key, logical_width, logical_height);
+            }
+        }
+
+        self.request_redraw();
+    }
+
+    pub fn with_component_instance<F, R>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&ComponentInstance) -> R,
+    {
+        self.component_instance
+            .borrow()
+            .as_ref()
+            .map(f)
+    }
 }
 
 impl WindowAdapter for PopupWindow {

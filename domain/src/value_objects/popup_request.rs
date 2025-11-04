@@ -45,7 +45,7 @@ impl PopupRequest {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum PopupAt {
     Absolute { x: f32, y: f32 },
     Cursor,
@@ -77,7 +77,7 @@ impl PopupAt {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum PopupSize {
     Fixed { w: f32, h: f32 },
     Content,

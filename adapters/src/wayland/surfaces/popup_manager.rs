@@ -68,6 +68,13 @@ struct ActivePopup {
     window: Rc<PopupWindow>,
 }
 
+impl Drop for ActivePopup {
+    fn drop(&mut self) {
+        info!("ActivePopup being dropped - cleaning up resources");
+        self.window.cleanup_component_instance();
+    }
+}
+
 struct PopupState {
     scale_factor: f32,
     output_size: PhysicalSize,
@@ -277,6 +284,9 @@ impl PopupManager {
     pub fn destroy_popup(&self, key: usize) {
         if let Some(popup) = self.popups.borrow_mut().try_remove(key) {
             info!("Destroying popup with key {key}");
+
+            popup.window.cleanup_component_instance();
+
             popup.surface.destroy();
         }
     }
@@ -286,5 +296,11 @@ impl PopupManager {
             .borrow()
             .iter()
             .find_map(|(key, popup)| (popup.surface.xdg_popup.id() == *xdg_popup_id).then_some(key))
+    }
+
+    pub fn update_popup_viewport(&self, key: usize, logical_width: i32, logical_height: i32) {
+        if let Some(popup) = self.popups.borrow().get(key) {
+            popup.surface.update_viewport_size(logical_width, logical_height);
+        }
     }
 }

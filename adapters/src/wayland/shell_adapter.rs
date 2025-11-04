@@ -18,7 +18,6 @@ use crate::{
 use core::result::Result as CoreResult;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::ports::windowing::WindowingSystemPort;
-use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use log::{error, info};
 use slint::{
     LogicalPosition, PhysicalSize, PlatformError, WindowPosition,
@@ -200,21 +199,10 @@ impl WaylandWindowingSystem {
                     positioning_mode: request.mode,
                 }
             } else {
-                let output_size = popup_manager_clone.output_size();
-                #[allow(clippy::cast_precision_loss)]
-                let default_width = output_size.width as f32;
-                #[allow(clippy::cast_precision_loss)]
-                let default_height = output_size.height as f32;
-
-                log::warn!("No popup request provided, using output size ({default_width}x{default_height}) as defaults");
-                CreatePopupParams {
-                    last_pointer_serial: serial,
-                    reference_x: 0.0,
-                    reference_y: 0.0,
-                    width: default_width,
-                    height: default_height,
-                    positioning_mode: PopupPositioningMode::TopLeft,
-                }
+                log::warn!("Popup creator called without pending popup request - aborting");
+                return Err(PlatformError::Other(
+                    "No popup request available - cannot create popup without parameters".to_string()
+                ));
             };
 
             let popup_window = popup_manager_clone

@@ -157,14 +157,6 @@ impl RuntimeState<'_> {
 
         self.close_current_popup()?;
 
-        let (width, height) = match req.size {
-            PopupSize::Fixed { w, h } => {
-                log::debug!("Using fixed popup size: {}x{}", w, h);
-                (w, h)
-            }
-            PopupSize::Content => self.measure_popup_dimensions(&definition)?,
-        };
-
         let popup_manager = self
             .window_state
             .popup_manager()
@@ -176,19 +168,30 @@ impl RuntimeState<'_> {
             })
             .map(Rc::clone)?;
 
+        let initial_dimensions = match req.size {
+            PopupSize::Fixed { w, h } => {
+                log::debug!("Using fixed popup size: {}x{}", w, h);
+                (w, h)
+            }
+            PopupSize::Content => {
+                log::debug!("Using content-based sizing - will measure after instance creation");
+                (600.0, 300.0)
+            }
+        };
+
         log::debug!(
             "Creating popup for '{}' with dimensions {}x{} at position ({}, {}), mode: {:?}",
             req.component,
-            width,
-            height,
+            initial_dimensions.0,
+            initial_dimensions.1,
             req.at.position().0,
             req.at.position().1,
             req.mode
         );
 
-        popup_manager.set_pending_popup(req, width, height);
+        popup_manager.set_pending_popup(req, initial_dimensions.0, initial_dimensions.1);
 
-        let instance = Self::create_popup_instance(&definition, &popup_manager)?;
+        let instance = Self::create_popup_instance(&definition, &popup_manager, 0)?;
 
         let popup_key = popup_manager.current_popup_key().ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
@@ -221,45 +224,10 @@ impl RuntimeState<'_> {
         Ok(())
     }
 
-    fn measure_popup_dimensions(&mut self, definition: &ComponentDefinition) -> Result<(f32, f32)> {
-        log::debug!(
-            "Creating temporary popup instance to read dimensions from component properties"
-        );
-
-        let temp_instance = definition.create().map_err(|e| {
-            Error::Domain(DomainError::Configuration {
-                message: format!("Failed to create temporary popup instance: {}", e),
-            })
-        })?;
-
-        let width: f32 = temp_instance
-            .get_property("popup-width")
-            .ok()
-            .and_then(|v| v.try_into().ok())
-            .unwrap_or(120.0);
-
-        let height: f32 = temp_instance
-            .get_property("popup-height")
-            .ok()
-            .and_then(|v| v.try_into().ok())
-            .unwrap_or(120.0);
-
-        log::debug!(
-            "Read popup dimensions from component properties: {}x{} (popup-width, popup-height)",
-            width,
-            height
-        );
-
-        drop(temp_instance);
-        self.close_current_popup()?;
-        log::debug!("Destroyed temporary popup instance");
-
-        Ok((width, height))
-    }
-
     fn create_popup_instance(
         definition: &ComponentDefinition,
         popup_manager: &Rc<PopupManager>,
+        popup_key: usize,
     ) -> Result<ComponentInstance> {
         let instance = definition.create().map_err(|e| {
             Error::Domain(DomainError::Configuration {
@@ -280,6 +248,33 @@ impl RuntimeState<'_> {
                     message: format!("Failed to set popup closed callback: {}", e),
                 })
             })?;
+
+        let popup_manager_for_resize = Rc::downgrade(popup_manager);
+        let result = instance.set_callback("change_popup_size", move |args| {
+            let width: f32 = args
+                .first()
+                .and_then(|v| v.clone().try_into().ok())
+                .unwrap_or(200.0);
+            let height: f32 = args
+                .get(1)
+                .and_then(|v| v.clone().try_into().ok())
+                .unwrap_or(150.0);
+
+            log::info!("change_popup_size callback invoked: {}x{}", width, height);
+
+            if let Some(popup_mgr) = popup_manager_for_resize.upgrade() {
+                if let Some(popup_window) = popup_mgr.get_popup_window(popup_key) {
+                    popup_window.request_resize(width, height);
+                }
+            }
+            Value::Void
+        });
+
+        if let Err(e) = result {
+            log::warn!("Failed to set change_popup_size callback: {}", e);
+        } else {
+            log::info!("change_popup_size callback registered successfully");
+        }
 
         instance.show().map_err(|e| {
             Error::Domain(DomainError::Configuration {
