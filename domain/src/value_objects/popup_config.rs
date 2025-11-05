@@ -7,6 +7,8 @@ pub struct PopupConfig {
     width: f32,
     height: f32,
     positioning_mode: PopupPositioningMode,
+    output_width: f32,
+    output_height: f32,
 }
 
 impl PopupConfig {
@@ -17,6 +19,8 @@ impl PopupConfig {
         width: f32,
         height: f32,
         positioning_mode: PopupPositioningMode,
+        output_width: f32,
+        output_height: f32,
     ) -> Self {
         Self {
             reference_x,
@@ -24,6 +28,8 @@ impl PopupConfig {
             width,
             height,
             positioning_mode,
+            output_width,
+            output_height,
         }
     }
 
@@ -54,19 +60,25 @@ impl PopupConfig {
 
     #[must_use]
     pub fn calculated_top_left_x(&self) -> f32 {
-        if self.positioning_mode.center_x() {
+        let unclamped_x = if self.positioning_mode.center_x() {
             self.reference_x - (self.width / 2.0)
         } else {
             self.reference_x
-        }
+        };
+
+        let max_x = self.output_width - self.width;
+        unclamped_x.max(0.0).min(max_x)
     }
 
     #[must_use]
     pub fn calculated_top_left_y(&self) -> f32 {
-        if self.positioning_mode.center_y() {
+        let unclamped_y = if self.positioning_mode.center_y() {
             self.reference_y - (self.height / 2.0)
         } else {
             self.reference_y
-        }
+        };
+
+        let max_y = self.output_height - self.height;
+        unclamped_y.max(0.0).min(max_y)
     }
 }

@@ -179,12 +179,21 @@ impl PopupManager {
             params.positioning_mode
         );
 
+        let output_size = self.output_size();
+        #[allow(clippy::cast_precision_loss)]
+        let output_logical_size = (
+            output_size.width as f32 / scale_factor,
+            output_size.height as f32 / scale_factor,
+        );
+
         let popup_config = PopupConfig::new(
             params.reference_x,
             params.reference_y,
             params.width,
             params.height,
             params.positioning_mode,
+            output_logical_size.0,
+            output_logical_size.1,
         );
 
         #[allow(clippy::cast_possible_truncation)]

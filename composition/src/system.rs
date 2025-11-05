@@ -28,11 +28,7 @@ use std::time::{Duration, Instant};
 enum PopupCommand {
     Show(PopupRequest),
     Close(PopupHandle),
-    Resize {
-        key: usize,
-        width: f32,
-        height: f32,
-    },
+    Resize { key: usize, width: f32, height: f32 },
 }
 
 pub struct EventLoopHandle {
@@ -142,7 +138,11 @@ impl RuntimeState<'_> {
         self.window_state.compilation_result()
     }
 
-    pub fn show_popup(&mut self, req: PopupRequest, resize_sender: Option<channel::Sender<PopupCommand>>) -> Result<PopupHandle> {
+    pub fn show_popup(
+        &mut self,
+        req: PopupRequest,
+        resize_sender: Option<channel::Sender<PopupCommand>>,
+    ) -> Result<PopupHandle> {
         let compilation_result = self.compilation_result().ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
                 message: "No compilation result available for popup creation".to_string(),
@@ -229,7 +229,13 @@ impl RuntimeState<'_> {
         Ok(())
     }
 
-    pub fn resize_popup(&mut self, key: usize, width: f32, height: f32, resize_sender: Option<channel::Sender<PopupCommand>>) -> Result<()> {
+    pub fn resize_popup(
+        &mut self,
+        key: usize,
+        width: f32,
+        height: f32,
+        resize_sender: Option<channel::Sender<PopupCommand>>,
+    ) -> Result<()> {
         let popup_manager = self
             .window_state
             .popup_manager()
@@ -416,7 +422,9 @@ impl WindowingSystem {
 
                     match command {
                         PopupCommand::Show(request) => {
-                            if let Err(e) = runtime_state.show_popup(request, Some(sender_for_handler.clone())) {
+                            if let Err(e) =
+                                runtime_state.show_popup(request, Some(sender_for_handler.clone()))
+                            {
                                 log::error!("Failed to show popup: {}", e);
                             }
                         }
@@ -426,7 +434,12 @@ impl WindowingSystem {
                             }
                         }
                         PopupCommand::Resize { key, width, height } => {
-                            if let Err(e) = runtime_state.resize_popup(key, width, height, Some(sender_for_handler.clone())) {
+                            if let Err(e) = runtime_state.resize_popup(
+                                key,
+                                width,
+                                height,
+                                Some(sender_for_handler.clone()),
+                            ) {
                                 log::error!("Failed to resize popup: {}", e);
                             }
                         }
