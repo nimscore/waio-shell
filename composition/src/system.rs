@@ -25,7 +25,7 @@ use std::rc::{Rc, Weak};
 use std::result::Result as StdResult;
 use std::time::{Duration, Instant};
 
-enum PopupCommand {
+pub enum PopupCommand {
     Show(PopupRequest),
     Close(PopupHandle),
     Resize { key: usize, width: f32, height: f32 },
@@ -254,9 +254,8 @@ impl RuntimeState<'_> {
         })?;
 
         let current_size = request.size.dimensions();
-        let size_changed = current_size.map_or(true, |(w, h)| {
-            (w - width).abs() > 0.01 || (h - height).abs() > 0.01
-        });
+        let size_changed =
+            current_size.is_none_or(|(w, h)| (w - width).abs() > 0.01 || (h - height).abs() > 0.01);
 
         let needs_repositioning = request.mode.center_x() || request.mode.center_y();
 
