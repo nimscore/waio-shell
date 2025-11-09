@@ -1,6 +1,9 @@
 #![allow(clippy::pub_use)]
 
 pub use crate::config::WindowConfig;
+pub use crate::dimensions::{
+    LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize, ScaleFactor,
+};
 pub use crate::entities::component::UiComponentHandle;
 pub use crate::entities::surface::SurfaceHandle;
 pub use crate::entities::window::WindowHandle;

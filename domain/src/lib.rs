@@ -1,4 +1,5 @@
 pub mod config;
+pub mod dimensions;
 pub mod entities;
 pub mod errors;
 pub mod ports;

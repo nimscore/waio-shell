@@ -1,42 +1,42 @@
+use crate::dimensions::LogicalSize;
 use crate::errors::{DomainError, Result};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct PopupDimensions {
-    width: f32,
-    height: f32,
+    size: LogicalSize,
 }
 
 impl PopupDimensions {
-    #[must_use]
-    pub const fn new(width: f32, height: f32) -> Self {
-        Self { width, height }
+    pub fn new(width: f32, height: f32) -> Result<Self> {
+        let size = LogicalSize::new(width, height)?;
+        Ok(Self { size })
     }
 
-    #[must_use]
+    pub const fn from_logical(size: LogicalSize) -> Self {
+        Self { size }
+    }
+
     pub const fn width(&self) -> f32 {
-        self.width
+        self.size.width()
     }
 
-    #[must_use]
     pub const fn height(&self) -> f32 {
-        self.height
+        self.size.height()
     }
 
-    pub fn validate(&self) -> Result<()> {
-        if self.width <= 0.0 || self.height <= 0.0 {
-            return Err(DomainError::Configuration {
-                message: format!(
-                    "Invalid popup dimensions: width={}, height={}. Both must be positive.",
-                    self.width, self.height
-                ),
-            });
-        }
-        Ok(())
+    pub const fn logical_size(&self) -> LogicalSize {
+        self.size
+    }
+
+    pub fn as_tuple(&self) -> (f32, f32) {
+        self.size.as_tuple()
     }
 }
 
-impl Default for PopupDimensions {
-    fn default() -> Self {
-        Self::new(120.0, 120.0)
+impl TryFrom<(f32, f32)> for PopupDimensions {
+    type Error = DomainError;
+
+    fn try_from((width, height): (f32, f32)) -> Result<Self> {
+        Self::new(width, height)
     }
 }

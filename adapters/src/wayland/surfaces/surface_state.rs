@@ -12,7 +12,7 @@ use core::result::Result as CoreResult;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::ports::windowing::RuntimeStatePort;
 use layer_shika_domain::surface_dimensions::SurfaceDimensions;
-use log::info;
+use log::{error, info};
 use slint::{LogicalPosition, PhysicalSize, ComponentHandle};
 use slint::platform::{WindowAdapter, WindowEvent};
 use slint_interpreter::{ComponentInstance, CompilationResult};
@@ -179,22 +179,22 @@ impl WindowState {
                 self.window.set_scale_factor(self.scale_factor);
                 self.window
                     .set_size(slint::WindowSize::Logical(slint::LogicalSize::new(
-                        dimensions.logical_width as f32,
-                        dimensions.logical_height as f32,
+                        dimensions.logical_width() as f32,
+                        dimensions.logical_height() as f32,
                     )));
             }
             ScalingMode::FractionalOnly => {
-                self.window.set_scale_factor(dimensions.buffer_scale as f32);
+                self.window.set_scale_factor(dimensions.buffer_scale() as f32);
                 self.window
                     .set_size(slint::WindowSize::Logical(slint::LogicalSize::new(
-                        dimensions.logical_width as f32,
-                        dimensions.logical_height as f32,
+                        dimensions.logical_width() as f32,
+                        dimensions.logical_height() as f32,
                     )));
             }
             ScalingMode::Integer => {
                 self.window.set_scale_factor(self.scale_factor);
                 self.window
-                    .set_size(slint::WindowSize::Physical(dimensions.physical_size()));
+                    .set_size(slint::WindowSize::Physical(dimensions.to_slint_physical_size()));
             }
         }
     }
@@ -206,18 +206,18 @@ impl WindowState {
                 self.surface.set_buffer_scale(1);
                 if let Some(viewport) = &self.viewport {
                     viewport.set_destination(
-                        dimensions.logical_width as i32,
-                        dimensions.logical_height as i32,
+                        dimensions.logical_width() as i32,
+                        dimensions.logical_height() as i32,
                     );
                 }
             }
             ScalingMode::FractionalOnly | ScalingMode::Integer => {
-                self.surface.set_buffer_scale(dimensions.buffer_scale);
+                self.surface.set_buffer_scale(dimensions.buffer_scale());
             }
         }
 
         self.layer_surface
-            .set_size(dimensions.logical_width, dimensions.logical_height);
+            .set_size(dimensions.logical_width(), dimensions.logical_height());
         self.layer_surface.set_exclusive_zone(self.exclusive_zone);
         self.surface.commit();
     }
@@ -229,17 +229,23 @@ impl WindowState {
         }
 
         let scale_factor = self.scale_factor();
-        let dimensions = SurfaceDimensions::calculate(width, height, scale_factor);
+        let dimensions = match SurfaceDimensions::calculate(width, height, scale_factor) {
+            Ok(d) => d,
+            Err(e) => {
+                error!("Failed to calculate surface dimensions: {e}");
+                return;
+            }
+        };
         let scaling_mode = self.determine_scaling_mode();
 
         info!(
             "Updating window size: logical {}x{}, physical {}x{}, scale {}, buffer_scale {}, mode {:?}",
-            dimensions.logical_width,
-            dimensions.logical_height,
-            dimensions.physical_width,
-            dimensions.physical_height,
+            dimensions.logical_width(),
+            dimensions.logical_height(),
+            dimensions.physical_width(),
+            dimensions.physical_height(),
             scale_factor,
-            dimensions.buffer_scale,
+            dimensions.buffer_scale(),
             scaling_mode
         );
 
@@ -248,8 +254,8 @@ impl WindowState {
 
         info!("Window physical size: {:?}", self.window.size());
 
-        self.size = dimensions.physical_size();
-        self.logical_size = dimensions.logical_size();
+        self.size = dimensions.to_slint_physical_size();
+        self.logical_size = dimensions.to_slint_logical_size();
         self.window.request_redraw();
     }
 

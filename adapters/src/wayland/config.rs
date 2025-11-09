@@ -40,7 +40,7 @@ impl WaylandWindowConfig {
         domain_config: DomainWindowConfig,
     ) -> Self {
         Self {
-            height: domain_config.height,
+            height: domain_config.height.value(),
             layer: convert_layer(domain_config.layer),
             margin: domain_config.margin,
             anchor: convert_anchor(domain_config.anchor),
@@ -48,7 +48,7 @@ impl WaylandWindowConfig {
                 domain_config.keyboard_interactivity,
             ),
             exclusive_zone: domain_config.exclusive_zone,
-            scale_factor: domain_config.scale_factor,
+            scale_factor: domain_config.scale_factor.value(),
             namespace: domain_config.namespace,
             component_definition,
             compilation_result,

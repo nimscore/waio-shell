@@ -3,7 +3,7 @@ use crate::system::WindowingSystem;
 use layer_shika_adapters::platform::slint_interpreter::{CompilationResult, Compiler};
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::prelude::{
-    AnchorEdges, KeyboardInteractivity, Layer, Margins, WindowConfig,
+    AnchorEdges, KeyboardInteractivity, Layer, Margins, ScaleFactor, WindowConfig, WindowHeight,
 };
 use spin_on::spin_on;
 use std::path::{Path, PathBuf};
@@ -135,10 +135,9 @@ impl LayerShika<NeedsComponent> {
 }
 
 impl LayerShika<HasComponent> {
-    #[must_use]
-    pub const fn with_height(mut self, height: u32) -> Self {
-        self.config.height = height;
-        self
+    pub fn with_height(mut self, height: u32) -> Result<Self> {
+        self.config.height = WindowHeight::new(height)?;
+        Ok(self)
     }
 
     #[must_use]
@@ -176,10 +175,9 @@ impl LayerShika<HasComponent> {
         self
     }
 
-    #[must_use]
-    pub const fn with_scale_factor(mut self, scale_factor: f32) -> Self {
-        self.config.scale_factor = scale_factor;
-        self
+    pub fn with_scale_factor(mut self, scale_factor: f32) -> Result<Self> {
+        self.config.scale_factor = ScaleFactor::new(scale_factor)?;
+        Ok(self)
     }
 
     #[must_use]
