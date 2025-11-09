@@ -6,12 +6,14 @@ use crate::wayland::managed_proxies::{
     ManagedWlPointer, ManagedWlSurface, ManagedZwlrLayerSurfaceV1,
     ManagedWpFractionalScaleV1, ManagedWpViewport,
 };
+use crate::wayland::services::popup_service::{ActiveWindow, PopupService};
 use crate::rendering::femtovg::main_window::FemtoVGWindow;
 use crate::errors::{LayerShikaError, Result};
 use core::result::Result as CoreResult;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::ports::windowing::RuntimeStatePort;
 use layer_shika_domain::surface_dimensions::SurfaceDimensions;
+use layer_shika_domain::value_objects::popup_request::PopupHandle;
 use log::{error, info};
 use slint::{LogicalPosition, PhysicalSize, ComponentHandle};
 use slint::platform::{WindowAdapter, WindowEvent};
@@ -54,12 +56,6 @@ enum ScalingMode {
     Integer,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ActiveWindow {
-    Main,
-    Popup(usize),
-}
-
 pub struct WindowState {
     component_instance: ComponentInstance,
     compilation_result: Option<Rc<CompilationResult>>,
@@ -72,7 +68,7 @@ pub struct WindowState {
     window: Rc<FemtoVGWindow>,
     height: u32,
     exclusive_zone: i32,
-    popup_manager: Option<Rc<PopupManager>>,
+    popup_service: Option<Rc<PopupService>>,
     size: PhysicalSize,
     logical_size: PhysicalSize,
     output_size: PhysicalSize,
@@ -80,7 +76,6 @@ pub struct WindowState {
     last_pointer_serial: u32,
     shared_pointer_serial: Option<Rc<SharedPointerSerial>>,
     scale_factor: f32,
-    active_window: Option<ActiveWindow>,
 }
 
 impl WindowState {
@@ -150,7 +145,7 @@ impl WindowState {
             window,
             height: builder.height,
             exclusive_zone: builder.exclusive_zone,
-            popup_manager: None,
+            popup_service: None,
             size: builder.size.unwrap_or_default(),
             logical_size: PhysicalSize::default(),
             output_size: builder.output_size.unwrap_or_default(),
@@ -158,7 +153,6 @@ impl WindowState {
             last_pointer_serial: 0,
             shared_pointer_serial: None,
             scale_factor: builder.scale_factor,
-            active_window: None,
         })
     }
 
@@ -184,7 +178,8 @@ impl WindowState {
                     )));
             }
             ScalingMode::FractionalOnly => {
-                self.window.set_scale_factor(dimensions.buffer_scale() as f32);
+                self.window
+                    .set_scale_factor(dimensions.buffer_scale() as f32);
                 self.window
                     .set_size(slint::WindowSize::Logical(slint::LogicalSize::new(
                         dimensions.logical_width() as f32,
@@ -193,8 +188,9 @@ impl WindowState {
             }
             ScalingMode::Integer => {
                 self.window.set_scale_factor(self.scale_factor);
-                self.window
-                    .set_size(slint::WindowSize::Physical(dimensions.to_slint_physical_size()));
+                self.window.set_size(slint::WindowSize::Physical(
+                    dimensions.to_slint_physical_size(),
+                ));
             }
         }
     }
@@ -295,8 +291,8 @@ impl WindowState {
 
     pub fn set_output_size(&mut self, output_size: PhysicalSize) {
         self.output_size = output_size;
-        if let Some(popup_manager) = &self.popup_manager {
-            popup_manager.update_output_size(output_size);
+        if let Some(popup_service) = &self.popup_service {
+            popup_service.update_output_size(output_size);
         }
     }
 
@@ -327,8 +323,8 @@ impl WindowState {
         );
         self.scale_factor = new_scale_factor;
 
-        if let Some(popup_manager) = &self.popup_manager {
-            popup_manager.update_scale_factor(new_scale_factor);
+        if let Some(popup_service) = &self.popup_service {
+            popup_service.update_scale_factor(new_scale_factor);
         }
 
         let current_logical_size = self.logical_size;
@@ -356,41 +352,35 @@ impl WindowState {
         self.shared_pointer_serial = Some(shared_serial);
     }
 
+    pub fn set_popup_service(&mut self, popup_service: Rc<PopupService>) {
+        self.popup_service = Some(popup_service);
+    }
+
     pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager>) {
-        self.popup_manager = Some(popup_manager);
+        self.popup_service = Some(Rc::new(PopupService::new(popup_manager)));
     }
 
     pub fn find_window_for_surface(&mut self, surface: &WlSurface) {
-        let surface_id = surface.id();
-
-        if (**self.surface.inner()).id() == surface_id {
-            self.active_window = Some(ActiveWindow::Main);
-            return;
+        if let Some(popup_service) = &self.popup_service {
+            popup_service.find_window_for_surface(surface, &(**self.surface.inner()).id());
         }
-
-        if let Some(popup_manager) = &self.popup_manager {
-            if let Some(popup_key) = popup_manager.find_popup_key_by_surface_id(&surface_id) {
-                self.active_window = Some(ActiveWindow::Popup(popup_key));
-                return;
-            }
-        }
-
-        self.active_window = None;
     }
 
     pub fn dispatch_to_active_window(&self, event: WindowEvent) {
-        match self.active_window {
-            Some(ActiveWindow::Main) => {
-                self.window.window().dispatch_event(event);
-            }
-            Some(ActiveWindow::Popup(index)) => {
-                if let Some(popup_manager) = &self.popup_manager {
-                    if let Some(popup_window) = popup_manager.get_popup_window(index) {
+        if let Some(popup_service) = &self.popup_service {
+            match popup_service.active_window() {
+                Some(ActiveWindow::Main) => {
+                    self.window.window().dispatch_event(event);
+                }
+                Some(ActiveWindow::Popup(index)) => {
+                    if let Some(popup_window) =
+                        popup_service.get_popup_window(PopupHandle::new(index))
+                    {
                         popup_window.dispatch_event(event);
                     }
                 }
+                None => {}
             }
-            None => {}
         }
     }
 
@@ -409,32 +399,32 @@ impl WindowState {
             }
         }
 
-        if let Some(popup_manager) = &self.popup_manager {
-            if let Some(popup_key) =
-                popup_manager.find_popup_key_by_fractional_scale_id(&fractional_scale_id)
-            {
-                if let Some(popup_window) = popup_manager.get_popup_window(popup_key) {
-                    let new_scale_factor = scale_120ths as f32 / 120.0;
-                    info!("Updating popup scale factor to {new_scale_factor} ({scale_120ths}x)");
-                    popup_window.set_scale_factor(new_scale_factor);
-                    popup_window.request_redraw();
-                }
-            }
+        if let Some(popup_service) = &self.popup_service {
+            popup_service
+                .update_scale_for_fractional_scale_object(fractional_scale_proxy, scale_120ths);
         }
     }
 
     pub fn clear_active_window(&mut self) {
-        self.active_window = None;
-    }
-
-    pub fn clear_active_window_if_popup(&mut self, popup_key: usize) {
-        if self.active_window == Some(ActiveWindow::Popup(popup_key)) {
-            self.active_window = None;
+        if let Some(popup_service) = &self.popup_service {
+            popup_service.clear_active_window();
         }
     }
 
-    pub const fn popup_manager(&self) -> &Option<Rc<PopupManager>> {
-        &self.popup_manager
+    pub fn clear_active_window_if_popup(&mut self, popup_key: usize) {
+        if let Some(popup_service) = &self.popup_service {
+            popup_service.clear_active_window_if_popup(popup_key);
+        }
+    }
+
+    pub const fn popup_service(&self) -> &Option<Rc<PopupService>> {
+        &self.popup_service
+    }
+
+    pub fn popup_manager(&self) -> Option<Rc<PopupManager>> {
+        self.popup_service
+            .as_ref()
+            .map(|service| Rc::clone(service.manager()))
     }
 }
 

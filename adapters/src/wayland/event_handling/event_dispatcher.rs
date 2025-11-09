@@ -269,30 +269,30 @@ impl Dispatch<XdgPopup, ()> for WindowState {
             } => {
                 info!("XdgPopup Configure: position=({x}, {y}), size=({width}x{height})");
 
-                if let Some(popup_manager) = &state.popup_manager() {
+                if let Some(popup_service) = state.popup_service() {
                     let popup_id = xdg_popup.id();
-                    if let Some(key) = popup_manager.find_popup_key_by_xdg_popup_id(&popup_id) {
+                    if let Some(handle) = popup_service.find_by_xdg_popup(&popup_id) {
                         info!(
-                            "Marking popup with key {key} as configured after XdgPopup::Configure"
+                            "Marking popup with handle {handle:?} as configured after XdgPopup::Configure"
                         );
-                        popup_manager.mark_popup_configured(key);
-                        popup_manager.mark_all_popups_dirty();
+                        popup_service.mark_popup_configured(handle);
+                        popup_service.manager().mark_all_popups_dirty();
                     }
                 }
             }
             xdg_popup::Event::PopupDone => {
                 info!("XdgPopup dismissed by compositor");
                 let popup_id = xdg_popup.id();
-                let popup_key = state
-                    .popup_manager()
+                let popup_handle = state
+                    .popup_service()
                     .as_ref()
-                    .and_then(|pm| pm.find_popup_key_by_xdg_popup_id(&popup_id));
+                    .and_then(|ps| ps.find_by_xdg_popup(&popup_id));
 
-                if let Some(key) = popup_key {
-                    info!("Destroying popup with key {key}");
-                    state.clear_active_window_if_popup(key);
-                    if let Some(popup_manager) = &state.popup_manager() {
-                        popup_manager.destroy_popup(key);
+                if let Some(handle) = popup_handle {
+                    info!("Destroying popup with handle {handle:?}");
+                    state.clear_active_window_if_popup(handle.key());
+                    if let Some(popup_service) = state.popup_service() {
+                        let _result = popup_service.close(handle);
                     }
                 }
             }
@@ -317,9 +317,9 @@ impl Dispatch<XdgSurface, ()> for WindowState {
             info!("XdgSurface Configure received, sending ack with serial {serial}");
             xdg_surface.ack_configure(serial);
 
-            if let Some(popup_manager) = &state.popup_manager() {
+            if let Some(popup_service) = state.popup_service() {
                 info!("Marking all popups as dirty after Configure");
-                popup_manager.mark_all_popups_dirty();
+                popup_service.manager().mark_all_popups_dirty();
             }
         }
     }
