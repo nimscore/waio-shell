@@ -1,5 +1,4 @@
 use std::rc::Rc;
-use std::cell::RefCell;
 use super::surface_builder::WindowStateBuilder;
 use super::dimensions::SurfaceDimensionsExt;
 use super::popup_manager::PopupManager;
@@ -20,6 +19,7 @@ use slint_interpreter::{ComponentInstance, CompilationResult};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use wayland_client::{protocol::wl_surface::WlSurface, Proxy};
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
+use std::cell::RefCell;
 
 pub struct SharedPointerSerial {
     serial: RefCell<u32>,
@@ -60,33 +60,6 @@ enum ActiveWindow {
     Popup(usize),
 }
 
-struct MutableWindowState {
-    size: PhysicalSize,
-    logical_size: PhysicalSize,
-    output_size: PhysicalSize,
-    current_pointer_position: LogicalPosition,
-    last_pointer_serial: u32,
-    shared_pointer_serial: Option<Rc<SharedPointerSerial>>,
-    scale_factor: f32,
-    active_window: Option<ActiveWindow>,
-}
-
-impl MutableWindowState {
-    #[allow(clippy::cast_possible_truncation)]
-    fn set_pointer_position(&mut self, physical_x: f64, physical_y: f64, fractional_scale: bool) {
-        let logical_position = if fractional_scale {
-            LogicalPosition::new(physical_x as f32, physical_y as f32)
-        } else {
-            let scale_factor = self.scale_factor;
-            LogicalPosition::new(
-                (physical_x / f64::from(scale_factor)) as f32,
-                (physical_y / f64::from(scale_factor)) as f32,
-            )
-        };
-        self.current_pointer_position = logical_position;
-    }
-}
-
 pub struct WindowState {
     component_instance: ComponentInstance,
     compilation_result: Option<Rc<CompilationResult>>,
@@ -100,7 +73,14 @@ pub struct WindowState {
     height: u32,
     exclusive_zone: i32,
     popup_manager: Option<Rc<PopupManager>>,
-    mutable_state: RefCell<MutableWindowState>,
+    size: PhysicalSize,
+    logical_size: PhysicalSize,
+    output_size: PhysicalSize,
+    current_pointer_position: LogicalPosition,
+    last_pointer_serial: u32,
+    shared_pointer_serial: Option<Rc<SharedPointerSerial>>,
+    scale_factor: f32,
+    active_window: Option<ActiveWindow>,
 }
 
 impl WindowState {
@@ -171,16 +151,14 @@ impl WindowState {
             height: builder.height,
             exclusive_zone: builder.exclusive_zone,
             popup_manager: None,
-            mutable_state: RefCell::new(MutableWindowState {
-                size: builder.size.unwrap_or_default(),
-                logical_size: PhysicalSize::default(),
-                output_size: builder.output_size.unwrap_or_default(),
-                current_pointer_position: LogicalPosition::default(),
-                last_pointer_serial: 0,
-                shared_pointer_serial: None,
-                scale_factor: builder.scale_factor,
-                active_window: None,
-            }),
+            size: builder.size.unwrap_or_default(),
+            logical_size: PhysicalSize::default(),
+            output_size: builder.output_size.unwrap_or_default(),
+            current_pointer_position: LogicalPosition::default(),
+            last_pointer_serial: 0,
+            shared_pointer_serial: None,
+            scale_factor: builder.scale_factor,
+            active_window: None,
         })
     }
 
@@ -196,10 +174,9 @@ impl WindowState {
 
     #[allow(clippy::cast_precision_loss)]
     fn configure_slint_window(&self, dimensions: &SurfaceDimensions, mode: ScalingMode) {
-        let state = self.mutable_state.borrow();
         match mode {
             ScalingMode::FractionalWithViewport => {
-                self.window.set_scale_factor(state.scale_factor);
+                self.window.set_scale_factor(self.scale_factor);
                 self.window
                     .set_size(slint::WindowSize::Logical(slint::LogicalSize::new(
                         dimensions.logical_width as f32,
@@ -215,7 +192,7 @@ impl WindowState {
                     )));
             }
             ScalingMode::Integer => {
-                self.window.set_scale_factor(state.scale_factor);
+                self.window.set_scale_factor(self.scale_factor);
                 self.window
                     .set_size(slint::WindowSize::Physical(dimensions.physical_size()));
             }
@@ -271,25 +248,31 @@ impl WindowState {
 
         info!("Window physical size: {:?}", self.window.size());
 
-        let mut state = self.mutable_state.borrow_mut();
-        state.size = dimensions.physical_size();
-        state.logical_size = dimensions.logical_size();
+        self.size = dimensions.physical_size();
+        self.logical_size = dimensions.logical_size();
         self.window.request_redraw();
     }
 
     #[allow(clippy::cast_possible_truncation)]
     pub fn set_current_pointer_position(&mut self, physical_x: f64, physical_y: f64) {
         let has_fractional_scale = self.fractional_scale.is_some();
-        let mut state = self.mutable_state.borrow_mut();
-        state.set_pointer_position(physical_x, physical_y, has_fractional_scale);
+        let logical_position = if has_fractional_scale {
+            LogicalPosition::new(physical_x as f32, physical_y as f32)
+        } else {
+            LogicalPosition::new(
+                (physical_x / f64::from(self.scale_factor)) as f32,
+                (physical_y / f64::from(self.scale_factor)) as f32,
+            )
+        };
+        self.current_pointer_position = logical_position;
     }
 
-    pub fn size(&self) -> PhysicalSize {
-        self.mutable_state.borrow().size
+    pub const fn size(&self) -> PhysicalSize {
+        self.size
     }
 
-    pub fn current_pointer_position(&self) -> LogicalPosition {
-        self.mutable_state.borrow().current_pointer_position
+    pub const fn current_pointer_position(&self) -> LogicalPosition {
+        self.current_pointer_position
     }
 
     pub(crate) fn window(&self) -> Rc<FemtoVGWindow> {
@@ -305,14 +288,14 @@ impl WindowState {
     }
 
     pub fn set_output_size(&mut self, output_size: PhysicalSize) {
-        self.mutable_state.borrow_mut().output_size = output_size;
+        self.output_size = output_size;
         if let Some(popup_manager) = &self.popup_manager {
             popup_manager.update_output_size(output_size);
         }
     }
 
-    pub fn output_size(&self) -> PhysicalSize {
-        self.mutable_state.borrow().output_size
+    pub const fn output_size(&self) -> PhysicalSize {
+        self.output_size
     }
 
     pub const fn component_instance(&self) -> &ComponentInstance {
@@ -331,41 +314,40 @@ impl WindowState {
     #[allow(clippy::cast_precision_loss)]
     pub fn update_scale_factor(&mut self, scale_120ths: u32) {
         let new_scale_factor = scale_120ths as f32 / 120.0;
-        let old_scale_factor = self.scale_factor();
+        let old_scale_factor = self.scale_factor;
         info!(
             "Updating scale factor from {} to {} ({}x)",
             old_scale_factor, new_scale_factor, scale_120ths
         );
-        self.mutable_state.borrow_mut().scale_factor = new_scale_factor;
+        self.scale_factor = new_scale_factor;
 
         if let Some(popup_manager) = &self.popup_manager {
             popup_manager.update_scale_factor(new_scale_factor);
         }
 
-        let current_logical_size = self.mutable_state.borrow().logical_size;
+        let current_logical_size = self.logical_size;
         if current_logical_size.width > 0 && current_logical_size.height > 0 {
             self.update_size(current_logical_size.width, current_logical_size.height);
         }
     }
 
-    pub fn scale_factor(&self) -> f32 {
-        self.mutable_state.borrow().scale_factor
+    pub const fn scale_factor(&self) -> f32 {
+        self.scale_factor
     }
 
-    pub fn last_pointer_serial(&self) -> u32 {
-        self.mutable_state.borrow().last_pointer_serial
+    pub const fn last_pointer_serial(&self) -> u32 {
+        self.last_pointer_serial
     }
 
     pub fn set_last_pointer_serial(&mut self, serial: u32) {
-        let mut state = self.mutable_state.borrow_mut();
-        state.last_pointer_serial = serial;
-        if let Some(ref shared_serial) = state.shared_pointer_serial {
+        self.last_pointer_serial = serial;
+        if let Some(ref shared_serial) = self.shared_pointer_serial {
             shared_serial.update(serial);
         }
     }
 
     pub fn set_shared_pointer_serial(&mut self, shared_serial: Rc<SharedPointerSerial>) {
-        self.mutable_state.borrow_mut().shared_pointer_serial = Some(shared_serial);
+        self.shared_pointer_serial = Some(shared_serial);
     }
 
     pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager>) {
@@ -376,24 +358,22 @@ impl WindowState {
         let surface_id = surface.id();
 
         if (**self.surface.inner()).id() == surface_id {
-            self.mutable_state.borrow_mut().active_window = Some(ActiveWindow::Main);
+            self.active_window = Some(ActiveWindow::Main);
             return;
         }
 
         if let Some(popup_manager) = &self.popup_manager {
             if let Some(popup_key) = popup_manager.find_popup_key_by_surface_id(&surface_id) {
-                self.mutable_state.borrow_mut().active_window =
-                    Some(ActiveWindow::Popup(popup_key));
+                self.active_window = Some(ActiveWindow::Popup(popup_key));
                 return;
             }
         }
 
-        self.mutable_state.borrow_mut().active_window = None;
+        self.active_window = None;
     }
 
     pub fn dispatch_to_active_window(&self, event: WindowEvent) {
-        let active_window = self.mutable_state.borrow().active_window;
-        match active_window {
+        match self.active_window {
             Some(ActiveWindow::Main) => {
                 self.window.window().dispatch_event(event);
             }
@@ -438,13 +418,12 @@ impl WindowState {
     }
 
     pub fn clear_active_window(&mut self) {
-        self.mutable_state.borrow_mut().active_window = None;
+        self.active_window = None;
     }
 
     pub fn clear_active_window_if_popup(&mut self, popup_key: usize) {
-        let mut state = self.mutable_state.borrow_mut();
-        if state.active_window == Some(ActiveWindow::Popup(popup_key)) {
-            state.active_window = None;
+        if self.active_window == Some(ActiveWindow::Popup(popup_key)) {
+            self.active_window = None;
         }
     }
 
