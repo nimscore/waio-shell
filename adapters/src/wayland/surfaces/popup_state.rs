@@ -4,17 +4,17 @@ use slint::PhysicalSize;
 use std::rc::Rc;
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 
-pub struct PopupCoordinator {
+pub struct PopupState {
     popup_service: Option<Rc<PopupService>>,
 }
 
-impl Default for PopupCoordinator {
+impl Default for PopupState {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl PopupCoordinator {
+impl PopupState {
     #[must_use]
     pub const fn new() -> Self {
         Self {

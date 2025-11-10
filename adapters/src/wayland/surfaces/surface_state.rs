@@ -1,10 +1,13 @@
 use std::rc::Rc;
 use super::surface_builder::WindowStateBuilder;
+use super::component_state::ComponentState;
+use super::rendering_state::RenderingState;
+use super::interaction_state::InteractionState;
 use super::event_router::EventRouter;
-use super::popup_coordinator::PopupCoordinator;
+use super::popup_state::PopupState;
 use super::popup_manager::PopupManager;
 use super::scale_coordinator::{ScaleCoordinator, SharedPointerSerial};
-use super::window_renderer::{WindowRenderer, WindowRendererParams};
+use super::window_renderer::WindowRendererParams;
 use crate::wayland::managed_proxies::{
     ManagedWlPointer, ManagedWlSurface, ManagedZwlrLayerSurfaceV1,
     ManagedWpFractionalScaleV1, ManagedWpViewport,
@@ -15,7 +18,7 @@ use crate::errors::{LayerShikaError, Result};
 use core::result::Result as CoreResult;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::ports::windowing::RuntimeStatePort;
-use slint::{LogicalPosition, PhysicalSize, ComponentHandle};
+use slint::{LogicalPosition, PhysicalSize};
 use slint::platform::WindowEvent;
 use slint_interpreter::{ComponentInstance, CompilationResult};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
@@ -23,14 +26,10 @@ use wayland_client::{protocol::wl_surface::WlSurface, Proxy};
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 
 pub struct WindowState {
-    component_instance: ComponentInstance,
-    compilation_result: Option<Rc<CompilationResult>>,
-    #[allow(dead_code)]
-    pointer: ManagedWlPointer,
-    renderer: WindowRenderer,
-    event_router: EventRouter,
-    popup_coordinator: PopupCoordinator,
-    scale_coordinator: ScaleCoordinator,
+    component: ComponentState,
+    rendering: RenderingState,
+    interaction: InteractionState,
+    popup: PopupState,
     output_size: PhysicalSize,
 }
 
@@ -47,14 +46,9 @@ impl WindowState {
             .ok_or_else(|| LayerShikaError::InvalidInput {
                 message: "Window is required".into(),
             })?;
-        let component_instance = component_definition
-            .create()
-            .map_err(|e| LayerShikaError::SlintComponentCreation { source: e })?;
-        component_instance
-            .show()
-            .map_err(|e| LayerShikaError::SlintComponentCreation { source: e })?;
 
-        window.request_redraw();
+        let component =
+            ComponentState::new(component_definition, builder.compilation_result, &window)?;
 
         let connection = builder
             .connection
@@ -88,12 +82,12 @@ impl WindowState {
         let layer_surface =
             ManagedZwlrLayerSurfaceV1::new(layer_surface_rc, Rc::clone(&connection));
         let surface = ManagedWlSurface::new(Rc::clone(&surface_rc), Rc::clone(&connection));
-        let pointer = ManagedWlPointer::new(pointer_rc, connection);
+        let pointer = ManagedWlPointer::new(pointer_rc, Rc::clone(&connection));
 
         let has_fractional_scale = fractional_scale.is_some();
         let size = builder.size.unwrap_or_default();
 
-        let renderer = WindowRenderer::new(WindowRendererParams {
+        let rendering = RenderingState::new(WindowRendererParams {
             window: Rc::clone(&window),
             surface,
             layer_surface,
@@ -106,55 +100,55 @@ impl WindowState {
 
         let main_surface_id = (*surface_rc).id();
         let event_router = EventRouter::new(Rc::clone(&window), main_surface_id);
-        let popup_coordinator = PopupCoordinator::new();
         let scale_coordinator = ScaleCoordinator::new(builder.scale_factor, has_fractional_scale);
 
+        let interaction = InteractionState::new(pointer, event_router, scale_coordinator);
+
+        let popup = PopupState::new();
+
         Ok(Self {
-            component_instance,
-            compilation_result: builder.compilation_result,
-            pointer,
-            renderer,
-            event_router,
-            popup_coordinator,
-            scale_coordinator,
+            component,
+            rendering,
+            interaction,
+            popup,
             output_size: builder.output_size.unwrap_or_default(),
         })
     }
 
     pub fn update_size(&mut self, width: u32, height: u32) {
-        let scale_factor = self.scale_coordinator.scale_factor();
-        self.renderer.update_size(width, height, scale_factor);
+        let scale_factor = self.interaction.scale_factor();
+        self.rendering.update_size(width, height, scale_factor);
     }
 
     #[allow(clippy::cast_possible_truncation)]
     pub fn set_current_pointer_position(&mut self, physical_x: f64, physical_y: f64) {
-        self.scale_coordinator
+        self.interaction
             .set_current_pointer_position(physical_x, physical_y);
     }
 
     pub fn size(&self) -> PhysicalSize {
-        self.renderer.size()
+        self.rendering.size()
     }
 
     pub fn current_pointer_position(&self) -> LogicalPosition {
-        self.scale_coordinator.current_pointer_position()
+        self.interaction.current_pointer_position()
     }
 
     pub(crate) fn window(&self) -> Rc<FemtoVGWindow> {
-        Rc::clone(self.renderer.window())
+        Rc::clone(self.rendering.window())
     }
 
     pub(crate) fn layer_surface(&self) -> Rc<ZwlrLayerSurfaceV1> {
-        self.renderer.layer_surface()
+        self.rendering.layer_surface()
     }
 
     pub fn height(&self) -> u32 {
-        self.renderer.height()
+        self.rendering.height()
     }
 
     pub fn set_output_size(&mut self, output_size: PhysicalSize) {
         self.output_size = output_size;
-        self.popup_coordinator.update_output_size(output_size);
+        self.popup.update_output_size(output_size);
     }
 
     pub const fn output_size(&self) -> PhysicalSize {
@@ -162,63 +156,62 @@ impl WindowState {
     }
 
     pub const fn component_instance(&self) -> &ComponentInstance {
-        &self.component_instance
+        self.component.component_instance()
     }
 
     #[must_use]
     pub fn compilation_result(&self) -> Option<Rc<CompilationResult>> {
-        self.compilation_result.as_ref().map(Rc::clone)
+        self.component.compilation_result()
     }
 
     pub fn render_frame_if_dirty(&self) -> Result<()> {
-        self.renderer.render_frame_if_dirty()
+        self.rendering.render_frame_if_dirty()
     }
 
     #[allow(clippy::cast_precision_loss)]
     pub fn update_scale_factor(&mut self, scale_120ths: u32) {
-        let new_scale_factor = self.scale_coordinator.update_scale_factor(scale_120ths);
+        let new_scale_factor = self.interaction.update_scale_factor(scale_120ths);
 
-        self.popup_coordinator.update_scale_factor(new_scale_factor);
+        self.popup.update_scale_factor(new_scale_factor);
 
-        let current_logical_size = self.renderer.logical_size();
+        let current_logical_size = self.rendering.logical_size();
         if current_logical_size.width > 0 && current_logical_size.height > 0 {
             self.update_size(current_logical_size.width, current_logical_size.height);
         }
     }
 
     pub fn scale_factor(&self) -> f32 {
-        self.scale_coordinator.scale_factor()
+        self.interaction.scale_factor()
     }
 
     pub fn last_pointer_serial(&self) -> u32 {
-        self.scale_coordinator.last_pointer_serial()
+        self.interaction.last_pointer_serial()
     }
 
     pub fn set_last_pointer_serial(&mut self, serial: u32) {
-        self.scale_coordinator.set_last_pointer_serial(serial);
+        self.interaction.set_last_pointer_serial(serial);
     }
 
     pub fn set_shared_pointer_serial(&mut self, shared_serial: Rc<SharedPointerSerial>) {
-        self.scale_coordinator
-            .set_shared_pointer_serial(shared_serial);
+        self.interaction.set_shared_pointer_serial(shared_serial);
     }
 
     pub fn set_popup_service(&mut self, popup_service: Rc<PopupService>) {
-        self.event_router
+        self.interaction
             .set_popup_service(Rc::clone(&popup_service));
-        self.popup_coordinator.set_popup_service(popup_service);
+        self.popup.set_popup_service(popup_service);
     }
 
     pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager>) {
-        self.popup_coordinator.set_popup_manager(popup_manager);
+        self.popup.set_popup_manager(popup_manager);
     }
 
     pub fn find_window_for_surface(&mut self, surface: &WlSurface) {
-        self.event_router.find_window_for_surface(surface);
+        self.interaction.find_window_for_surface(surface);
     }
 
     pub fn dispatch_to_active_window(&self, event: WindowEvent) {
-        self.event_router.dispatch_to_active_window(event);
+        self.interaction.dispatch_to_active_window(event);
     }
 
     #[allow(clippy::cast_precision_loss)]
@@ -229,32 +222,31 @@ impl WindowState {
     ) {
         let fractional_scale_id = fractional_scale_proxy.id();
 
-        if let Some(main_fractional_scale) = self.renderer.fractional_scale() {
+        if let Some(main_fractional_scale) = self.rendering.fractional_scale() {
             if (**main_fractional_scale.inner()).id() == fractional_scale_id {
                 self.update_scale_factor(scale_120ths);
                 return;
             }
         }
 
-        self.popup_coordinator
+        self.popup
             .update_scale_for_fractional_scale_object(fractional_scale_proxy, scale_120ths);
     }
 
     pub fn clear_active_window(&mut self) {
-        self.popup_coordinator.clear_active_window();
+        self.popup.clear_active_window();
     }
 
     pub fn clear_active_window_if_popup(&mut self, popup_key: usize) {
-        self.popup_coordinator
-            .clear_active_window_if_popup(popup_key);
+        self.popup.clear_active_window_if_popup(popup_key);
     }
 
     pub fn popup_service(&self) -> &Option<Rc<PopupService>> {
-        self.popup_coordinator.popup_service()
+        self.popup.popup_service()
     }
 
     pub fn popup_manager(&self) -> Option<Rc<PopupManager>> {
-        self.popup_coordinator.popup_manager()
+        self.popup.popup_manager()
     }
 }
 

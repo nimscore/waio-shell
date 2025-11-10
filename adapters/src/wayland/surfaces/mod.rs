@@ -1,9 +1,12 @@
+pub mod component_state;
 pub mod dimensions;
 pub mod event_router;
+pub mod interaction_state;
 pub mod layer_surface;
-pub mod popup_coordinator;
 pub mod popup_manager;
+pub mod popup_state;
 pub mod popup_surface;
+pub mod rendering_state;
 pub mod scale_coordinator;
 pub mod surface_builder;
 pub mod surface_state;
