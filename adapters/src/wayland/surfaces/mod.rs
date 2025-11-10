@@ -1,6 +1,10 @@
 pub mod dimensions;
+pub mod event_router;
 pub mod layer_surface;
+pub mod popup_coordinator;
 pub mod popup_manager;
 pub mod popup_surface;
+pub mod scale_coordinator;
 pub mod surface_builder;
 pub mod surface_state;
+pub mod window_renderer;

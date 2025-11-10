@@ -5,8 +5,8 @@ use crate::wayland::{
     surfaces::layer_surface::{SurfaceCtx, SurfaceSetupParams},
     surfaces::popup_manager::{CreatePopupParams, PopupContext, PopupManager},
     surfaces::{
-        surface_builder::WindowStateBuilder,
-        surface_state::{SharedPointerSerial, WindowState},
+        scale_coordinator::SharedPointerSerial, surface_builder::WindowStateBuilder,
+        surface_state::WindowState,
     },
 };
 use crate::{
@@ -181,7 +181,9 @@ impl WaylandWindowingSystem {
 
             let serial = serial_holder.get();
 
-            let (params, request) = if let Some((request, width, height)) = popup_service_clone.take_pending_popup() {
+            let (params, request) = if let Some((request, width, height)) =
+                popup_service_clone.take_pending_popup()
+            {
                 log::info!(
                     "Using popup request: component='{}', position=({}, {}), size={}x{}, mode={:?}",
                     request.component,
@@ -204,18 +206,14 @@ impl WaylandWindowingSystem {
             } else {
                 log::warn!("Popup creator called without pending popup request - aborting");
                 return Err(PlatformError::Other(
-                    "No popup request available - cannot create popup without parameters".to_string()
+                    "No popup request available - cannot create popup without parameters"
+                        .to_string(),
                 ));
             };
 
             let popup_window = popup_service_clone
                 .manager()
-                .create_popup(
-                    &queue_handle,
-                    &layer_surface,
-                    params,
-                    request,
-                )
+                .create_popup(&queue_handle, &layer_surface, params, request)
                 .map_err(|e| PlatformError::Other(format!("Failed to create popup: {e}")))?;
 
             let result = Ok(popup_window as Rc<dyn WindowAdapter>);
