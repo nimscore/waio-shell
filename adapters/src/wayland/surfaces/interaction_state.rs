@@ -55,12 +55,8 @@ impl InteractionState {
         self.event_router.set_popup_service(popup_service);
     }
 
-    pub fn find_window_for_surface(&mut self, surface: &WlSurface) {
-        self.event_router.find_window_for_surface(surface);
-    }
-
-    pub fn dispatch_to_active_window(&self, event: WindowEvent) {
-        self.event_router.dispatch_to_active_window(event);
+    pub fn dispatch_to_active_window(&self, event: WindowEvent, surface: &WlSurface) {
+        self.event_router.dispatch_to_active_window(event, surface);
     }
 
     pub fn scale_factor(&self) -> f32 {

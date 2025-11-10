@@ -2,7 +2,7 @@ use slint::{
     PlatformError,
     platform::{Platform, WindowAdapter},
 };
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, OnceCell};
 use std::rc::{Rc, Weak};
 
 use crate::rendering::femtovg::main_window::FemtoVGWindow;
@@ -11,7 +11,7 @@ type PopupCreator = dyn Fn() -> Result<Rc<dyn WindowAdapter>, PlatformError>;
 
 pub struct CustomSlintPlatform {
     main_window: Weak<FemtoVGWindow>,
-    popup_creator: RefCell<Option<Rc<PopupCreator>>>,
+    popup_creator: OnceCell<Rc<PopupCreator>>,
     first_call: Cell<bool>,
 }
 
@@ -20,7 +20,7 @@ impl CustomSlintPlatform {
     pub fn new(window: &Rc<FemtoVGWindow>) -> Rc<Self> {
         Rc::new(Self {
             main_window: Rc::downgrade(window),
-            popup_creator: RefCell::new(None),
+            popup_creator: OnceCell::new(),
             first_call: Cell::new(true),
         })
     }
@@ -29,7 +29,9 @@ impl CustomSlintPlatform {
     where
         F: Fn() -> Result<Rc<dyn WindowAdapter>, PlatformError> + 'static,
     {
-        *self.popup_creator.borrow_mut() = Some(Rc::new(creator));
+        if self.popup_creator.set(Rc::new(creator)).is_err() {
+            log::warn!("Popup creator already set, ignoring new creator");
+        }
     }
 }
 
@@ -41,7 +43,7 @@ impl Platform for CustomSlintPlatform {
                 .upgrade()
                 .ok_or(PlatformError::NoPlatform)
                 .map(|w| w as Rc<dyn WindowAdapter>)
-        } else if let Some(creator) = self.popup_creator.borrow().as_ref() {
+        } else if let Some(creator) = self.popup_creator.get() {
             creator()
         } else {
             Err(PlatformError::NoPlatform)

@@ -1,10 +1,10 @@
 use log::info;
 use slint::LogicalPosition;
-use std::cell::RefCell;
+use std::cell::Cell;
 use std::rc::Rc;
 
 pub struct SharedPointerSerial {
-    serial: RefCell<u32>,
+    serial: Cell<u32>,
 }
 
 impl Default for SharedPointerSerial {
@@ -16,16 +16,16 @@ impl Default for SharedPointerSerial {
 impl SharedPointerSerial {
     pub const fn new() -> Self {
         Self {
-            serial: RefCell::new(0),
+            serial: Cell::new(0),
         }
     }
 
     pub fn update(&self, serial: u32) {
-        *self.serial.borrow_mut() = serial;
+        self.serial.set(serial);
     }
 
     pub fn get(&self) -> u32 {
-        *self.serial.borrow()
+        self.serial.get()
     }
 }
 

@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::cell::RefCell;
 use super::surface_builder::WindowStateBuilder;
 use super::component_state::ComponentState;
 use super::rendering_state::RenderingState;
@@ -18,6 +19,7 @@ use crate::errors::{LayerShikaError, Result};
 use core::result::Result as CoreResult;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::ports::windowing::RuntimeStatePort;
+use layer_shika_domain::value_objects::popup_request::PopupHandle;
 use slint::{LogicalPosition, PhysicalSize};
 use slint::platform::WindowEvent;
 use slint_interpreter::{ComponentInstance, CompilationResult};
@@ -31,6 +33,8 @@ pub struct WindowState {
     interaction: InteractionState,
     popup: PopupState,
     output_size: PhysicalSize,
+    active_popup_key: RefCell<Option<usize>>,
+    main_surface: Rc<WlSurface>,
 }
 
 impl WindowState {
@@ -112,6 +116,8 @@ impl WindowState {
             interaction,
             popup,
             output_size: builder.output_size.unwrap_or_default(),
+            active_popup_key: RefCell::new(None),
+            main_surface: surface_rc,
         })
     }
 
@@ -206,12 +212,39 @@ impl WindowState {
         self.popup.set_popup_manager(popup_manager);
     }
 
-    pub fn find_window_for_surface(&mut self, surface: &WlSurface) {
-        self.interaction.find_window_for_surface(surface);
+    pub fn set_entered_surface(&self, surface: &WlSurface) {
+        if let Some(popup_service) = self.popup.popup_service() {
+            if let Some(popup_key) = popup_service
+                .manager()
+                .find_popup_key_by_surface_id(&surface.id())
+            {
+                *self.active_popup_key.borrow_mut() = Some(popup_key);
+                return;
+            }
+        }
+        *self.active_popup_key.borrow_mut() = None;
+    }
+
+    pub fn clear_entered_surface(&self) {
+        *self.active_popup_key.borrow_mut() = None;
     }
 
     pub fn dispatch_to_active_window(&self, event: WindowEvent) {
-        self.interaction.dispatch_to_active_window(event);
+        let active_popup = *self.active_popup_key.borrow();
+
+        if let Some(popup_key) = active_popup {
+            if let Some(popup_service) = self.popup.popup_service() {
+                if let Some(popup_window) =
+                    popup_service.get_popup_window(PopupHandle::new(popup_key))
+                {
+                    popup_window.dispatch_event(event);
+                    return;
+                }
+            }
+        }
+
+        self.interaction
+            .dispatch_to_active_window(event, &self.main_surface);
     }
 
     #[allow(clippy::cast_precision_loss)]
@@ -231,14 +264,6 @@ impl WindowState {
 
         self.popup
             .update_scale_for_fractional_scale_object(fractional_scale_proxy, scale_120ths);
-    }
-
-    pub fn clear_active_window(&mut self) {
-        self.popup.clear_active_window();
-    }
-
-    pub fn clear_active_window_if_popup(&mut self, popup_key: usize) {
-        self.popup.clear_active_window_if_popup(popup_key);
     }
 
     pub fn popup_service(&self) -> &Option<Rc<PopupService>> {

@@ -25,26 +25,20 @@ impl EventRouter {
         self.popup_service = Some(popup_service);
     }
 
-    pub fn find_window_for_surface(&mut self, surface: &WlSurface) {
+    pub fn dispatch_to_active_window(&self, event: WindowEvent, surface: &WlSurface) {
         if let Some(popup_service) = &self.popup_service {
-            popup_service.find_window_for_surface(surface, &self.main_surface_id);
-        }
-    }
-
-    pub fn dispatch_to_active_window(&self, event: WindowEvent) {
-        if let Some(popup_service) = &self.popup_service {
-            match popup_service.active_window() {
-                Some(ActiveWindow::Main) => {
+            match popup_service.get_active_window(surface, &self.main_surface_id) {
+                ActiveWindow::Main => {
                     self.main_window.window().dispatch_event(event);
                 }
-                Some(ActiveWindow::Popup(index)) => {
+                ActiveWindow::Popup(index) => {
                     if let Some(popup_window) =
                         popup_service.get_popup_window(PopupHandle::new(index))
                     {
                         popup_window.dispatch_event(event);
                     }
                 }
-                None => {}
+                ActiveWindow::None => {}
             }
         }
     }

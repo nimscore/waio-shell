@@ -42,18 +42,6 @@ impl PopupState {
         }
     }
 
-    pub fn clear_active_window(&mut self) {
-        if let Some(popup_service) = &self.popup_service {
-            popup_service.clear_active_window();
-        }
-    }
-
-    pub fn clear_active_window_if_popup(&mut self, popup_key: usize) {
-        if let Some(popup_service) = &self.popup_service {
-            popup_service.clear_active_window_if_popup(popup_key);
-        }
-    }
-
     pub const fn popup_service(&self) -> &Option<Rc<PopupService>> {
         &self.popup_service
     }

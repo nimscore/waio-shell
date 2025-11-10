@@ -170,7 +170,7 @@ impl Dispatch<WlPointer, ()> for WindowState {
                 state.set_last_pointer_serial(serial);
                 state.set_current_pointer_position(surface_x, surface_y);
 
-                state.find_window_for_surface(&surface);
+                state.set_entered_surface(&surface);
                 let position = state.current_pointer_position();
 
                 state.dispatch_to_active_window(WindowEvent::PointerMoved { position });
@@ -189,7 +189,7 @@ impl Dispatch<WlPointer, ()> for WindowState {
 
             wl_pointer::Event::Leave { .. } => {
                 state.dispatch_to_active_window(WindowEvent::PointerExited);
-                state.clear_active_window();
+                state.clear_entered_surface();
             }
 
             wl_pointer::Event::Button {
@@ -290,7 +290,6 @@ impl Dispatch<XdgPopup, ()> for WindowState {
 
                 if let Some(handle) = popup_handle {
                     info!("Destroying popup with handle {handle:?}");
-                    state.clear_active_window_if_popup(handle.key());
                     if let Some(popup_service) = state.popup_service() {
                         let _result = popup_service.close(handle);
                     }

@@ -7,7 +7,7 @@ use slint::{
     platform::{Renderer, WindowAdapter, WindowEvent, femtovg_renderer::FemtoVGRenderer},
 };
 use slint_interpreter::ComponentInstance;
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, OnceCell, RefCell};
 use std::rc::{Rc, Weak};
 
 use super::main_window::RenderState;
@@ -22,7 +22,7 @@ pub struct PopupWindow {
     popup_manager: RefCell<Weak<PopupManager>>,
     popup_key: Cell<Option<usize>>,
     configured: Cell<bool>,
-    component_instance: RefCell<Option<ComponentInstance>>,
+    component_instance: OnceCell<ComponentInstance>,
 }
 
 #[allow(dead_code)]
@@ -40,7 +40,7 @@ impl PopupWindow {
                 popup_manager: RefCell::new(Weak::new()),
                 popup_key: Cell::new(None),
                 configured: Cell::new(false),
-                component_instance: RefCell::new(None),
+                component_instance: OnceCell::new(),
             }
         })
     }
@@ -121,7 +121,9 @@ impl PopupWindow {
 
     pub fn set_component_instance(&self, instance: ComponentInstance) {
         info!("Setting component instance for popup window");
-        *self.component_instance.borrow_mut() = Some(instance);
+        if self.component_instance.set(instance).is_err() {
+            info!("Component instance already set for popup window");
+        }
     }
 
     pub fn request_resize(&self, width: f32, height: f32) {

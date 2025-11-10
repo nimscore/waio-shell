@@ -3,9 +3,9 @@ use crate::rendering::femtovg::popup_window::PopupWindow;
 use layer_shika_domain::value_objects::popup_request::{PopupHandle, PopupRequest};
 use log::info;
 use slint::PhysicalSize;
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::rc::Rc;
-use wayland_client::{backend::ObjectId, protocol::wl_surface::WlSurface, Proxy};
+use wayland_client::{Proxy, backend::ObjectId, protocol::wl_surface::WlSurface};
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 
 use super::super::surfaces::popup_manager::PopupManager;
@@ -14,11 +14,11 @@ use super::super::surfaces::popup_manager::PopupManager;
 pub enum ActiveWindow {
     Main,
     Popup(usize),
+    None,
 }
 
 pub struct PopupService {
     manager: Rc<PopupManager>,
-    active_window: RefCell<Option<ActiveWindow>>,
     scale_factor: Cell<f32>,
 }
 
@@ -28,7 +28,6 @@ impl PopupService {
         let scale_factor = manager.scale_factor();
         Self {
             manager,
-            active_window: RefCell::new(None),
             scale_factor: Cell::new(scale_factor),
         }
     }
@@ -38,16 +37,11 @@ impl PopupService {
     }
 
     pub fn close(&self, handle: PopupHandle) -> Result<()> {
-        let key = handle.key();
-        self.clear_active_window_if_popup(key);
-        self.manager.destroy_popup(key);
+        self.manager.destroy_popup(handle.key());
         Ok(())
     }
 
     pub fn close_current(&self) {
-        if let Some(key) = self.manager.current_popup_key() {
-            self.clear_active_window_if_popup(key);
-        }
         self.manager.close_current_popup();
     }
 
@@ -99,35 +93,23 @@ impl PopupService {
         self.scale_factor.get()
     }
 
-    pub fn find_window_for_surface(&self, surface: &WlSurface, main_surface_id: &ObjectId) {
+    #[must_use]
+    pub fn get_active_window(
+        &self,
+        surface: &WlSurface,
+        main_surface_id: &ObjectId,
+    ) -> ActiveWindow {
         let surface_id = surface.id();
 
         if *main_surface_id == surface_id {
-            *self.active_window.borrow_mut() = Some(ActiveWindow::Main);
-            return;
+            return ActiveWindow::Main;
         }
 
         if let Some(popup_key) = self.manager.find_popup_key_by_surface_id(&surface_id) {
-            *self.active_window.borrow_mut() = Some(ActiveWindow::Popup(popup_key));
-            return;
+            return ActiveWindow::Popup(popup_key);
         }
 
-        *self.active_window.borrow_mut() = None;
-    }
-
-    #[must_use]
-    pub fn active_window(&self) -> Option<ActiveWindow> {
-        *self.active_window.borrow()
-    }
-
-    pub fn clear_active_window(&self) {
-        *self.active_window.borrow_mut() = None;
-    }
-
-    pub fn clear_active_window_if_popup(&self, popup_key: usize) {
-        if *self.active_window.borrow() == Some(ActiveWindow::Popup(popup_key)) {
-            *self.active_window.borrow_mut() = None;
-        }
+        ActiveWindow::None
     }
 
     #[allow(clippy::cast_precision_loss)]
@@ -138,9 +120,9 @@ impl PopupService {
     ) {
         let fractional_scale_id = fractional_scale_proxy.id();
 
-        if let Some(popup_key) =
-            self.manager
-                .find_popup_key_by_fractional_scale_id(&fractional_scale_id)
+        if let Some(popup_key) = self
+            .manager
+            .find_popup_key_by_fractional_scale_id(&fractional_scale_id)
         {
             if let Some(popup_window) = self.manager.get_popup_window(popup_key) {
                 let new_scale_factor = scale_120ths as f32 / 120.0;
