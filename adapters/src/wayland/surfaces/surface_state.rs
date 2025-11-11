@@ -9,6 +9,7 @@ use super::popup_state::PopupState;
 use super::popup_manager::PopupManager;
 use super::scale_coordinator::{ScaleCoordinator, SharedPointerSerial};
 use super::window_renderer::WindowRendererParams;
+use super::event_bus::EventBus;
 use crate::wayland::managed_proxies::{
     ManagedWlPointer, ManagedWlSurface, ManagedZwlrLayerSurfaceV1,
     ManagedWpFractionalScaleV1, ManagedWpViewport,
@@ -35,6 +36,8 @@ pub struct WindowState {
     output_size: PhysicalSize,
     active_popup_key: RefCell<Option<usize>>,
     main_surface: Rc<WlSurface>,
+    #[allow(dead_code)]
+    event_bus: EventBus,
 }
 
 impl WindowState {
@@ -91,7 +94,21 @@ impl WindowState {
         let has_fractional_scale = fractional_scale.is_some();
         let size = builder.size.unwrap_or_default();
 
-        let rendering = RenderingState::new(WindowRendererParams {
+        let main_surface_id = (*surface_rc).id();
+        let event_router = EventRouter::new(Rc::clone(&window), main_surface_id);
+        let scale_coordinator = ScaleCoordinator::new(builder.scale_factor, has_fractional_scale);
+
+        let mut interaction = InteractionState::new(pointer, event_router, scale_coordinator);
+
+        let mut popup = PopupState::new();
+
+        let event_bus = EventBus::new();
+
+        let event_bus_clone_for_rendering = event_bus.clone();
+        let event_bus_clone_for_interaction = event_bus.clone();
+        let event_bus_clone_for_popup = event_bus.clone();
+
+        let mut rendering = RenderingState::new(WindowRendererParams {
             window: Rc::clone(&window),
             surface,
             layer_surface,
@@ -102,15 +119,11 @@ impl WindowState {
             size,
         });
 
-        let main_surface_id = (*surface_rc).id();
-        let event_router = EventRouter::new(Rc::clone(&window), main_surface_id);
-        let scale_coordinator = ScaleCoordinator::new(builder.scale_factor, has_fractional_scale);
+        rendering.set_event_bus(event_bus_clone_for_rendering);
+        interaction.set_event_bus(event_bus_clone_for_interaction);
+        popup.set_event_bus(event_bus_clone_for_popup);
 
-        let interaction = InteractionState::new(pointer, event_router, scale_coordinator);
-
-        let popup = PopupState::new();
-
-        Ok(Self {
+        let mut instance = Self {
             component,
             rendering,
             interaction,
@@ -118,8 +131,16 @@ impl WindowState {
             output_size: builder.output_size.unwrap_or_default(),
             active_popup_key: RefCell::new(None),
             main_surface: surface_rc,
-        })
+            event_bus,
+        };
+
+        instance.setup_event_handlers();
+
+        Ok(instance)
     }
+
+    #[allow(clippy::unused_self)]
+    fn setup_event_handlers(&mut self) {}
 
     pub fn update_size(&mut self, width: u32, height: u32) {
         let scale_factor = self.interaction.scale_factor();
