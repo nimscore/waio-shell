@@ -5,7 +5,7 @@ use crate::wayland::{
     surfaces::layer_surface::{SurfaceCtx, SurfaceSetupParams},
     surfaces::popup_manager::{CreatePopupParams, PopupContext, PopupManager},
     surfaces::{
-        scale_coordinator::SharedPointerSerial, surface_builder::WindowStateBuilder,
+        event_context::SharedPointerSerial, surface_builder::WindowStateBuilder,
         surface_state::WindowState,
     },
 };

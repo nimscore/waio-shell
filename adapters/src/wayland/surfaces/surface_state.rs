@@ -3,13 +3,9 @@ use std::cell::RefCell;
 use super::surface_builder::WindowStateBuilder;
 use super::component_state::ComponentState;
 use super::rendering_state::RenderingState;
-use super::interaction_state::InteractionState;
-use super::event_router::EventRouter;
-use super::popup_state::PopupState;
+use super::event_context::{EventContext, SharedPointerSerial};
 use super::popup_manager::PopupManager;
-use super::scale_coordinator::{ScaleCoordinator, SharedPointerSerial};
 use super::window_renderer::WindowRendererParams;
-use super::event_bus::EventBus;
 use crate::wayland::managed_proxies::{
     ManagedWlPointer, ManagedWlSurface, ManagedZwlrLayerSurfaceV1,
     ManagedWpFractionalScaleV1, ManagedWpViewport,
@@ -31,13 +27,12 @@ use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1:
 pub struct WindowState {
     component: ComponentState,
     rendering: RenderingState,
-    interaction: InteractionState,
-    popup: PopupState,
+    event_context: EventContext,
+    #[allow(dead_code)]
+    pointer: ManagedWlPointer,
     output_size: PhysicalSize,
     active_popup_key: RefCell<Option<usize>>,
     main_surface: Rc<WlSurface>,
-    #[allow(dead_code)]
-    event_bus: EventBus,
 }
 
 impl WindowState {
@@ -95,20 +90,14 @@ impl WindowState {
         let size = builder.size.unwrap_or_default();
 
         let main_surface_id = (*surface_rc).id();
-        let event_router = EventRouter::new(Rc::clone(&window), main_surface_id);
-        let scale_coordinator = ScaleCoordinator::new(builder.scale_factor, has_fractional_scale);
+        let event_context = EventContext::new(
+            Rc::clone(&window),
+            main_surface_id,
+            builder.scale_factor,
+            has_fractional_scale,
+        );
 
-        let mut interaction = InteractionState::new(pointer, event_router, scale_coordinator);
-
-        let mut popup = PopupState::new();
-
-        let event_bus = EventBus::new();
-
-        let event_bus_clone_for_rendering = event_bus.clone();
-        let event_bus_clone_for_interaction = event_bus.clone();
-        let event_bus_clone_for_popup = event_bus.clone();
-
-        let mut rendering = RenderingState::new(WindowRendererParams {
+        let rendering = RenderingState::new(WindowRendererParams {
             window: Rc::clone(&window),
             surface,
             layer_surface,
@@ -119,37 +108,25 @@ impl WindowState {
             size,
         });
 
-        rendering.set_event_bus(event_bus_clone_for_rendering);
-        interaction.set_event_bus(event_bus_clone_for_interaction);
-        popup.set_event_bus(event_bus_clone_for_popup);
-
-        let mut instance = Self {
+        Ok(Self {
             component,
             rendering,
-            interaction,
-            popup,
+            event_context,
+            pointer,
             output_size: builder.output_size.unwrap_or_default(),
             active_popup_key: RefCell::new(None),
             main_surface: surface_rc,
-            event_bus,
-        };
-
-        instance.setup_event_handlers();
-
-        Ok(instance)
+        })
     }
 
-    #[allow(clippy::unused_self)]
-    fn setup_event_handlers(&mut self) {}
-
     pub fn update_size(&mut self, width: u32, height: u32) {
-        let scale_factor = self.interaction.scale_factor();
+        let scale_factor = self.event_context.scale_factor();
         self.rendering.update_size(width, height, scale_factor);
     }
 
     #[allow(clippy::cast_possible_truncation)]
     pub fn set_current_pointer_position(&mut self, physical_x: f64, physical_y: f64) {
-        self.interaction
+        self.event_context
             .set_current_pointer_position(physical_x, physical_y);
     }
 
@@ -158,7 +135,7 @@ impl WindowState {
     }
 
     pub fn current_pointer_position(&self) -> LogicalPosition {
-        self.interaction.current_pointer_position()
+        self.event_context.current_pointer_position()
     }
 
     pub(crate) fn window(&self) -> Rc<FemtoVGWindow> {
@@ -175,7 +152,7 @@ impl WindowState {
 
     pub fn set_output_size(&mut self, output_size: PhysicalSize) {
         self.output_size = output_size;
-        self.popup.update_output_size(output_size);
+        self.event_context.update_output_size(output_size);
     }
 
     pub const fn output_size(&self) -> PhysicalSize {
@@ -197,9 +174,7 @@ impl WindowState {
 
     #[allow(clippy::cast_precision_loss)]
     pub fn update_scale_factor(&mut self, scale_120ths: u32) {
-        let new_scale_factor = self.interaction.update_scale_factor(scale_120ths);
-
-        self.popup.update_scale_factor(new_scale_factor);
+        self.event_context.update_scale_factor(scale_120ths);
 
         let current_logical_size = self.rendering.logical_size();
         if current_logical_size.width > 0 && current_logical_size.height > 0 {
@@ -208,33 +183,32 @@ impl WindowState {
     }
 
     pub fn scale_factor(&self) -> f32 {
-        self.interaction.scale_factor()
+        self.event_context.scale_factor()
     }
 
     pub fn last_pointer_serial(&self) -> u32 {
-        self.interaction.last_pointer_serial()
+        self.event_context.last_pointer_serial()
     }
 
     pub fn set_last_pointer_serial(&mut self, serial: u32) {
-        self.interaction.set_last_pointer_serial(serial);
+        self.event_context.set_last_pointer_serial(serial);
     }
 
     pub fn set_shared_pointer_serial(&mut self, shared_serial: Rc<SharedPointerSerial>) {
-        self.interaction.set_shared_pointer_serial(shared_serial);
+        self.event_context.set_shared_pointer_serial(shared_serial);
     }
 
     pub fn set_popup_service(&mut self, popup_service: Rc<PopupService>) {
-        self.interaction
-            .set_popup_service(Rc::clone(&popup_service));
-        self.popup.set_popup_service(popup_service);
+        self.event_context.set_popup_service(popup_service);
     }
 
     pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager>) {
-        self.popup.set_popup_manager(popup_manager);
+        let popup_service = Rc::new(PopupService::new(popup_manager));
+        self.event_context.set_popup_service(popup_service);
     }
 
     pub fn set_entered_surface(&self, surface: &WlSurface) {
-        if let Some(popup_service) = self.popup.popup_service() {
+        if let Some(popup_service) = self.event_context.popup_service() {
             if let Some(popup_key) = popup_service
                 .manager()
                 .find_popup_key_by_surface_id(&surface.id())
@@ -254,7 +228,7 @@ impl WindowState {
         let active_popup = *self.active_popup_key.borrow();
 
         if let Some(popup_key) = active_popup {
-            if let Some(popup_service) = self.popup.popup_service() {
+            if let Some(popup_service) = self.event_context.popup_service() {
                 if let Some(popup_window) =
                     popup_service.get_popup_window(PopupHandle::new(popup_key))
                 {
@@ -264,7 +238,7 @@ impl WindowState {
             }
         }
 
-        self.interaction
+        self.event_context
             .dispatch_to_active_window(event, &self.main_surface);
     }
 
@@ -283,16 +257,16 @@ impl WindowState {
             }
         }
 
-        self.popup
+        self.event_context
             .update_scale_for_fractional_scale_object(fractional_scale_proxy, scale_120ths);
     }
 
     pub fn popup_service(&self) -> &Option<Rc<PopupService>> {
-        self.popup.popup_service()
+        self.event_context.popup_service()
     }
 
     pub fn popup_manager(&self) -> Option<Rc<PopupManager>> {
-        self.popup.popup_manager()
+        self.event_context.popup_manager()
     }
 }
 
