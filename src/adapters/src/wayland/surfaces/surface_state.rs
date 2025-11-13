@@ -261,7 +261,7 @@ impl WindowState {
             .update_scale_for_fractional_scale_object(fractional_scale_proxy, scale_120ths);
     }
 
-    pub fn popup_manager(&self) -> &Option<Rc<PopupManager>> {
+    pub fn popup_manager(&self) -> Option<&Rc<PopupManager>> {
         self.event_context.popup_manager()
     }
 }

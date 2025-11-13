@@ -72,8 +72,8 @@ impl EventContext {
             .publish(&WindowStateEvent::PopupConfigurationChanged);
     }
 
-    pub const fn popup_manager(&self) -> &Option<Rc<PopupManager>> {
-        &self.popup_manager
+    pub const fn popup_manager(&self) -> Option<&Rc<PopupManager>> {
+        self.popup_manager.as_ref()
     }
 
     #[must_use]

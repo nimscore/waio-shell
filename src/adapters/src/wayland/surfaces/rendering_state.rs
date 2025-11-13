@@ -46,7 +46,7 @@ impl<W: RenderableWindow> RenderingState<W> {
         self.renderer.layer_surface()
     }
 
-    pub const fn fractional_scale(&self) -> &Option<ManagedWpFractionalScaleV1> {
+    pub fn fractional_scale(&self) -> Option<&ManagedWpFractionalScaleV1> {
         self.renderer.fractional_scale()
     }
 }

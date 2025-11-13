@@ -183,7 +183,7 @@ impl<W: RenderableWindow> WindowRenderer<W> {
         self.logical_size
     }
 
-    pub const fn fractional_scale(&self) -> &Option<ManagedWpFractionalScaleV1> {
-        &self.fractional_scale
+    pub const fn fractional_scale(&self) -> Option<&ManagedWpFractionalScaleV1> {
+        self.fractional_scale.as_ref()
     }
 }

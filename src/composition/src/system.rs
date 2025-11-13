@@ -164,13 +164,12 @@ impl RuntimeState<'_> {
         let popup_manager = self
             .window_state
             .popup_manager()
-            .as_ref()
             .ok_or_else(|| {
                 Error::Domain(DomainError::Configuration {
                     message: "No popup manager available".to_string(),
                 })
             })
-            .map(Rc::clone)?;
+            .cloned()?;
 
         let initial_dimensions = match req.size {
             PopupSize::Fixed { w, h } => {
@@ -242,13 +241,12 @@ impl RuntimeState<'_> {
         let popup_manager = self
             .window_state
             .popup_manager()
-            .as_ref()
             .ok_or_else(|| {
                 Error::Domain(DomainError::Configuration {
                     message: "No popup manager available".to_string(),
                 })
             })
-            .map(Rc::clone)?;
+            .cloned()?;
 
         let Some((request, _serial)) = popup_manager.get_popup_info(key) else {
             log::debug!(

@@ -3,23 +3,13 @@ use slint::PhysicalSize;
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum WindowStateEvent {
-    ScaleFactorChanged {
-        new_scale: f32,
-        source: ScaleSource,
-    },
+    ScaleFactorChanged { new_scale: f32, source: ScaleSource },
 
-    OutputSizeChanged {
-        output_size: PhysicalSize,
-    },
+    OutputSizeChanged { output_size: PhysicalSize },
 
-    PointerPositionChanged {
-        physical_x: f64,
-        physical_y: f64,
-    },
+    PointerPositionChanged { physical_x: f64, physical_y: f64 },
 
-    PointerSerialUpdated {
-        serial: u32,
-    },
+    PointerSerialUpdated { serial: u32 },
 
     PopupConfigurationChanged,
 }
