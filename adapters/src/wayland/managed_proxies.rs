@@ -21,7 +21,6 @@ impl ManagedWlPointer {
         }
     }
 
-    #[allow(dead_code)]
     pub const fn inner(&self) -> &Rc<WlPointer> {
         &self.pointer
     }
@@ -136,7 +135,6 @@ impl ManagedWpFractionalScaleV1 {
         }
     }
 
-    #[allow(dead_code)]
     pub const fn inner(&self) -> &Rc<WpFractionalScaleV1> {
         &self.fractional_scale
     }
@@ -174,7 +172,6 @@ impl ManagedWpViewport {
         }
     }
 
-    #[allow(dead_code)]
     pub const fn inner(&self) -> &Rc<WpViewport> {
         &self.viewport
     }

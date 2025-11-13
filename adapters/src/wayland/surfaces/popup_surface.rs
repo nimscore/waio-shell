@@ -23,7 +23,6 @@ use wayland_protocols::xdg::shell::client::{
 
 use super::surface_state::WindowState;
 
-#[allow(dead_code)]
 pub struct PopupSurfaceParams<'a> {
     pub compositor: &'a WlCompositor,
     pub xdg_wm_base: &'a XdgWmBase,
@@ -36,7 +35,6 @@ pub struct PopupSurfaceParams<'a> {
     pub scale_factor: f32,
 }
 
-#[allow(dead_code)]
 pub struct PopupSurface {
     pub surface: Rc<WlSurface>,
     pub xdg_surface: Rc<XdgSurface>,
@@ -45,7 +43,6 @@ pub struct PopupSurface {
     pub viewport: Option<Rc<WpViewport>>,
 }
 
-#[allow(dead_code)]
 impl PopupSurface {
     pub fn create(params: &PopupSurfaceParams<'_>) -> Self {
         let surface = Rc::new(params.compositor.create_surface(params.queue_handle, ()));

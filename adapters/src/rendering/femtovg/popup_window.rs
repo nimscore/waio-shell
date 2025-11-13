@@ -12,7 +12,6 @@ use std::rc::{Rc, Weak};
 
 use super::main_window::RenderState;
 
-#[allow(dead_code)]
 pub struct PopupWindow {
     window: Window,
     renderer: FemtoVGRenderer,
