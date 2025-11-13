@@ -11,13 +11,11 @@ use crate::wayland::managed_proxies::{
     ManagedWlPointer, ManagedWlSurface, ManagedZwlrLayerSurfaceV1,
     ManagedWpFractionalScaleV1, ManagedWpViewport,
 };
-use crate::wayland::services::popup_service::PopupService;
 use crate::rendering::femtovg::main_window::FemtoVGWindow;
 use crate::errors::{LayerShikaError, Result};
 use core::result::Result as CoreResult;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::ports::windowing::RuntimeStatePort;
-use layer_shika_domain::value_objects::popup_request::PopupHandle;
 use slint::{LogicalPosition, PhysicalSize};
 use slint::platform::WindowEvent;
 use slint_interpreter::{ComponentInstance, CompilationResult};
@@ -210,25 +208,17 @@ impl WindowState {
         self.event_context.set_shared_pointer_serial(shared_serial);
     }
 
-    pub fn set_popup_service(&mut self, popup_service: Rc<PopupService>) {
-        self.event_context.set_popup_service(popup_service);
-    }
-
     pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager>) {
         self.display_metrics
             .borrow()
             .register_observer(Rc::downgrade(&popup_manager) as _);
 
-        let popup_service = Rc::new(PopupService::new(popup_manager));
-        self.event_context.set_popup_service(popup_service);
+        self.event_context.set_popup_manager(popup_manager);
     }
 
     pub fn set_entered_surface(&self, surface: &WlSurface) {
-        if let Some(popup_service) = self.event_context.popup_service() {
-            if let Some(popup_key) = popup_service
-                .manager()
-                .find_popup_key_by_surface_id(&surface.id())
-            {
+        if let Some(popup_manager) = self.event_context.popup_manager() {
+            if let Some(popup_key) = popup_manager.find_popup_key_by_surface_id(&surface.id()) {
                 *self.active_popup_key.borrow_mut() = Some(popup_key);
                 return;
             }
@@ -244,10 +234,8 @@ impl WindowState {
         let active_popup = *self.active_popup_key.borrow();
 
         if let Some(popup_key) = active_popup {
-            if let Some(popup_service) = self.event_context.popup_service() {
-                if let Some(popup_window) =
-                    popup_service.get_popup_window(PopupHandle::new(popup_key))
-                {
+            if let Some(popup_manager) = self.event_context.popup_manager() {
+                if let Some(popup_window) = popup_manager.get_popup_window(popup_key) {
                     popup_window.dispatch_event(event);
                     return;
                 }
@@ -277,11 +265,7 @@ impl WindowState {
             .update_scale_for_fractional_scale_object(fractional_scale_proxy, scale_120ths);
     }
 
-    pub fn popup_service(&self) -> &Option<Rc<PopupService>> {
-        self.event_context.popup_service()
-    }
-
-    pub fn popup_manager(&self) -> Option<Rc<PopupManager>> {
+    pub fn popup_manager(&self) -> &Option<Rc<PopupManager>> {
         self.event_context.popup_manager()
     }
 }

@@ -1,7 +1,6 @@
 use crate::wayland::{
     config::{LayerSurfaceParams, WaylandWindowConfig},
     globals::context::GlobalContext,
-    services::popup_service::PopupService,
     surfaces::layer_surface::{SurfaceCtx, SurfaceSetupParams},
     surfaces::popup_manager::{CreatePopupParams, PopupContext, PopupManager},
     surfaces::{
@@ -39,7 +38,7 @@ pub struct WaylandWindowingSystem {
     connection: Rc<Connection>,
     event_queue: EventQueue<WindowState>,
     event_loop: EventLoop<'static, WindowState>,
-    popup_service: Rc<PopupService>,
+    popup_manager: Rc<PopupManager>,
 }
 
 impl WaylandWindowingSystem {
@@ -64,11 +63,10 @@ impl WaylandWindowingSystem {
             popup_context,
             Rc::clone(state.display_metrics()),
         ));
-        let popup_service = Rc::new(PopupService::new(popup_manager));
         let shared_serial = Rc::new(SharedPointerSerial::new());
 
         Self::setup_popup_creator(
-            &popup_service,
+            &popup_manager,
             &platform,
             &state,
             &event_queue,
@@ -80,12 +78,12 @@ impl WaylandWindowingSystem {
             connection,
             event_queue,
             event_loop,
-            popup_service,
+            popup_manager,
         })
         .map(|mut system| {
             system
                 .state
-                .set_popup_service(Rc::clone(&system.popup_service));
+                .set_popup_manager(Rc::clone(&system.popup_manager));
             system.state.set_shared_pointer_serial(shared_serial);
             system
         })
@@ -161,20 +159,20 @@ impl WaylandWindowingSystem {
     }
 
     fn setup_popup_creator(
-        popup_service: &Rc<PopupService>,
+        popup_manager: &Rc<PopupManager>,
         platform: &Rc<CustomSlintPlatform>,
         state: &WindowState,
         event_queue: &EventQueue<WindowState>,
         shared_serial: &Rc<SharedPointerSerial>,
     ) {
-        if !popup_service.has_xdg_shell() {
+        if !popup_manager.has_xdg_shell() {
             info!("xdg-shell not available, popups will not be supported");
             return;
         }
 
         info!("Setting up popup creator with xdg-shell support");
 
-        let popup_service_clone = Rc::clone(popup_service);
+        let popup_manager_clone = Rc::clone(popup_manager);
         let layer_surface = state.layer_surface();
         let queue_handle = event_queue.handle();
         let serial_holder = Rc::clone(shared_serial);
@@ -185,7 +183,7 @@ impl WaylandWindowingSystem {
             let serial = serial_holder.get();
 
             let (params, request) = if let Some((request, width, height)) =
-                popup_service_clone.take_pending_popup()
+                popup_manager_clone.take_pending_popup()
             {
                 log::info!(
                     "Using popup request: component='{}', position=({}, {}), size={}x{}, mode={:?}",
@@ -214,8 +212,7 @@ impl WaylandWindowingSystem {
                 ));
             };
 
-            let popup_window = popup_service_clone
-                .manager()
+            let popup_window = popup_manager_clone
                 .create_popup(&queue_handle, &layer_surface, params, request)
                 .map_err(|e| PlatformError::Other(format!("Failed to create popup: {e}")))?;
 
@@ -280,12 +277,12 @@ impl WaylandWindowingSystem {
 
         let event_queue = &mut self.event_queue;
         let connection = &self.connection;
-        let popup_service = Rc::clone(&self.popup_service);
+        let popup_manager = Rc::clone(&self.popup_manager);
 
         self.event_loop
             .run(None, &mut self.state, move |shared_data| {
                 if let Err(e) =
-                    Self::process_events(connection, event_queue, shared_data, &popup_service)
+                    Self::process_events(connection, event_queue, shared_data, &popup_manager)
                 {
                     error!("Error processing events: {e}");
                 }
@@ -315,7 +312,7 @@ impl WaylandWindowingSystem {
         connection: &Connection,
         event_queue: &mut EventQueue<WindowState>,
         shared_data: &mut WindowState,
-        popup_service: &PopupService,
+        popup_manager: &PopupManager,
     ) -> Result<()> {
         if let Some(guard) = event_queue.prepare_read() {
             guard
@@ -334,7 +331,7 @@ impl WaylandWindowingSystem {
                 message: e.to_string(),
             })?;
 
-        popup_service
+        popup_manager
             .render_popups()
             .map_err(|e| RenderingError::Operation {
                 message: e.to_string(),

@@ -4,24 +4,32 @@ use crate::rendering::femtovg::popup_window::PopupWindow;
 use crate::wayland::surfaces::display_metrics::{DisplayMetricsObserver, SharedDisplayMetrics};
 use layer_shika_domain::value_objects::popup_config::PopupConfig;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
-use layer_shika_domain::value_objects::popup_request::PopupRequest;
+use layer_shika_domain::value_objects::popup_request::{PopupHandle, PopupRequest};
 use log::info;
 use slint::{platform::femtovg_renderer::FemtoVGRenderer, PhysicalSize, WindowSize};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 use wayland_client::{
     backend::ObjectId,
-    protocol::{wl_compositor::WlCompositor, wl_display::WlDisplay, wl_seat::WlSeat},
+    protocol::{wl_compositor::WlCompositor, wl_display::WlDisplay, wl_seat::WlSeat, wl_surface::WlSurface},
     Connection, Proxy, QueueHandle,
 };
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1;
+use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 use wayland_protocols::wp::viewporter::client::wp_viewporter::WpViewporter;
 use wayland_protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
 
 use super::popup_surface::PopupSurface;
 use super::surface_state::WindowState;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActiveWindow {
+    Main,
+    Popup(usize),
+    None,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PopupId(pub(crate) usize);
@@ -123,14 +131,17 @@ impl PopupManagerState {
 pub struct PopupManager {
     context: PopupContext,
     state: RefCell<PopupManagerState>,
+    scale_factor: Cell<f32>,
 }
 
 impl PopupManager {
     #[must_use]
     pub fn new(context: PopupContext, display_metrics: SharedDisplayMetrics) -> Self {
+        let scale_factor = display_metrics.borrow().scale_factor();
         Self {
             context,
             state: RefCell::new(PopupManagerState::new(display_metrics)),
+            scale_factor: Cell::new(scale_factor),
         }
     }
 
@@ -153,7 +164,7 @@ impl PopupManager {
 
     #[must_use]
     pub fn scale_factor(&self) -> f32 {
-        self.state.borrow().display_metrics.borrow().scale_factor()
+        self.scale_factor.get()
     }
 
     #[must_use]
@@ -163,6 +174,7 @@ impl PopupManager {
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn update_scale_factor(&self, scale_factor: f32) {
+        self.scale_factor.set(scale_factor);
         let scale_120ths = (scale_factor * 120.0) as u32;
         self.state
             .borrow()
@@ -173,6 +185,7 @@ impl PopupManager {
         for popup in self.state.borrow().popups.values() {
             popup.window.set_scale_factor(scale_factor);
         }
+        self.mark_all_popups_dirty();
     }
 
     pub fn update_output_size(&self, output_size: PhysicalSize) {
@@ -400,6 +413,77 @@ impl PopupManager {
         let id = PopupId(key);
         if let Some(popup) = self.state.borrow().popups.get(&id) {
             popup.window.mark_configured();
+        }
+    }
+
+    pub fn show(&self, request: PopupRequest, width: f32, height: f32) {
+        self.set_pending_popup(request, width, height);
+    }
+
+    pub fn close(&self, handle: PopupHandle) -> Result<()> {
+        let id = PopupId::from_key(handle.key());
+        self.destroy_popup(id);
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn find_by_surface(&self, surface_id: &ObjectId) -> Option<PopupHandle> {
+        self.find_popup_key_by_surface_id(surface_id)
+            .map(PopupHandle::new)
+    }
+
+    #[must_use]
+    pub fn find_by_fractional_scale(&self, fractional_scale_id: &ObjectId) -> Option<PopupHandle> {
+        self.find_popup_key_by_fractional_scale_id(fractional_scale_id)
+            .map(PopupHandle::new)
+    }
+
+    #[must_use]
+    pub fn find_by_xdg_popup(&self, xdg_popup_id: &ObjectId) -> Option<PopupHandle> {
+        self.find_popup_key_by_xdg_popup_id(xdg_popup_id)
+            .map(PopupHandle::new)
+    }
+
+    #[must_use]
+    pub fn find_by_xdg_surface(&self, xdg_surface_id: &ObjectId) -> Option<PopupHandle> {
+        self.find_popup_key_by_xdg_surface_id(xdg_surface_id)
+            .map(PopupHandle::new)
+    }
+
+    #[must_use]
+    pub fn get_active_window(
+        &self,
+        surface: &WlSurface,
+        main_surface_id: &ObjectId,
+    ) -> ActiveWindow {
+        let surface_id = surface.id();
+
+        if *main_surface_id == surface_id {
+            return ActiveWindow::Main;
+        }
+
+        if let Some(popup_key) = self.find_popup_key_by_surface_id(&surface_id) {
+            return ActiveWindow::Popup(popup_key);
+        }
+
+        ActiveWindow::None
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    pub fn update_scale_for_fractional_scale_object(
+        &self,
+        fractional_scale_proxy: &WpFractionalScaleV1,
+        scale_120ths: u32,
+    ) {
+        let fractional_scale_id = fractional_scale_proxy.id();
+
+        if let Some(popup_key) = self.find_popup_key_by_fractional_scale_id(&fractional_scale_id) {
+            if let Some(popup_window) = self.get_popup_window(popup_key) {
+                let new_scale_factor = scale_120ths as f32 / 120.0;
+                info!("Updating popup scale factor to {new_scale_factor} ({scale_120ths}x)");
+                popup_window.set_scale_factor(new_scale_factor);
+                popup_window.request_redraw();
+            }
         }
     }
 }

@@ -1,10 +1,8 @@
 use crate::rendering::femtovg::main_window::FemtoVGWindow;
-use crate::wayland::services::popup_service::{ActiveWindow, PopupService};
 use crate::wayland::surfaces::display_metrics::SharedDisplayMetrics;
 use crate::wayland::surfaces::event_bus::EventBus;
-use crate::wayland::surfaces::popup_manager::PopupManager;
+use crate::wayland::surfaces::popup_manager::{ActiveWindow, PopupManager};
 use crate::wayland::surfaces::window_events::{ScaleSource, WindowStateEvent};
-use layer_shika_domain::value_objects::popup_request::PopupHandle;
 use slint::platform::{WindowAdapter, WindowEvent};
 use slint::{LogicalPosition, PhysicalSize};
 use std::cell::Cell;
@@ -41,7 +39,7 @@ impl SharedPointerSerial {
 pub struct EventContext {
     main_window: Rc<FemtoVGWindow>,
     main_surface_id: ObjectId,
-    popup_service: Option<Rc<PopupService>>,
+    popup_manager: Option<Rc<PopupManager>>,
     event_bus: EventBus,
     display_metrics: SharedDisplayMetrics,
     current_pointer_position: LogicalPosition,
@@ -59,7 +57,7 @@ impl EventContext {
         Self {
             main_window,
             main_surface_id,
-            popup_service: None,
+            popup_manager: None,
             event_bus: EventBus::new(),
             display_metrics,
             current_pointer_position: LogicalPosition::new(0.0, 0.0),
@@ -76,20 +74,14 @@ impl EventContext {
         &self.event_bus
     }
 
-    pub fn set_popup_service(&mut self, popup_service: Rc<PopupService>) {
-        self.popup_service = Some(popup_service);
+    pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager>) {
+        self.popup_manager = Some(popup_manager);
         self.event_bus
             .publish(&WindowStateEvent::PopupConfigurationChanged);
     }
 
-    pub const fn popup_service(&self) -> &Option<Rc<PopupService>> {
-        &self.popup_service
-    }
-
-    pub fn popup_manager(&self) -> Option<Rc<PopupManager>> {
-        self.popup_service
-            .as_ref()
-            .map(|service| Rc::clone(service.manager()))
+    pub const fn popup_manager(&self) -> &Option<Rc<PopupManager>> {
+        &self.popup_manager
     }
 
     #[must_use]
@@ -108,8 +100,8 @@ impl EventContext {
             .borrow_mut()
             .update_scale_factor(scale_120ths);
 
-        if let Some(popup_service) = &self.popup_service {
-            popup_service.update_scale_factor(new_scale_factor);
+        if let Some(popup_manager) = &self.popup_manager {
+            popup_manager.update_scale_factor(new_scale_factor);
         }
 
         self.event_bus
@@ -166,15 +158,13 @@ impl EventContext {
     }
 
     pub fn dispatch_to_active_window(&self, event: WindowEvent, surface: &WlSurface) {
-        if let Some(popup_service) = &self.popup_service {
-            match popup_service.get_active_window(surface, &self.main_surface_id) {
+        if let Some(popup_manager) = &self.popup_manager {
+            match popup_manager.get_active_window(surface, &self.main_surface_id) {
                 ActiveWindow::Main => {
                     self.main_window.window().dispatch_event(event);
                 }
                 ActiveWindow::Popup(index) => {
-                    if let Some(popup_window) =
-                        popup_service.get_popup_window(PopupHandle::new(index))
-                    {
+                    if let Some(popup_window) = popup_manager.get_popup_window(index) {
                         popup_window.dispatch_event(event);
                     }
                 }
@@ -184,8 +174,8 @@ impl EventContext {
     }
 
     pub fn update_output_size(&self, output_size: PhysicalSize) {
-        if let Some(popup_service) = &self.popup_service {
-            popup_service.update_output_size(output_size);
+        if let Some(popup_manager) = &self.popup_manager {
+            popup_manager.update_output_size(output_size);
         }
 
         self.event_bus
@@ -197,8 +187,8 @@ impl EventContext {
         fractional_scale_proxy: &WpFractionalScaleV1,
         scale_120ths: u32,
     ) {
-        if let Some(popup_service) = &self.popup_service {
-            popup_service
+        if let Some(popup_manager) = &self.popup_manager {
+            popup_manager
                 .update_scale_for_fractional_scale_object(fractional_scale_proxy, scale_120ths);
         }
     }

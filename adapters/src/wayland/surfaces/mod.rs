@@ -6,7 +6,6 @@ pub mod event_context;
 pub mod event_router;
 pub mod layer_surface;
 pub mod popup_manager;
-pub mod popup_state;
 pub mod popup_surface;
 pub mod rendering_state;
 pub mod surface_builder;

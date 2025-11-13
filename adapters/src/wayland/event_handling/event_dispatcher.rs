@@ -269,14 +269,14 @@ impl Dispatch<XdgPopup, ()> for WindowState {
             } => {
                 info!("XdgPopup Configure: position=({x}, {y}), size=({width}x{height})");
 
-                if let Some(popup_service) = state.popup_service() {
+                if let Some(popup_manager) = state.popup_manager() {
                     let popup_id = xdg_popup.id();
-                    if let Some(handle) = popup_service.find_by_xdg_popup(&popup_id) {
+                    if let Some(handle) = popup_manager.find_by_xdg_popup(&popup_id) {
                         info!(
                             "Marking popup with handle {handle:?} as configured after XdgPopup::Configure"
                         );
-                        popup_service.mark_popup_configured(handle);
-                        popup_service.manager().mark_all_popups_dirty();
+                        popup_manager.mark_popup_configured(handle.key());
+                        popup_manager.mark_all_popups_dirty();
                     }
                 }
             }
@@ -284,14 +284,14 @@ impl Dispatch<XdgPopup, ()> for WindowState {
                 info!("XdgPopup dismissed by compositor");
                 let popup_id = xdg_popup.id();
                 let popup_handle = state
-                    .popup_service()
+                    .popup_manager()
                     .as_ref()
-                    .and_then(|ps| ps.find_by_xdg_popup(&popup_id));
+                    .and_then(|pm| pm.find_by_xdg_popup(&popup_id));
 
                 if let Some(handle) = popup_handle {
                     info!("Destroying popup with handle {handle:?}");
-                    if let Some(popup_service) = state.popup_service() {
-                        let _result = popup_service.close(handle);
+                    if let Some(popup_manager) = state.popup_manager() {
+                        let _result = popup_manager.close(handle);
                     }
                 }
             }
@@ -316,9 +316,9 @@ impl Dispatch<XdgSurface, ()> for WindowState {
             info!("XdgSurface Configure received, sending ack with serial {serial}");
             xdg_surface.ack_configure(serial);
 
-            if let Some(popup_service) = state.popup_service() {
+            if let Some(popup_manager) = state.popup_manager() {
                 info!("Marking all popups as dirty after Configure");
-                popup_service.manager().mark_all_popups_dirty();
+                popup_manager.mark_all_popups_dirty();
             }
         }
     }
