@@ -11,7 +11,10 @@ use layer_shika_adapters::platform::slint_interpreter::{
 use layer_shika_adapters::wayland::{
     config::WaylandWindowConfig,
     shell_adapter::WaylandWindowingSystem,
-    surfaces::{popup_manager::PopupManager, surface_state::WindowState},
+    surfaces::{
+        popup_manager::{PopupId, PopupManager},
+        surface_state::WindowState,
+    },
 };
 use layer_shika_domain::config::WindowConfig;
 use layer_shika_domain::errors::DomainError;
@@ -19,6 +22,7 @@ use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningM
 use layer_shika_domain::value_objects::popup_request::{
     PopupAt, PopupHandle, PopupRequest, PopupSize,
 };
+use std::cell::Cell;
 use std::cell::{Ref, RefCell};
 use std::os::unix::io::AsFd;
 use std::rc::{Rc, Weak};
@@ -196,13 +200,16 @@ impl RuntimeState<'_> {
 
         popup_manager.set_pending_popup(req, initial_dimensions.0, initial_dimensions.1);
 
-        let instance = Self::create_popup_instance(&definition, &popup_manager, 0, resize_sender)?;
+        let (instance, popup_key_cell) =
+            Self::create_popup_instance(&definition, &popup_manager, resize_sender)?;
 
         let popup_key = popup_manager.current_popup_key().ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
                 message: "No popup key available after creation".to_string(),
             })
         })?;
+
+        popup_key_cell.set(popup_key);
 
         if let Some(popup_window) = popup_manager.get_popup_window(popup_key) {
             popup_window.set_component_instance(instance);
@@ -217,7 +224,8 @@ impl RuntimeState<'_> {
 
     pub fn close_popup(&mut self, handle: PopupHandle) -> Result<()> {
         if let Some(popup_manager) = self.window_state.popup_manager() {
-            popup_manager.destroy_popup(handle.key());
+            let id = PopupId::from_key(handle.key());
+            popup_manager.destroy_popup(id);
         }
         Ok(())
     }
@@ -247,11 +255,13 @@ impl RuntimeState<'_> {
             })
             .map(Rc::clone)?;
 
-        let (request, _serial) = popup_manager.get_popup_info(key).ok_or_else(|| {
-            Error::Domain(DomainError::Configuration {
-                message: format!("Popup with key {} not found", key),
-            })
-        })?;
+        let Some((request, _serial)) = popup_manager.get_popup_info(key) else {
+            log::debug!(
+                "Ignoring resize request for non-existent popup with key {}",
+                key
+            );
+            return Ok(());
+        };
 
         let current_size = request.size.dimensions();
         let size_changed =
@@ -288,9 +298,8 @@ impl RuntimeState<'_> {
     fn create_popup_instance(
         definition: &ComponentDefinition,
         popup_manager: &Rc<PopupManager>,
-        popup_key: usize,
         resize_sender: Option<channel::Sender<PopupCommand>>,
-    ) -> Result<ComponentInstance> {
+    ) -> Result<(ComponentInstance, Rc<Cell<usize>>)> {
         let instance = definition.create().map_err(|e| {
             Error::Domain(DomainError::Configuration {
                 message: format!("Failed to create popup instance: {}", e),
@@ -311,7 +320,10 @@ impl RuntimeState<'_> {
                 })
             })?;
 
+        let popup_key_cell = Rc::new(Cell::new(0));
+
         let result = if let Some(sender) = resize_sender {
+            let key_cell = Rc::clone(&popup_key_cell);
             instance.set_callback("change_popup_size", move |args| {
                 let width: f32 = args
                     .first()
@@ -322,7 +334,13 @@ impl RuntimeState<'_> {
                     .and_then(|v| v.clone().try_into().ok())
                     .unwrap_or(150.0);
 
-                log::info!("change_popup_size callback invoked: {}x{}", width, height);
+                let popup_key = key_cell.get();
+                log::info!(
+                    "change_popup_size callback invoked: {}x{} for key {}",
+                    width,
+                    height,
+                    popup_key
+                );
 
                 if sender
                     .send(PopupCommand::Resize {
@@ -338,6 +356,7 @@ impl RuntimeState<'_> {
             })
         } else {
             let popup_manager_for_resize = Rc::downgrade(popup_manager);
+            let key_cell = Rc::clone(&popup_key_cell);
             instance.set_callback("change_popup_size", move |args| {
                 let width: f32 = args
                     .first()
@@ -348,7 +367,13 @@ impl RuntimeState<'_> {
                     .and_then(|v| v.clone().try_into().ok())
                     .unwrap_or(150.0);
 
-                log::info!("change_popup_size callback invoked: {}x{}", width, height);
+                let popup_key = key_cell.get();
+                log::info!(
+                    "change_popup_size callback invoked: {}x{} for key {}",
+                    width,
+                    height,
+                    popup_key
+                );
 
                 if let Some(popup_window) = popup_manager_for_resize
                     .upgrade()
@@ -372,7 +397,7 @@ impl RuntimeState<'_> {
             })
         })?;
 
-        Ok(instance)
+        Ok((instance, popup_key_cell))
     }
 }
 

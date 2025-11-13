@@ -1,5 +1,6 @@
 use crate::errors::Result;
 use crate::rendering::femtovg::popup_window::PopupWindow;
+use crate::wayland::surfaces::popup_manager::PopupId;
 use layer_shika_domain::value_objects::popup_request::{PopupHandle, PopupRequest};
 use log::info;
 use slint::PhysicalSize;
@@ -37,7 +38,8 @@ impl PopupService {
     }
 
     pub fn close(&self, handle: PopupHandle) -> Result<()> {
-        self.manager.destroy_popup(handle.key());
+        let id = PopupId::from_key(handle.key());
+        self.manager.destroy_popup(id);
         Ok(())
     }
 

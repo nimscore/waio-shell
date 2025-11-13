@@ -5,10 +5,10 @@ use layer_shika_domain::value_objects::popup_config::PopupConfig;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use layer_shika_domain::value_objects::popup_request::PopupRequest;
 use log::info;
-use slab::Slab;
 use slint::{platform::femtovg_renderer::FemtoVGRenderer, PhysicalSize, WindowSize};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use wayland_client::{
     backend::ObjectId,
@@ -21,6 +21,23 @@ use wayland_protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
 
 use super::popup_surface::PopupSurface;
 use super::surface_state::WindowState;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PopupId(pub(crate) usize);
+
+impl PopupId {
+    #[must_use]
+    pub const fn key(self) -> usize {
+        self.0
+    }
+
+    #[must_use]
+    pub const fn from_key(key: usize) -> Self {
+        Self(key)
+    }
+}
+
+pub type OnCloseCallback = Box<dyn Fn(PopupId)>;
 
 #[derive(Debug, Clone, Copy)]
 pub struct CreatePopupParams {
@@ -83,21 +100,23 @@ struct PendingPopup {
 }
 
 struct PopupManagerState {
-    popups: Slab<ActivePopup>,
+    popups: HashMap<PopupId, ActivePopup>,
     scale_factor: f32,
     output_size: PhysicalSize,
-    current_popup_key: Option<usize>,
+    current_popup_id: Option<PopupId>,
     pending_popup: Option<PendingPopup>,
+    id_generator: usize,
 }
 
 impl PopupManagerState {
     fn new(initial_scale_factor: f32) -> Self {
         Self {
-            popups: Slab::new(),
+            popups: HashMap::new(),
             scale_factor: initial_scale_factor,
             output_size: PhysicalSize::new(0, 0),
-            current_popup_key: None,
+            current_popup_id: None,
             pending_popup: None,
+            id_generator: 0,
         }
     }
 }
@@ -152,15 +171,15 @@ impl PopupManager {
     }
 
     pub fn close_current_popup(&self) {
-        let key = self.state.borrow_mut().current_popup_key.take();
-        if let Some(key) = key {
-            self.destroy_popup(key);
+        let id = self.state.borrow_mut().current_popup_id.take();
+        if let Some(id) = id {
+            self.destroy_popup(id);
         }
     }
 
     #[must_use]
     pub fn current_popup_key(&self) -> Option<usize> {
-        self.state.borrow().current_popup_key
+        self.state.borrow().current_popup_id.map(PopupId::key)
     }
 
     pub fn create_popup(
@@ -235,7 +254,24 @@ impl PopupManager {
         let renderer = FemtoVGRenderer::new(context)
             .map_err(|e| LayerShikaError::FemtoVGRendererCreation { source: e })?;
 
-        let popup_window = PopupWindow::new(renderer);
+        let popup_id = {
+            let mut state = self.state.borrow_mut();
+            let id = PopupId(state.id_generator);
+            state.id_generator += 1;
+            id
+        };
+
+        let on_close: OnCloseCallback = {
+            let weak_self = Rc::downgrade(self);
+            Box::new(move |id: PopupId| {
+                if let Some(manager) = weak_self.upgrade() {
+                    manager.destroy_popup(id);
+                }
+            })
+        };
+
+        let popup_window = PopupWindow::new_with_callback(renderer, on_close);
+        popup_window.set_popup_id(popup_id);
         popup_window.set_scale_factor(scale_factor);
         popup_window.set_size(WindowSize::Logical(slint::LogicalSize::new(
             params.width,
@@ -243,23 +279,25 @@ impl PopupManager {
         )));
 
         let mut state = self.state.borrow_mut();
-        let key = state.popups.insert(ActivePopup {
-            surface: popup_surface,
-            window: Rc::clone(&popup_window),
-            request,
-            last_serial: params.last_pointer_serial,
-        });
-        popup_window.set_popup_manager(Rc::downgrade(self), key);
-        state.current_popup_key = Some(key);
+        state.popups.insert(
+            popup_id,
+            ActivePopup {
+                surface: popup_surface,
+                window: Rc::clone(&popup_window),
+                request,
+                last_serial: params.last_pointer_serial,
+            },
+        );
+        state.current_popup_id = Some(popup_id);
 
-        info!("Popup window created successfully with key {key}");
+        info!("Popup window created successfully with id {:?}", popup_id);
 
         Ok(popup_window)
     }
 
     pub fn render_popups(&self) -> Result<()> {
         let state = self.state.borrow();
-        for (_key, popup) in &state.popups {
+        for popup in state.popups.values() {
             popup.window.render_frame_if_dirty()?;
         }
         Ok(())
@@ -271,7 +309,7 @@ impl PopupManager {
 
     pub fn mark_all_popups_dirty(&self) {
         let state = self.state.borrow();
-        for (_key, popup) in &state.popups {
+        for popup in state.popups.values() {
             popup.window.request_redraw();
         }
     }
@@ -281,55 +319,55 @@ impl PopupManager {
             .borrow()
             .popups
             .iter()
-            .find_map(|(key, popup)| (popup.surface.surface.id() == *surface_id).then_some(key))
+            .find_map(|(id, popup)| (popup.surface.surface.id() == *surface_id).then_some(id.key()))
     }
 
     pub fn find_popup_key_by_fractional_scale_id(
         &self,
         fractional_scale_id: &ObjectId,
     ) -> Option<usize> {
-        self.state.borrow().popups.iter().find_map(|(key, popup)| {
+        self.state.borrow().popups.iter().find_map(|(id, popup)| {
             popup
                 .surface
                 .fractional_scale
                 .as_ref()
                 .filter(|fs| fs.id() == *fractional_scale_id)
-                .map(|_| key)
+                .map(|_| id.key())
         })
     }
 
     pub fn get_popup_window(&self, key: usize) -> Option<Rc<PopupWindow>> {
+        let id = PopupId(key);
         self.state
             .borrow()
             .popups
-            .get(key)
+            .get(&id)
             .map(|popup| Rc::clone(&popup.window))
     }
 
-    pub fn destroy_popup(&self, key: usize) {
-        if let Some(popup) = self.state.borrow_mut().popups.try_remove(key) {
-            info!("Destroying popup with key {key}");
+    pub fn destroy_popup(&self, id: PopupId) {
+        if let Some(popup) = self.state.borrow_mut().popups.remove(&id) {
+            info!("Destroying popup with id {:?}", id);
 
             popup.surface.destroy();
         }
     }
 
     pub fn find_popup_key_by_xdg_popup_id(&self, xdg_popup_id: &ObjectId) -> Option<usize> {
-        self.state
-            .borrow()
-            .popups
-            .iter()
-            .find_map(|(key, popup)| (popup.surface.xdg_popup.id() == *xdg_popup_id).then_some(key))
+        self.state.borrow().popups.iter().find_map(|(id, popup)| {
+            (popup.surface.xdg_popup.id() == *xdg_popup_id).then_some(id.key())
+        })
     }
 
     pub fn find_popup_key_by_xdg_surface_id(&self, xdg_surface_id: &ObjectId) -> Option<usize> {
-        self.state.borrow().popups.iter().find_map(|(key, popup)| {
-            (popup.surface.xdg_surface.id() == *xdg_surface_id).then_some(key)
+        self.state.borrow().popups.iter().find_map(|(id, popup)| {
+            (popup.surface.xdg_surface.id() == *xdg_surface_id).then_some(id.key())
         })
     }
 
     pub fn update_popup_viewport(&self, key: usize, logical_width: i32, logical_height: i32) {
-        if let Some(popup) = self.state.borrow().popups.get(key) {
+        let id = PopupId(key);
+        if let Some(popup) = self.state.borrow().popups.get(&id) {
             popup
                 .surface
                 .update_viewport_size(logical_width, logical_height);
@@ -337,15 +375,17 @@ impl PopupManager {
     }
 
     pub fn get_popup_info(&self, key: usize) -> Option<(PopupRequest, u32)> {
+        let id = PopupId(key);
         self.state
             .borrow()
             .popups
-            .get(key)
+            .get(&id)
             .map(|popup| (popup.request.clone(), popup.last_serial))
     }
 
     pub fn mark_popup_configured(&self, key: usize) {
-        if let Some(popup) = self.state.borrow().popups.get(key) {
+        let id = PopupId(key);
+        if let Some(popup) = self.state.borrow().popups.get(&id) {
             popup.window.mark_configured();
         }
     }

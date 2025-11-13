@@ -1,5 +1,5 @@
 use crate::errors::{RenderingError, Result};
-use crate::wayland::surfaces::popup_manager::PopupManager;
+use crate::wayland::surfaces::popup_manager::{OnCloseCallback, PopupId};
 use core::ops::Deref;
 use log::info;
 use slint::{
@@ -7,7 +7,7 @@ use slint::{
     platform::{Renderer, WindowAdapter, WindowEvent, femtovg_renderer::FemtoVGRenderer},
 };
 use slint_interpreter::ComponentInstance;
-use std::cell::{Cell, OnceCell, RefCell};
+use std::cell::{Cell, OnceCell};
 use std::rc::{Rc, Weak};
 
 use super::main_window::RenderState;
@@ -19,13 +19,12 @@ pub struct PopupWindow {
     render_state: Cell<RenderState>,
     size: Cell<PhysicalSize>,
     scale_factor: Cell<f32>,
-    popup_manager: RefCell<Weak<PopupManager>>,
-    popup_key: Cell<Option<usize>>,
+    popup_id: Cell<Option<PopupId>>,
+    on_close: OnceCell<OnCloseCallback>,
     configured: Cell<bool>,
     component_instance: OnceCell<ComponentInstance>,
 }
 
-#[allow(dead_code)]
 impl PopupWindow {
     #[must_use]
     pub fn new(renderer: FemtoVGRenderer) -> Rc<Self> {
@@ -37,17 +36,23 @@ impl PopupWindow {
                 render_state: Cell::new(RenderState::Clean),
                 size: Cell::new(PhysicalSize::default()),
                 scale_factor: Cell::new(1.),
-                popup_manager: RefCell::new(Weak::new()),
-                popup_key: Cell::new(None),
+                popup_id: Cell::new(None),
+                on_close: OnceCell::new(),
                 configured: Cell::new(false),
                 component_instance: OnceCell::new(),
             }
         })
     }
 
-    pub fn set_popup_manager(&self, popup_manager: Weak<PopupManager>, key: usize) {
-        *self.popup_manager.borrow_mut() = popup_manager;
-        self.popup_key.set(Some(key));
+    #[must_use]
+    pub fn new_with_callback(renderer: FemtoVGRenderer, on_close: OnCloseCallback) -> Rc<Self> {
+        let window = Self::new(renderer);
+        window.on_close.set(on_close).ok();
+        window
+    }
+
+    pub fn set_popup_id(&self, id: PopupId) {
+        self.popup_id.set(Some(id));
     }
 
     pub fn close_popup(&self) {
@@ -57,15 +62,14 @@ impl PopupWindow {
             info!("Failed to hide popup window: {e}");
         }
 
-        if let Some(popup_manager) = self.popup_manager.borrow().upgrade() {
-            if let Some(key) = self.popup_key.get() {
-                info!("Destroying popup with key {key}");
-                popup_manager.destroy_popup(key);
+        if let Some(id) = self.popup_id.get() {
+            info!("Destroying popup with id {:?}", id);
+            if let Some(on_close) = self.on_close.get() {
+                on_close(id);
             }
         }
 
-        *self.popup_manager.borrow_mut() = Weak::new();
-        self.popup_key.set(None);
+        self.popup_id.set(None);
 
         info!("Popup window cleanup complete");
     }
@@ -107,7 +111,7 @@ impl PopupWindow {
     }
 
     pub fn popup_key(&self) -> Option<usize> {
-        self.popup_key.get()
+        self.popup_id.get().map(PopupId::key)
     }
 
     pub fn mark_configured(&self) {
