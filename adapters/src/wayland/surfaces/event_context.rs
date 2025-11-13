@@ -1,10 +1,10 @@
 use crate::rendering::femtovg::main_window::FemtoVGWindow;
 use crate::wayland::services::popup_service::{ActiveWindow, PopupService};
+use crate::wayland::surfaces::display_metrics::SharedDisplayMetrics;
 use crate::wayland::surfaces::event_bus::EventBus;
 use crate::wayland::surfaces::popup_manager::PopupManager;
 use crate::wayland::surfaces::window_events::{ScaleSource, WindowStateEvent};
 use layer_shika_domain::value_objects::popup_request::PopupHandle;
-use log::info;
 use slint::platform::{WindowAdapter, WindowEvent};
 use slint::{LogicalPosition, PhysicalSize};
 use std::cell::Cell;
@@ -43,8 +43,7 @@ pub struct EventContext {
     main_surface_id: ObjectId,
     popup_service: Option<Rc<PopupService>>,
     event_bus: EventBus,
-    scale_factor: f32,
-    has_fractional_scale: bool,
+    display_metrics: SharedDisplayMetrics,
     current_pointer_position: LogicalPosition,
     last_pointer_serial: u32,
     shared_pointer_serial: Option<Rc<SharedPointerSerial>>,
@@ -55,16 +54,14 @@ impl EventContext {
     pub fn new(
         main_window: Rc<FemtoVGWindow>,
         main_surface_id: ObjectId,
-        scale_factor: f32,
-        has_fractional_scale: bool,
+        display_metrics: SharedDisplayMetrics,
     ) -> Self {
         Self {
             main_window,
             main_surface_id,
             popup_service: None,
             event_bus: EventBus::new(),
-            scale_factor,
-            has_fractional_scale,
+            display_metrics,
             current_pointer_position: LogicalPosition::new(0.0, 0.0),
             last_pointer_serial: 0,
             shared_pointer_serial: None,
@@ -95,19 +92,21 @@ impl EventContext {
             .map(|service| Rc::clone(service.manager()))
     }
 
-    pub const fn scale_factor(&self) -> f32 {
-        self.scale_factor
+    #[must_use]
+    pub fn scale_factor(&self) -> f32 {
+        self.display_metrics.borrow().scale_factor()
+    }
+
+    pub const fn display_metrics(&self) -> &SharedDisplayMetrics {
+        &self.display_metrics
     }
 
     #[allow(clippy::cast_precision_loss)]
     pub fn update_scale_factor(&mut self, scale_120ths: u32) -> f32 {
-        let new_scale_factor = scale_120ths as f32 / 120.0;
-        let old_scale_factor = self.scale_factor;
-        info!(
-            "Updating scale factor from {} to {} ({}x)",
-            old_scale_factor, new_scale_factor, scale_120ths
-        );
-        self.scale_factor = new_scale_factor;
+        let new_scale_factor = self
+            .display_metrics
+            .borrow_mut()
+            .update_scale_factor(scale_120ths);
 
         if let Some(popup_service) = &self.popup_service {
             popup_service.update_scale_factor(new_scale_factor);
@@ -128,12 +127,15 @@ impl EventContext {
 
     #[allow(clippy::cast_possible_truncation)]
     pub fn set_current_pointer_position(&mut self, physical_x: f64, physical_y: f64) {
-        let logical_position = if self.has_fractional_scale {
+        let has_fractional_scale = self.display_metrics.borrow().has_fractional_scale();
+        let scale_factor = self.display_metrics.borrow().scale_factor();
+
+        let logical_position = if has_fractional_scale {
             LogicalPosition::new(physical_x as f32, physical_y as f32)
         } else {
             LogicalPosition::new(
-                (physical_x / f64::from(self.scale_factor)) as f32,
-                (physical_y / f64::from(self.scale_factor)) as f32,
+                (physical_x / f64::from(scale_factor)) as f32,
+                (physical_y / f64::from(scale_factor)) as f32,
             )
         };
         self.current_pointer_position = logical_position;

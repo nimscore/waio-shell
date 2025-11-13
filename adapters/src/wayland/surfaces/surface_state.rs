@@ -6,6 +6,7 @@ use super::rendering_state::RenderingState;
 use super::event_context::{EventContext, SharedPointerSerial};
 use super::popup_manager::PopupManager;
 use super::window_renderer::WindowRendererParams;
+use super::display_metrics::{DisplayMetrics, SharedDisplayMetrics};
 use crate::wayland::managed_proxies::{
     ManagedWlPointer, ManagedWlSurface, ManagedZwlrLayerSurfaceV1,
     ManagedWpFractionalScaleV1, ManagedWpViewport,
@@ -28,9 +29,9 @@ pub struct WindowState {
     component: ComponentState,
     rendering: RenderingState,
     event_context: EventContext,
+    display_metrics: SharedDisplayMetrics,
     #[allow(dead_code)]
     pointer: ManagedWlPointer,
-    output_size: PhysicalSize,
     active_popup_key: RefCell<Option<usize>>,
     main_surface: Rc<WlSurface>,
 }
@@ -90,11 +91,16 @@ impl WindowState {
         let size = builder.size.unwrap_or_default();
 
         let main_surface_id = (*surface_rc).id();
+
+        let display_metrics = Rc::new(RefCell::new(
+            DisplayMetrics::new(builder.scale_factor, has_fractional_scale)
+                .with_output_size(builder.output_size.unwrap_or_default()),
+        ));
+
         let event_context = EventContext::new(
             Rc::clone(&window),
             main_surface_id,
-            builder.scale_factor,
-            has_fractional_scale,
+            Rc::clone(&display_metrics),
         );
 
         let rendering = RenderingState::new(WindowRendererParams {
@@ -112,8 +118,8 @@ impl WindowState {
             component,
             rendering,
             event_context,
+            display_metrics,
             pointer,
-            output_size: builder.output_size.unwrap_or_default(),
             active_popup_key: RefCell::new(None),
             main_surface: surface_rc,
         })
@@ -151,12 +157,14 @@ impl WindowState {
     }
 
     pub fn set_output_size(&mut self, output_size: PhysicalSize) {
-        self.output_size = output_size;
+        self.display_metrics
+            .borrow_mut()
+            .update_output_size(output_size);
         self.event_context.update_output_size(output_size);
     }
 
-    pub const fn output_size(&self) -> PhysicalSize {
-        self.output_size
+    pub fn output_size(&self) -> PhysicalSize {
+        self.display_metrics.borrow().output_size()
     }
 
     pub const fn component_instance(&self) -> &ComponentInstance {
@@ -186,6 +194,10 @@ impl WindowState {
         self.event_context.scale_factor()
     }
 
+    pub const fn display_metrics(&self) -> &SharedDisplayMetrics {
+        &self.display_metrics
+    }
+
     pub fn last_pointer_serial(&self) -> u32 {
         self.event_context.last_pointer_serial()
     }
@@ -203,6 +215,10 @@ impl WindowState {
     }
 
     pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager>) {
+        self.display_metrics
+            .borrow()
+            .register_observer(Rc::downgrade(&popup_manager) as _);
+
         let popup_service = Rc::new(PopupService::new(popup_manager));
         self.event_context.set_popup_service(popup_service);
     }

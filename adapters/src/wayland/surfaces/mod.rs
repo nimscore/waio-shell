@@ -1,5 +1,6 @@
 pub mod component_state;
 pub mod dimensions;
+pub mod display_metrics;
 pub mod event_bus;
 pub mod event_context;
 pub mod event_router;

@@ -60,7 +60,10 @@ impl WaylandWindowingSystem {
             Rc::clone(&connection),
         );
 
-        let popup_manager = Rc::new(PopupManager::new(popup_context, state.scale_factor()));
+        let popup_manager = Rc::new(PopupManager::new(
+            popup_context,
+            Rc::clone(state.display_metrics()),
+        ));
         let popup_service = Rc::new(PopupService::new(popup_manager));
         let shared_serial = Rc::new(SharedPointerSerial::new());
 

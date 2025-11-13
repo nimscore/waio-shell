@@ -1,6 +1,7 @@
 use crate::errors::{LayerShikaError, Result};
 use crate::rendering::egl::context::EGLContext;
 use crate::rendering::femtovg::popup_window::PopupWindow;
+use crate::wayland::surfaces::display_metrics::{DisplayMetricsObserver, SharedDisplayMetrics};
 use layer_shika_domain::value_objects::popup_config::PopupConfig;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use layer_shika_domain::value_objects::popup_request::PopupRequest;
@@ -101,19 +102,17 @@ struct PendingPopup {
 
 struct PopupManagerState {
     popups: HashMap<PopupId, ActivePopup>,
-    scale_factor: f32,
-    output_size: PhysicalSize,
+    display_metrics: SharedDisplayMetrics,
     current_popup_id: Option<PopupId>,
     pending_popup: Option<PendingPopup>,
     id_generator: usize,
 }
 
 impl PopupManagerState {
-    fn new(initial_scale_factor: f32) -> Self {
+    fn new(display_metrics: SharedDisplayMetrics) -> Self {
         Self {
             popups: HashMap::new(),
-            scale_factor: initial_scale_factor,
-            output_size: PhysicalSize::new(0, 0),
+            display_metrics,
             current_popup_id: None,
             pending_popup: None,
             id_generator: 0,
@@ -128,10 +127,10 @@ pub struct PopupManager {
 
 impl PopupManager {
     #[must_use]
-    pub fn new(context: PopupContext, initial_scale_factor: f32) -> Self {
+    pub fn new(context: PopupContext, display_metrics: SharedDisplayMetrics) -> Self {
         Self {
             context,
-            state: RefCell::new(PopupManagerState::new(initial_scale_factor)),
+            state: RefCell::new(PopupManagerState::new(display_metrics)),
         }
     }
 
@@ -154,20 +153,34 @@ impl PopupManager {
 
     #[must_use]
     pub fn scale_factor(&self) -> f32 {
-        self.state.borrow().scale_factor
+        self.state.borrow().display_metrics.borrow().scale_factor()
     }
 
     #[must_use]
     pub fn output_size(&self) -> PhysicalSize {
-        self.state.borrow().output_size
+        self.state.borrow().display_metrics.borrow().output_size()
     }
 
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn update_scale_factor(&self, scale_factor: f32) {
-        self.state.borrow_mut().scale_factor = scale_factor;
+        let scale_120ths = (scale_factor * 120.0) as u32;
+        self.state
+            .borrow()
+            .display_metrics
+            .borrow_mut()
+            .update_scale_factor(scale_120ths);
+
+        for popup in self.state.borrow().popups.values() {
+            popup.window.set_scale_factor(scale_factor);
+        }
     }
 
     pub fn update_output_size(&self, output_size: PhysicalSize) {
-        self.state.borrow_mut().output_size = output_size;
+        self.state
+            .borrow()
+            .display_metrics
+            .borrow_mut()
+            .update_output_size(output_size);
     }
 
     pub fn close_current_popup(&self) {
@@ -388,5 +401,18 @@ impl PopupManager {
         if let Some(popup) = self.state.borrow().popups.get(&id) {
             popup.window.mark_configured();
         }
+    }
+}
+
+impl DisplayMetricsObserver for PopupManager {
+    fn on_scale_factor_changed(&self, new_scale: f32) {
+        info!("PopupManager received scale factor change: {}", new_scale);
+        for popup in self.state.borrow().popups.values() {
+            popup.window.set_scale_factor(new_scale);
+        }
+    }
+
+    fn on_output_size_changed(&self, new_size: PhysicalSize) {
+        info!("PopupManager received output size change: {:?}", new_size);
     }
 }
