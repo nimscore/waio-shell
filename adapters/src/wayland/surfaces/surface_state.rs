@@ -209,10 +209,6 @@ impl WindowState {
     }
 
     pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager>) {
-        self.display_metrics
-            .borrow()
-            .register_observer(Rc::downgrade(&popup_manager) as _);
-
         self.event_context.set_popup_manager(popup_manager);
     }
 

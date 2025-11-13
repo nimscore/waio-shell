@@ -1,19 +1,13 @@
 use log::info;
 use slint::PhysicalSize;
 use std::cell::RefCell;
-use std::rc::{Rc, Weak};
-
-pub trait DisplayMetricsObserver {
-    fn on_scale_factor_changed(&self, new_scale: f32);
-    fn on_output_size_changed(&self, new_size: PhysicalSize);
-}
+use std::rc::Rc;
 
 pub struct DisplayMetrics {
     scale_factor: f32,
     output_size: PhysicalSize,
     surface_size: PhysicalSize,
     has_fractional_scale: bool,
-    observers: RefCell<Vec<Weak<dyn DisplayMetricsObserver>>>,
 }
 
 impl DisplayMetrics {
@@ -24,7 +18,6 @@ impl DisplayMetrics {
             output_size: PhysicalSize::new(0, 0),
             surface_size: PhysicalSize::new(0, 0),
             has_fractional_scale,
-            observers: RefCell::new(Vec::new()),
         }
     }
 
@@ -54,11 +47,6 @@ impl DisplayMetrics {
         self.has_fractional_scale
     }
 
-    pub fn register_observer(&self, observer: Weak<dyn DisplayMetricsObserver>) {
-        self.observers.borrow_mut().push(observer);
-        self.cleanup_dead_observers();
-    }
-
     #[allow(clippy::cast_precision_loss)]
     pub fn update_scale_factor(&mut self, scale_120ths: u32) -> f32 {
         let new_scale_factor = scale_120ths as f32 / 120.0;
@@ -71,7 +59,6 @@ impl DisplayMetrics {
             );
             self.scale_factor = new_scale_factor;
             self.recalculate_surface_size();
-            self.notify_scale_factor_changed(new_scale_factor);
         }
 
         new_scale_factor
@@ -85,7 +72,6 @@ impl DisplayMetrics {
             );
             self.output_size = output_size;
             self.recalculate_surface_size();
-            self.notify_output_size_changed(output_size);
         }
     }
 
@@ -105,34 +91,6 @@ impl DisplayMetrics {
                 (self.output_size.height as f32 / self.scale_factor) as u32,
             );
         }
-    }
-
-    fn notify_scale_factor_changed(&self, new_scale: f32) {
-        self.observers.borrow_mut().retain(|observer| {
-            if let Some(obs) = observer.upgrade() {
-                obs.on_scale_factor_changed(new_scale);
-                true
-            } else {
-                false
-            }
-        });
-    }
-
-    fn notify_output_size_changed(&self, new_size: PhysicalSize) {
-        self.observers.borrow_mut().retain(|observer| {
-            if let Some(obs) = observer.upgrade() {
-                obs.on_output_size_changed(new_size);
-                true
-            } else {
-                false
-            }
-        });
-    }
-
-    fn cleanup_dead_observers(&self) {
-        self.observers
-            .borrow_mut()
-            .retain(|obs| obs.upgrade().is_some());
     }
 }
 

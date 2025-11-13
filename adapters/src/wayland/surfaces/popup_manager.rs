@@ -1,7 +1,7 @@
 use crate::errors::{LayerShikaError, Result};
 use crate::rendering::egl::context::EGLContext;
 use crate::rendering::femtovg::popup_window::PopupWindow;
-use crate::wayland::surfaces::display_metrics::{DisplayMetricsObserver, SharedDisplayMetrics};
+use crate::wayland::surfaces::display_metrics::SharedDisplayMetrics;
 use layer_shika_domain::value_objects::popup_config::PopupConfig;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use layer_shika_domain::value_objects::popup_request::{PopupHandle, PopupRequest};
@@ -485,18 +485,5 @@ impl PopupManager {
                 popup_window.request_redraw();
             }
         }
-    }
-}
-
-impl DisplayMetricsObserver for PopupManager {
-    fn on_scale_factor_changed(&self, new_scale: f32) {
-        info!("PopupManager received scale factor change: {}", new_scale);
-        for popup in self.state.borrow().popups.values() {
-            popup.window.set_scale_factor(new_scale);
-        }
-    }
-
-    fn on_output_size_changed(&self, new_size: PhysicalSize) {
-        info!("PopupManager received output size change: {:?}", new_size);
     }
 }
