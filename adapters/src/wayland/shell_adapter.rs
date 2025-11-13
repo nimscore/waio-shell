@@ -11,7 +11,8 @@ use crate::wayland::{
 use crate::{
     errors::{EventLoopError, LayerShikaError, RenderingError, Result},
     rendering::{
-        egl::context::EGLContext, femtovg::main_window::FemtoVGWindow,
+        egl::context::EGLContext,
+        femtovg::{main_window::FemtoVGWindow, renderable_window::RenderableWindow},
         slint_integration::platform::CustomSlintPlatform,
     },
 };

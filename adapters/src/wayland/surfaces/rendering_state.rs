@@ -1,18 +1,18 @@
 use std::rc::Rc;
 use crate::errors::Result;
-use crate::rendering::femtovg::main_window::FemtoVGWindow;
+use crate::rendering::femtovg::renderable_window::RenderableWindow;
 use crate::wayland::surfaces::window_renderer::{WindowRenderer, WindowRendererParams};
 use slint::PhysicalSize;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use crate::wayland::managed_proxies::ManagedWpFractionalScaleV1;
 
-pub struct RenderingState {
-    renderer: WindowRenderer,
+pub struct RenderingState<W: RenderableWindow> {
+    renderer: WindowRenderer<W>,
 }
 
-impl RenderingState {
+impl<W: RenderableWindow> RenderingState<W> {
     #[must_use]
-    pub fn new(params: WindowRendererParams) -> Self {
+    pub fn new(params: WindowRendererParams<W>) -> Self {
         Self {
             renderer: WindowRenderer::new(params),
         }
@@ -38,7 +38,7 @@ impl RenderingState {
         self.renderer.height()
     }
 
-    pub const fn window(&self) -> &Rc<FemtoVGWindow> {
+    pub const fn window(&self) -> &Rc<W> {
         self.renderer.window()
     }
 

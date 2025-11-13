@@ -25,7 +25,7 @@ use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1:
 
 pub struct WindowState {
     component: ComponentState,
-    rendering: RenderingState,
+    rendering: RenderingState<FemtoVGWindow>,
     event_context: EventContext,
     display_metrics: SharedDisplayMetrics,
     #[allow(dead_code)]

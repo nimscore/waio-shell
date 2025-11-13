@@ -1,3 +1,4 @@
+use super::renderable_window::{RenderState, RenderableWindow};
 use crate::errors::{RenderingError, Result};
 use core::ops::Deref;
 use log::info;
@@ -7,11 +8,6 @@ use slint::{
 };
 use std::cell::Cell;
 use std::rc::{Rc, Weak};
-
-pub enum RenderState {
-    Clean,
-    Dirty,
-}
 
 pub struct FemtoVGWindow {
     window: Window,
@@ -35,8 +31,10 @@ impl FemtoVGWindow {
             }
         })
     }
+}
 
-    pub fn render_frame_if_dirty(&self) -> Result<()> {
+impl RenderableWindow for FemtoVGWindow {
+    fn render_frame_if_dirty(&self) -> Result<()> {
         if matches!(
             self.render_state.replace(RenderState::Clean),
             RenderState::Dirty
@@ -50,15 +48,27 @@ impl FemtoVGWindow {
         Ok(())
     }
 
-    pub fn set_scale_factor(&self, scale_factor: f32) {
+    fn set_scale_factor(&self, scale_factor: f32) {
         info!("Setting scale factor to {scale_factor}");
         self.scale_factor.set(scale_factor);
         self.window()
             .dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor });
     }
 
-    pub fn scale_factor(&self) -> f32 {
+    fn scale_factor(&self) -> f32 {
         self.scale_factor.get()
+    }
+
+    fn render_state(&self) -> &Cell<RenderState> {
+        &self.render_state
+    }
+
+    fn size_cell(&self) -> &Cell<PhysicalSize> {
+        &self.size
+    }
+
+    fn scale_factor_cell(&self) -> &Cell<f32> {
+        &self.scale_factor
     }
 }
 
@@ -72,18 +82,15 @@ impl WindowAdapter for FemtoVGWindow {
     }
 
     fn size(&self) -> PhysicalSize {
-        self.size.get()
+        self.size_impl()
     }
 
     fn set_size(&self, size: WindowSize) {
-        self.size.set(size.to_physical(self.scale_factor()));
-        self.window.dispatch_event(WindowEvent::Resized {
-            size: size.to_logical(self.scale_factor()),
-        });
+        self.set_size_impl(size);
     }
 
     fn request_redraw(&self) {
-        self.render_state.set(RenderState::Dirty);
+        RenderableWindow::request_redraw(self);
     }
 }
 

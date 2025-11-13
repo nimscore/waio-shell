@@ -1,3 +1,4 @@
+use super::renderable_window::{RenderState, RenderableWindow};
 use crate::errors::{RenderingError, Result};
 use crate::wayland::surfaces::popup_manager::{OnCloseCallback, PopupId};
 use core::ops::Deref;
@@ -9,8 +10,6 @@ use slint::{
 use slint_interpreter::ComponentInstance;
 use std::cell::{Cell, OnceCell};
 use std::rc::{Rc, Weak};
-
-use super::main_window::RenderState;
 
 pub struct PopupWindow {
     window: Window,
@@ -73,7 +72,35 @@ impl PopupWindow {
         info!("Popup window cleanup complete");
     }
 
-    pub fn render_frame_if_dirty(&self) -> Result<()> {
+    pub fn popup_key(&self) -> Option<usize> {
+        self.popup_id.get().map(PopupId::key)
+    }
+
+    pub fn mark_configured(&self) {
+        info!("Popup window marked as configured");
+        self.configured.set(true);
+    }
+
+    pub fn is_configured(&self) -> bool {
+        self.configured.get()
+    }
+
+    pub fn set_component_instance(&self, instance: ComponentInstance) {
+        info!("Setting component instance for popup window");
+        if self.component_instance.set(instance).is_err() {
+            info!("Component instance already set for popup window");
+        }
+    }
+
+    pub fn request_resize(&self, width: f32, height: f32) {
+        info!("Requesting popup resize to {}x{}", width, height);
+        self.set_size(WindowSize::Logical(slint::LogicalSize::new(width, height)));
+        RenderableWindow::request_redraw(self);
+    }
+}
+
+impl RenderableWindow for PopupWindow {
+    fn render_frame_if_dirty(&self) -> Result<()> {
         if !self.configured.get() {
             info!("Popup not yet configured, skipping render");
             return Ok(());
@@ -98,41 +125,27 @@ impl PopupWindow {
         Ok(())
     }
 
-    pub fn set_scale_factor(&self, scale_factor: f32) {
+    fn set_scale_factor(&self, scale_factor: f32) {
         info!("Setting popup scale factor to {scale_factor}");
         self.scale_factor.set(scale_factor);
         self.window()
             .dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor });
     }
 
-    pub fn scale_factor(&self) -> f32 {
+    fn scale_factor(&self) -> f32 {
         self.scale_factor.get()
     }
 
-    pub fn popup_key(&self) -> Option<usize> {
-        self.popup_id.get().map(PopupId::key)
+    fn render_state(&self) -> &Cell<RenderState> {
+        &self.render_state
     }
 
-    pub fn mark_configured(&self) {
-        info!("Popup window marked as configured");
-        self.configured.set(true);
+    fn size_cell(&self) -> &Cell<PhysicalSize> {
+        &self.size
     }
 
-    pub fn is_configured(&self) -> bool {
-        self.configured.get()
-    }
-
-    pub fn set_component_instance(&self, instance: ComponentInstance) {
-        info!("Setting component instance for popup window");
-        if self.component_instance.set(instance).is_err() {
-            info!("Component instance already set for popup window");
-        }
-    }
-
-    pub fn request_resize(&self, width: f32, height: f32) {
-        info!("Requesting popup resize to {}x{}", width, height);
-        self.set_size(WindowSize::Logical(slint::LogicalSize::new(width, height)));
-        self.request_redraw();
+    fn scale_factor_cell(&self) -> &Cell<f32> {
+        &self.scale_factor
     }
 }
 
@@ -146,18 +159,15 @@ impl WindowAdapter for PopupWindow {
     }
 
     fn size(&self) -> PhysicalSize {
-        self.size.get()
+        self.size_impl()
     }
 
     fn set_size(&self, size: WindowSize) {
-        self.size.set(size.to_physical(self.scale_factor()));
-        self.window.dispatch_event(WindowEvent::Resized {
-            size: size.to_logical(self.scale_factor()),
-        });
+        self.set_size_impl(size);
     }
 
     fn request_redraw(&self) {
-        self.render_state.set(RenderState::Dirty);
+        RenderableWindow::request_redraw(self);
     }
 }
 

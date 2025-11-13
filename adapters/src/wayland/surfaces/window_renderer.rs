@@ -1,5 +1,5 @@
 use crate::errors::Result;
-use crate::rendering::femtovg::main_window::FemtoVGWindow;
+use crate::rendering::femtovg::renderable_window::RenderableWindow;
 use crate::wayland::managed_proxies::{
     ManagedWlSurface, ManagedZwlrLayerSurfaceV1, ManagedWpFractionalScaleV1, ManagedWpViewport,
 };
@@ -17,8 +17,8 @@ enum ScalingMode {
     Integer,
 }
 
-pub struct WindowRendererParams {
-    pub window: Rc<FemtoVGWindow>,
+pub struct WindowRendererParams<W: RenderableWindow> {
+    pub window: Rc<W>,
     pub surface: ManagedWlSurface,
     pub layer_surface: ManagedZwlrLayerSurfaceV1,
     pub viewport: Option<ManagedWpViewport>,
@@ -28,8 +28,8 @@ pub struct WindowRendererParams {
     pub size: PhysicalSize,
 }
 
-pub struct WindowRenderer {
-    window: Rc<FemtoVGWindow>,
+pub struct WindowRenderer<W: RenderableWindow> {
+    window: Rc<W>,
     surface: ManagedWlSurface,
     layer_surface: ManagedZwlrLayerSurfaceV1,
     viewport: Option<ManagedWpViewport>,
@@ -40,9 +40,9 @@ pub struct WindowRenderer {
     logical_size: PhysicalSize,
 }
 
-impl WindowRenderer {
+impl<W: RenderableWindow> WindowRenderer<W> {
     #[must_use]
-    pub fn new(params: WindowRendererParams) -> Self {
+    pub fn new(params: WindowRendererParams<W>) -> Self {
         Self {
             window: params.window,
             surface: params.surface,
@@ -60,7 +60,7 @@ impl WindowRenderer {
         self.window.render_frame_if_dirty()
     }
 
-    pub const fn window(&self) -> &Rc<FemtoVGWindow> {
+    pub const fn window(&self) -> &Rc<W> {
         &self.window
     }
 
@@ -176,7 +176,7 @@ impl WindowRenderer {
 
         self.size = dimensions.to_slint_physical_size();
         self.logical_size = dimensions.to_slint_logical_size();
-        self.window.request_redraw();
+        RenderableWindow::request_redraw(self.window.as_ref());
     }
 
     pub const fn logical_size(&self) -> PhysicalSize {

@@ -1,6 +1,6 @@
 use crate::errors::{LayerShikaError, Result};
 use crate::rendering::egl::context::EGLContext;
-use crate::rendering::femtovg::popup_window::PopupWindow;
+use crate::rendering::femtovg::{popup_window::PopupWindow, renderable_window::RenderableWindow};
 use crate::wayland::surfaces::display_metrics::SharedDisplayMetrics;
 use layer_shika_domain::value_objects::popup_config::PopupConfig;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
