@@ -1,16 +1,11 @@
 use slint::PhysicalSize;
-use wayland_client::backend::ObjectId;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum WindowStateEvent {
     ScaleFactorChanged {
         new_scale: f32,
         source: ScaleSource,
-    },
-
-    SizeChanged {
-        logical_width: u32,
-        logical_height: u32,
     },
 
     OutputSizeChanged {
@@ -26,27 +21,11 @@ pub enum WindowStateEvent {
         serial: u32,
     },
 
-    SurfaceEntered {
-        surface_id: ObjectId,
-    },
-
-    SurfaceExited,
-
-    RenderRequested,
-
     PopupConfigurationChanged,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum ScaleSource {
     FractionalScale,
-    IntegerScale,
-}
-
-pub trait WindowStateEventHandler {
-    fn handle_event(&mut self, event: &WindowStateEvent);
-}
-
-pub trait WindowStateEventEmitter {
-    fn emit_event(&self, event: WindowStateEvent);
 }

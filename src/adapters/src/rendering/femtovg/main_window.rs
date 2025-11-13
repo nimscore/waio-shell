@@ -66,10 +66,6 @@ impl RenderableWindow for FemtoVGWindow {
     fn size_cell(&self) -> &Cell<PhysicalSize> {
         &self.size
     }
-
-    fn scale_factor_cell(&self) -> &Cell<f32> {
-        &self.scale_factor
-    }
 }
 
 impl WindowAdapter for FemtoVGWindow {

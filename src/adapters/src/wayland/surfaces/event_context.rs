@@ -66,14 +66,6 @@ impl EventContext {
         }
     }
 
-    pub fn set_event_bus(&mut self, event_bus: EventBus) {
-        self.event_bus = event_bus;
-    }
-
-    pub const fn event_bus(&self) -> &EventBus {
-        &self.event_bus
-    }
-
     pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager>) {
         self.popup_manager = Some(popup_manager);
         self.event_bus
@@ -87,10 +79,6 @@ impl EventContext {
     #[must_use]
     pub fn scale_factor(&self) -> f32 {
         self.display_metrics.borrow().scale_factor()
-    }
-
-    pub const fn display_metrics(&self) -> &SharedDisplayMetrics {
-        &self.display_metrics
     }
 
     #[allow(clippy::cast_precision_loss)]

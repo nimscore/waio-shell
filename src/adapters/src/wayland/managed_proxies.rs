@@ -20,10 +20,6 @@ impl ManagedWlPointer {
             connection,
         }
     }
-
-    pub const fn inner(&self) -> &Rc<WlPointer> {
-        &self.pointer
-    }
 }
 
 impl Deref for ManagedWlPointer {
@@ -56,10 +52,6 @@ impl ManagedWlSurface {
             surface,
             connection,
         }
-    }
-
-    pub const fn inner(&self) -> &Rc<WlSurface> {
-        &self.surface
     }
 }
 
@@ -170,10 +162,6 @@ impl ManagedWpViewport {
             viewport,
             connection,
         }
-    }
-
-    pub const fn inner(&self) -> &Rc<WpViewport> {
-        &self.viewport
     }
 }
 

@@ -16,7 +16,6 @@ pub trait RenderableWindow: WindowAdapter {
     fn scale_factor(&self) -> f32;
     fn render_state(&self) -> &Cell<RenderState>;
     fn size_cell(&self) -> &Cell<PhysicalSize>;
-    fn scale_factor_cell(&self) -> &Cell<f32>;
 
     fn request_redraw(&self) {
         self.render_state().set(RenderState::Dirty);

@@ -22,21 +22,10 @@ impl EventBus {
         }
     }
 
-    pub fn subscribe<F>(&self, handler: F)
-    where
-        F: Fn(&WindowStateEvent) + 'static,
-    {
-        self.handlers.borrow_mut().push(Box::new(handler));
-    }
-
     pub fn publish(&self, event: &WindowStateEvent) {
         let handlers = self.handlers.borrow();
         for handler in handlers.iter() {
             handler(event);
         }
-    }
-
-    pub fn clear(&self) {
-        self.handlers.borrow_mut().clear();
     }
 }
