@@ -1,6 +1,6 @@
 pub mod config;
 pub mod dimensions;
-pub mod entities;
+pub(crate) mod entities;
 pub mod errors;
 pub mod ports;
 pub mod prelude;

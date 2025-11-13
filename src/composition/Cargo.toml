@@ -1,5 +1,5 @@
 [package]
-name = "layer-shika"
+name = "layer-shika-composition"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

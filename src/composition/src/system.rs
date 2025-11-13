@@ -8,13 +8,8 @@ use layer_shika_adapters::platform::slint::{ComponentHandle, SharedString};
 use layer_shika_adapters::platform::slint_interpreter::{
     CompilationResult, ComponentDefinition, ComponentInstance, Value,
 };
-use layer_shika_adapters::wayland::{
-    config::WaylandWindowConfig,
-    shell_adapter::WaylandWindowingSystem,
-    surfaces::{
-        popup_manager::{PopupId, PopupManager},
-        surface_state::WindowState,
-    },
+use layer_shika_adapters::{
+    PopupId, PopupManager, WaylandWindowConfig, WaylandWindowingSystem, WindowState,
 };
 use layer_shika_domain::config::WindowConfig;
 use layer_shika_domain::errors::DomainError;

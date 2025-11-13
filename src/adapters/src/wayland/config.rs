@@ -1,8 +1,9 @@
-use layer_shika_domain::prelude::{
-    AnchorEdges, KeyboardInteractivity as DomainKeyboardInteractivity, Layer, Margins,
-    WindowConfig as DomainWindowConfig,
-};
-use slint_interpreter::{ComponentDefinition, CompilationResult};
+use layer_shika_domain::config::WindowConfig as DomainWindowConfig;
+use layer_shika_domain::value_objects::anchor::AnchorEdges;
+use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteractivity as DomainKeyboardInteractivity;
+use layer_shika_domain::value_objects::layer::Layer;
+use layer_shika_domain::value_objects::margins::Margins;
+use slint_interpreter::{CompilationResult, ComponentDefinition};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::{self},
     zwlr_layer_surface_v1::{Anchor, KeyboardInteractivity as WaylandKeyboardInteractivity},

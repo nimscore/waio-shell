@@ -1855,11 +1855,7 @@ dependencies = [
 name = "layer-shika"
 version = "0.1.0"
 dependencies = [
- "layer-shika-adapters",
- "layer-shika-domain",
- "log",
- "spin_on",
- "thiserror 2.0.17",
+ "layer-shika-composition",
 ]
 
 [[package]]
@@ -1877,6 +1873,17 @@ dependencies = [
  "thiserror 2.0.17",
  "wayland-client",
  "wayland-protocols",
+]
+
+[[package]]
+name = "layer-shika-composition"
+version = "0.1.0"
+dependencies = [
+ "layer-shika-adapters",
+ "layer-shika-domain",
+ "log",
+ "spin_on",
+ "thiserror 2.0.17",
 ]
 
 [[package]]

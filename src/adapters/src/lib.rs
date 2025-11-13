@@ -1,10 +1,19 @@
 #![allow(clippy::pub_use)]
 
 pub mod errors;
-pub mod rendering;
-pub mod wayland;
+pub(crate) mod rendering;
+pub(crate) mod wayland;
 
 pub use rendering::femtovg::popup_window::PopupWindow;
+
+pub use wayland::{
+    config::WaylandWindowConfig,
+    shell_adapter::WaylandWindowingSystem,
+    surfaces::{
+        popup_manager::{PopupId, PopupManager},
+        surface_state::WindowState,
+    },
+};
 
 pub mod platform {
     pub use slint;

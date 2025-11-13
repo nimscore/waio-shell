@@ -1,7 +1,7 @@
 #![allow(clippy::pub_use)]
 
-pub mod builder;
-pub mod system;
+mod builder;
+mod system;
 
 use layer_shika_adapters::errors::LayerShikaError;
 use layer_shika_domain::errors::DomainError;
@@ -12,7 +12,12 @@ pub use layer_shika_adapters::PopupWindow;
 pub use layer_shika_adapters::platform::{slint, slint_interpreter};
 pub use layer_shika_domain::value_objects::anchor::AnchorEdges;
 pub use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteractivity;
+pub use layer_shika_domain::value_objects::layer::Layer;
 pub use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
+pub use layer_shika_domain::value_objects::popup_request::{
+    PopupAt, PopupHandle, PopupRequest, PopupSize,
+};
+pub use system::{EventLoopHandle, RuntimeState, WindowingSystem};
 
 pub mod calloop {
     pub use layer_shika_adapters::platform::calloop::{
