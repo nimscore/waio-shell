@@ -7,7 +7,7 @@ mod composition {
 pub use composition::{
     AnchorEdges, Error, EventLoopHandle, KeyboardInteractivity, Layer, LayerShika, PopupAt,
     PopupHandle, PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result, RuntimeState,
-    WindowingSystem,
+    SlintCallbackContract, SlintCallbackNames, WindowingSystem,
 };
 
 pub use composition::{slint, slint_interpreter};
