@@ -1,7 +1,8 @@
 use super::renderable_window::{RenderState, RenderableWindow};
 use crate::errors::{RenderingError, Result};
-use crate::wayland::surfaces::popup_manager::{OnCloseCallback, PopupId};
+use crate::wayland::surfaces::popup_manager::OnCloseCallback;
 use core::ops::Deref;
+use layer_shika_domain::value_objects::popup_request::PopupHandle;
 use log::info;
 use slint::{
     PhysicalSize, Window, WindowSize,
@@ -17,7 +18,7 @@ pub struct PopupWindow {
     render_state: Cell<RenderState>,
     size: Cell<PhysicalSize>,
     scale_factor: Cell<f32>,
-    popup_id: Cell<Option<PopupId>>,
+    popup_handle: Cell<Option<PopupHandle>>,
     on_close: OnceCell<OnCloseCallback>,
     configured: Cell<bool>,
     component_instance: OnceCell<ComponentInstance>,
@@ -34,7 +35,7 @@ impl PopupWindow {
                 render_state: Cell::new(RenderState::Clean),
                 size: Cell::new(PhysicalSize::default()),
                 scale_factor: Cell::new(1.),
-                popup_id: Cell::new(None),
+                popup_handle: Cell::new(None),
                 on_close: OnceCell::new(),
                 configured: Cell::new(false),
                 component_instance: OnceCell::new(),
@@ -49,8 +50,8 @@ impl PopupWindow {
         window
     }
 
-    pub fn set_popup_id(&self, id: PopupId) {
-        self.popup_id.set(Some(id));
+    pub fn set_popup_id(&self, handle: PopupHandle) {
+        self.popup_handle.set(Some(handle));
     }
 
     pub fn close_popup(&self) {
@@ -60,20 +61,20 @@ impl PopupWindow {
             info!("Failed to hide popup window: {e}");
         }
 
-        if let Some(id) = self.popup_id.get() {
-            info!("Destroying popup with id {:?}", id);
+        if let Some(handle) = self.popup_handle.get() {
+            info!("Destroying popup with handle {:?}", handle);
             if let Some(on_close) = self.on_close.get() {
-                on_close(id);
+                on_close(handle);
             }
         }
 
-        self.popup_id.set(None);
+        self.popup_handle.set(None);
 
         info!("Popup window cleanup complete");
     }
 
     pub fn popup_key(&self) -> Option<usize> {
-        self.popup_id.get().map(PopupId::key)
+        self.popup_handle.get().map(PopupHandle::key)
     }
 
     pub fn mark_configured(&self) {

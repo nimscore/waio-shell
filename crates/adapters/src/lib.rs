@@ -9,7 +9,7 @@ pub use rendering::femtovg::popup_window::PopupWindow;
 pub use wayland::config::WaylandWindowConfig;
 pub use wayland::facade::{PopupManagerFacade, RuntimeStateFacade, WindowingSystemFacade};
 pub use wayland::shell_adapter::WaylandWindowingSystem;
-pub use wayland::surfaces::popup_manager::{PopupId, PopupManager};
+pub use wayland::surfaces::popup_manager::PopupManager;
 pub use wayland::surfaces::surface_state::WindowState;
 
 pub mod platform {

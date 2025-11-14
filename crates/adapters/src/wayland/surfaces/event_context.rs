@@ -130,8 +130,8 @@ impl EventContext {
                 ActiveWindow::Main => {
                     self.main_window.window().dispatch_event(event);
                 }
-                ActiveWindow::Popup(index) => {
-                    if let Some(popup_window) = popup_manager.get_popup_window(index) {
+                ActiveWindow::Popup(handle) => {
+                    if let Some(popup_window) = popup_manager.get_popup_window(handle.key()) {
                         popup_window.dispatch_event(event);
                     }
                 }

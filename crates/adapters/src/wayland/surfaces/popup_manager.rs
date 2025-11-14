@@ -29,26 +29,31 @@ use super::surface_state::WindowState;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveWindow {
     Main,
-    Popup(usize),
+    Popup(PopupHandle),
     None,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct PopupId(pub(crate) usize);
+struct PopupId(usize);
 
 impl PopupId {
     #[must_use]
-    pub const fn key(self) -> usize {
+    const fn key(self) -> usize {
         self.0
     }
 
     #[must_use]
-    pub const fn from_key(key: usize) -> Self {
-        Self(key)
+    const fn from_handle(handle: PopupHandle) -> Self {
+        Self(handle.key())
+    }
+
+    #[must_use]
+    const fn to_handle(self) -> PopupHandle {
+        PopupHandle::new(self.0)
     }
 }
 
-pub type OnCloseCallback = Box<dyn Fn(PopupId)>;
+pub type OnCloseCallback = Box<dyn Fn(PopupHandle)>;
 
 #[derive(Debug, Clone, Copy)]
 pub struct CreatePopupParams {
@@ -291,15 +296,16 @@ impl PopupManager {
 
         let on_close: OnCloseCallback = {
             let weak_self = Rc::downgrade(self);
-            Box::new(move |id: PopupId| {
+            Box::new(move |handle: PopupHandle| {
                 if let Some(manager) = weak_self.upgrade() {
+                    let id = PopupId::from_handle(handle);
                     manager.destroy_popup(id);
                 }
             })
         };
 
         let popup_window = PopupWindow::new_with_callback(renderer, on_close);
-        popup_window.set_popup_id(popup_id);
+        popup_window.set_popup_id(popup_id.to_handle());
         popup_window.set_scale_factor(scale_factor);
         popup_window.set_size(WindowSize::Logical(slint::LogicalSize::new(
             params.width,
@@ -373,7 +379,7 @@ impl PopupManager {
             .map(|popup| Rc::clone(&popup.window))
     }
 
-    pub fn destroy_popup(&self, id: PopupId) {
+    fn destroy_popup(&self, id: PopupId) {
         if let Some(popup) = self.state.borrow_mut().popups.remove(&id) {
             info!("Destroying popup with id {:?}", id);
 
@@ -423,7 +429,7 @@ impl PopupManager {
     }
 
     pub fn close(&self, handle: PopupHandle) -> Result<()> {
-        let id = PopupId::from_key(handle.key());
+        let id = PopupId::from_handle(handle);
         self.destroy_popup(id);
         Ok(())
     }
@@ -464,8 +470,11 @@ impl PopupManager {
             return ActiveWindow::Main;
         }
 
-        if let Some(popup_key) = self.find_popup_key_by_surface_id(&surface_id) {
-            return ActiveWindow::Popup(popup_key);
+        if let Some(popup_handle) = self
+            .find_popup_key_by_surface_id(&surface_id)
+            .map(PopupHandle::new)
+        {
+            return ActiveWindow::Popup(popup_handle);
         }
 
         ActiveWindow::None

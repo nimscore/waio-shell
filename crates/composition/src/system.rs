@@ -8,9 +8,7 @@ use layer_shika_adapters::platform::slint::{ComponentHandle, SharedString};
 use layer_shika_adapters::platform::slint_interpreter::{
     CompilationResult, ComponentDefinition, ComponentInstance, Value,
 };
-use layer_shika_adapters::{
-    PopupId, PopupManager, WaylandWindowConfig, WindowState, WindowingSystemFacade,
-};
+use layer_shika_adapters::{PopupManager, WaylandWindowConfig, WindowState, WindowingSystemFacade};
 use layer_shika_domain::config::WindowConfig;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
@@ -27,7 +25,11 @@ use std::time::{Duration, Instant};
 pub enum PopupCommand {
     Show(PopupRequest),
     Close(PopupHandle),
-    Resize { key: usize, width: f32, height: f32 },
+    Resize {
+        handle: PopupHandle,
+        width: f32,
+        height: f32,
+    },
 }
 
 pub struct EventLoopHandle {
@@ -197,15 +199,18 @@ impl RuntimeState<'_> {
         let (instance, popup_key_cell) =
             Self::create_popup_instance(&definition, &popup_manager, resize_sender)?;
 
-        let popup_key = popup_manager.current_popup_key().ok_or_else(|| {
-            Error::Domain(DomainError::Configuration {
-                message: "No popup key available after creation".to_string(),
-            })
-        })?;
+        let popup_handle = popup_manager
+            .current_popup_key()
+            .map(PopupHandle::new)
+            .ok_or_else(|| {
+                Error::Domain(DomainError::Configuration {
+                    message: "No popup key available after creation".to_string(),
+                })
+            })?;
 
-        popup_key_cell.set(popup_key);
+        popup_key_cell.set(popup_handle.key());
 
-        if let Some(popup_window) = popup_manager.get_popup_window(popup_key) {
+        if let Some(popup_window) = popup_manager.get_popup_window(popup_handle.key()) {
             popup_window.set_component_instance(instance);
         } else {
             return Err(Error::Domain(DomainError::Configuration {
@@ -213,13 +218,12 @@ impl RuntimeState<'_> {
             }));
         }
 
-        Ok(PopupHandle::new(popup_key))
+        Ok(popup_handle)
     }
 
     pub fn close_popup(&mut self, handle: PopupHandle) -> Result<()> {
         if let Some(popup_manager) = self.window_state.popup_manager() {
-            let id = PopupId::from_key(handle.key());
-            popup_manager.destroy_popup(id);
+            popup_manager.close(handle)?;
         }
         Ok(())
     }
@@ -233,7 +237,7 @@ impl RuntimeState<'_> {
 
     pub fn resize_popup(
         &mut self,
-        key: usize,
+        handle: PopupHandle,
         width: f32,
         height: f32,
         resize_sender: Option<channel::Sender<PopupCommand>>,
@@ -248,10 +252,10 @@ impl RuntimeState<'_> {
             })
             .cloned()?;
 
-        let Some((request, _serial)) = popup_manager.get_popup_info(key) else {
+        let Some((request, _serial)) = popup_manager.get_popup_info(handle.key()) else {
             log::debug!(
-                "Ignoring resize request for non-existent popup with key {}",
-                key
+                "Ignoring resize request for non-existent popup with handle {:?}",
+                handle
             );
             return Ok(());
         };
@@ -270,7 +274,7 @@ impl RuntimeState<'_> {
                 height
             );
 
-            self.close_popup(PopupHandle::new(key))?;
+            self.close_popup(handle)?;
 
             let new_request = PopupRequest::builder(request.component)
                 .at(request.at)
@@ -280,7 +284,7 @@ impl RuntimeState<'_> {
 
             self.show_popup(new_request, resize_sender)?;
         } else if size_changed {
-            if let Some(popup_window) = popup_manager.get_popup_window(key) {
+            if let Some(popup_window) = popup_manager.get_popup_window(handle.key()) {
                 popup_window.request_resize(width, height);
             }
         }
@@ -337,7 +341,7 @@ impl RuntimeState<'_> {
 
                 if sender
                     .send(PopupCommand::Resize {
-                        key: popup_key,
+                        handle: PopupHandle::new(popup_key),
                         width,
                         height,
                     })
@@ -451,9 +455,13 @@ impl WindowingSystem {
                                 log::error!("Failed to close popup: {}", e);
                             }
                         }
-                        PopupCommand::Resize { key, width, height } => {
+                        PopupCommand::Resize {
+                            handle,
+                            width,
+                            height,
+                        } => {
                             if let Err(e) = runtime_state.resize_popup(
-                                key,
+                                handle,
                                 width,
                                 height,
                                 Some(sender_for_handler.clone()),
