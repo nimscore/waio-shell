@@ -267,7 +267,7 @@ impl WindowState {
 }
 
 impl RuntimeStatePort for WindowState {
-    fn render_frame_if_dirty(&self) -> CoreResult<(), DomainError> {
+    fn render_frame_if_dirty(&mut self) -> CoreResult<(), DomainError> {
         WindowState::render_frame_if_dirty(self).map_err(|e| DomainError::Adapter {
             source: Box::new(e),
         })

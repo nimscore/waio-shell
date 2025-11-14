@@ -9,7 +9,7 @@ use layer_shika_adapters::platform::slint_interpreter::{
     CompilationResult, ComponentDefinition, ComponentInstance, Value,
 };
 use layer_shika_adapters::{
-    PopupId, PopupManager, WaylandWindowConfig, WaylandWindowingSystem, WindowState,
+    PopupId, PopupManager, WaylandWindowConfig, WindowState, WindowingSystemFacade,
 };
 use layer_shika_domain::config::WindowConfig;
 use layer_shika_domain::errors::DomainError;
@@ -18,7 +18,7 @@ use layer_shika_domain::value_objects::popup_request::{
     PopupAt, PopupHandle, PopupRequest, PopupSize,
 };
 use std::cell::Cell;
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::os::unix::io::AsFd;
 use std::rc::{Rc, Weak};
 use std::result::Result as StdResult;
@@ -31,7 +31,7 @@ pub enum PopupCommand {
 }
 
 pub struct EventLoopHandle {
-    system: Weak<RefCell<WaylandWindowingSystem>>,
+    system: Weak<RefCell<WindowingSystemFacade>>,
 }
 
 impl EventLoopHandle {
@@ -45,7 +45,7 @@ impl EventLoopHandle {
         F: FnMut(S::Event, &mut S::Metadata, RuntimeState<'_>) -> R + 'static,
     {
         let system = self.system.upgrade().ok_or(Error::SystemDropped)?;
-        let loop_handle = system.borrow().event_loop_handle();
+        let loop_handle = system.borrow().inner_ref().event_loop_handle();
 
         loop_handle
             .insert_source(source, move |event, metadata, window_state| {
@@ -395,7 +395,7 @@ impl RuntimeState<'_> {
 }
 
 pub struct WindowingSystem {
-    inner: Rc<RefCell<WaylandWindowingSystem>>,
+    inner: Rc<RefCell<WindowingSystemFacade>>,
     popup_positioning_mode: Rc<RefCell<PopupPositioningMode>>,
     popup_command_sender: channel::Sender<PopupCommand>,
 }
@@ -411,8 +411,9 @@ impl WindowingSystem {
             compilation_result,
             config,
         );
-        let inner = WaylandWindowingSystem::new(wayland_config)?;
-        let inner_rc = Rc::new(RefCell::new(inner));
+        let inner = layer_shika_adapters::WaylandWindowingSystem::new(wayland_config)?;
+        let facade = WindowingSystemFacade::new(inner);
+        let inner_rc = Rc::new(RefCell::new(facade));
 
         let (sender, receiver) = channel::channel();
 
@@ -429,7 +430,7 @@ impl WindowingSystem {
     }
 
     fn setup_popup_command_handler(&self, receiver: channel::Channel<PopupCommand>) -> Result<()> {
-        let loop_handle = self.inner.borrow().event_loop_handle();
+        let loop_handle = self.inner.borrow().inner_ref().event_loop_handle();
         let sender_for_handler = self.popup_command_sender.clone();
 
         loop_handle
@@ -476,81 +477,83 @@ impl WindowingSystem {
     }
 
     fn register_popup_callbacks(&self) -> Result<()> {
-        let component_instance = self.component_instance();
+        self.with_component_instance(|component_instance| {
+            let popup_mode_clone = Rc::clone(&self.popup_positioning_mode);
+            component_instance
+                .set_callback("set_popup_positioning_mode", move |args| {
+                    let center_x: bool = args
+                        .first()
+                        .and_then(|v| v.clone().try_into().ok())
+                        .unwrap_or(false);
+                    let center_y: bool = args
+                        .get(1)
+                        .and_then(|v| v.clone().try_into().ok())
+                        .unwrap_or(false);
 
-        let popup_mode_clone = Rc::clone(&self.popup_positioning_mode);
-        component_instance
-            .set_callback("set_popup_positioning_mode", move |args| {
-                let center_x: bool = args
-                    .first()
-                    .and_then(|v| v.clone().try_into().ok())
-                    .unwrap_or(false);
-                let center_y: bool = args
-                    .get(1)
-                    .and_then(|v| v.clone().try_into().ok())
-                    .unwrap_or(false);
-
-                let mode = PopupPositioningMode::from_flags(center_x, center_y);
-                *popup_mode_clone.borrow_mut() = mode;
-                log::info!(
-                    "Popup positioning mode set to: {:?} (center_x: {}, center_y: {})",
-                    mode,
-                    center_x,
-                    center_y
-                );
-                Value::Void
-            })
-            .map_err(|e| {
-                Error::Domain(DomainError::Configuration {
-                    message: format!(
-                        "Failed to register set_popup_positioning_mode callback: {}",
-                        e
-                    ),
+                    let mode = PopupPositioningMode::from_flags(center_x, center_y);
+                    *popup_mode_clone.borrow_mut() = mode;
+                    log::info!(
+                        "Popup positioning mode set to: {:?} (center_x: {}, center_y: {})",
+                        mode,
+                        center_x,
+                        center_y
+                    );
+                    Value::Void
                 })
-            })?;
-
-        let sender = self.popup_command_sender.clone();
-        let popup_mode_for_callback = Rc::clone(&self.popup_positioning_mode);
-
-        component_instance
-            .set_callback("show_popup", move |args| {
-                let component_name: SharedString = args
-                    .first()
-                    .and_then(|v| v.clone().try_into().ok())
-                    .unwrap_or_else(|| SharedString::from(""));
-
-                if component_name.is_empty() {
-                    log::error!("show_popup called without component name");
-                    return Value::Void;
-                }
-
-                let x: f32 = args
-                    .get(1)
-                    .and_then(|v| v.clone().try_into().ok())
-                    .unwrap_or(0.0);
-                let y: f32 = args
-                    .get(2)
-                    .and_then(|v| v.clone().try_into().ok())
-                    .unwrap_or(0.0);
-
-                let mode = *popup_mode_for_callback.borrow();
-
-                let request = PopupRequest::builder(component_name.to_string())
-                    .at(PopupAt::absolute(x, y))
-                    .size(PopupSize::content())
-                    .mode(mode)
-                    .build();
-
-                if sender.send(PopupCommand::Show(request)).is_err() {
-                    log::error!("Failed to send popup show command through channel");
-                }
-                Value::Void
-            })
-            .map_err(|e| {
-                Error::Domain(DomainError::Configuration {
-                    message: format!("Failed to register show_popup callback: {}", e),
+                .map_err(|e| {
+                    Error::Domain(DomainError::Configuration {
+                        message: format!(
+                            "Failed to register set_popup_positioning_mode callback: {}",
+                            e
+                        ),
+                    })
                 })
-            })?;
+        })?;
+
+        self.with_component_instance(|component_instance| {
+            let sender = self.popup_command_sender.clone();
+            let popup_mode_for_callback = Rc::clone(&self.popup_positioning_mode);
+
+            component_instance
+                .set_callback("show_popup", move |args| {
+                    let component_name: SharedString = args
+                        .first()
+                        .and_then(|v| v.clone().try_into().ok())
+                        .unwrap_or_else(|| SharedString::from(""));
+
+                    if component_name.is_empty() {
+                        log::error!("show_popup called without component name");
+                        return Value::Void;
+                    }
+
+                    let x: f32 = args
+                        .get(1)
+                        .and_then(|v| v.clone().try_into().ok())
+                        .unwrap_or(0.0);
+                    let y: f32 = args
+                        .get(2)
+                        .and_then(|v| v.clone().try_into().ok())
+                        .unwrap_or(0.0);
+
+                    let mode = *popup_mode_for_callback.borrow();
+
+                    let request = PopupRequest::builder(component_name.to_string())
+                        .at(PopupAt::absolute(x, y))
+                        .size(PopupSize::content())
+                        .mode(mode)
+                        .build();
+
+                    if sender.send(PopupCommand::Show(request)).is_err() {
+                        log::error!("Failed to send popup show command through channel");
+                    }
+                    Value::Void
+                })
+                .map_err(|e| {
+                    Error::Domain(DomainError::Configuration {
+                        message: format!("Failed to register show_popup callback: {}", e),
+                    })
+                })
+        })?;
 
         Ok(())
     }
@@ -587,8 +590,10 @@ impl WindowingSystem {
         Ok(())
     }
 
-    #[must_use]
-    pub fn component_instance(&self) -> Ref<'_, ComponentInstance> {
-        Ref::map(self.inner.borrow(), |system| system.component_instance())
+    pub fn with_component_instance<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&ComponentInstance) -> R,
+    {
+        f(self.inner.borrow().component_instance())
     }
 }

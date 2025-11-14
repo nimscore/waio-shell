@@ -5,5 +5,5 @@ pub trait WindowingSystemPort {
 }
 
 pub trait RuntimeStatePort {
-    fn render_frame_if_dirty(&self) -> Result<(), DomainError>;
+    fn render_frame_if_dirty(&mut self) -> Result<(), DomainError>;
 }
