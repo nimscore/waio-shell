@@ -2,6 +2,8 @@ use crate::errors::{LayerShikaError, Result};
 use crate::rendering::egl::context::EGLContext;
 use crate::rendering::femtovg::{popup_window::PopupWindow, renderable_window::RenderableWindow};
 use crate::wayland::surfaces::display_metrics::SharedDisplayMetrics;
+use layer_shika_domain::dimensions::{LogicalSize as DomainLogicalSize, ScaleFactor as DomainScaleFactor};
+use layer_shika_domain::surface_dimensions::SurfaceDimensions;
 use layer_shika_domain::value_objects::popup_config::PopupConfig;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use layer_shika_domain::value_objects::popup_request::{PopupHandle, PopupRequest};
@@ -233,26 +235,26 @@ impl PopupManager {
 
         let output_size = self.output_size();
         #[allow(clippy::cast_precision_loss)]
-        let output_logical_size = (
+        let output_logical_size = DomainLogicalSize::from_raw(
             output_size.width as f32 / scale_factor,
             output_size.height as f32 / scale_factor,
         );
 
+        let popup_logical_size = DomainLogicalSize::from_raw(params.width, params.height);
+        let domain_scale = DomainScaleFactor::from_raw(scale_factor);
+        let popup_dimensions = SurfaceDimensions::from_logical(popup_logical_size, domain_scale);
+
         let popup_config = PopupConfig::new(
             params.reference_x,
             params.reference_y,
-            params.width,
-            params.height,
+            popup_dimensions,
             params.positioning_mode,
-            output_logical_size.0,
-            output_logical_size.1,
+            output_logical_size,
         );
 
-        #[allow(clippy::cast_possible_truncation)]
-        #[allow(clippy::cast_sign_loss)]
         let popup_size = PhysicalSize::new(
-            (params.width * scale_factor) as u32,
-            (params.height * scale_factor) as u32,
+            popup_dimensions.physical_width(),
+            popup_dimensions.physical_height(),
         );
 
         info!("Popup physical size: {popup_size:?}");
@@ -479,7 +481,8 @@ impl PopupManager {
 
         if let Some(popup_key) = self.find_popup_key_by_fractional_scale_id(&fractional_scale_id) {
             if let Some(popup_window) = self.get_popup_window(popup_key) {
-                let new_scale_factor = scale_120ths as f32 / 120.0;
+                let new_scale = DomainScaleFactor::from_120ths(scale_120ths);
+                let new_scale_factor = new_scale.value();
                 info!("Updating popup scale factor to {new_scale_factor} ({scale_120ths}x)");
                 popup_window.set_scale_factor(new_scale_factor);
                 popup_window.request_redraw();

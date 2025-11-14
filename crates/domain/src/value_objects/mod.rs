@@ -4,6 +4,5 @@ pub mod keyboard_interactivity;
 pub mod layer;
 pub mod margins;
 pub mod popup_config;
-pub mod popup_dimensions;
 pub mod popup_positioning_mode;
 pub mod popup_request;

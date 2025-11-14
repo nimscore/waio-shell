@@ -1,22 +1,29 @@
+use layer_shika_domain::dimensions::{
+    LogicalSize as DomainLogicalSize, PhysicalSize as DomainPhysicalSize,
+    ScaleFactor as DomainScaleFactor,
+};
+use layer_shika_domain::surface_dimensions::SurfaceDimensions;
 use log::info;
 use slint::PhysicalSize;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 pub struct DisplayMetrics {
-    scale_factor: f32,
+    surface: SurfaceDimensions,
     output_size: PhysicalSize,
-    surface_size: PhysicalSize,
     has_fractional_scale: bool,
 }
 
 impl DisplayMetrics {
     #[must_use]
     pub fn new(scale_factor: f32, has_fractional_scale: bool) -> Self {
+        let scale = DomainScaleFactor::from_raw(scale_factor);
+        let logical = DomainLogicalSize::from_raw(1.0, 1.0);
+        let surface = SurfaceDimensions::from_logical(logical, scale);
+
         Self {
-            scale_factor,
+            surface,
             output_size: PhysicalSize::new(0, 0),
-            surface_size: PhysicalSize::new(0, 0),
             has_fractional_scale,
         }
     }
@@ -24,12 +31,13 @@ impl DisplayMetrics {
     #[must_use]
     pub fn with_output_size(mut self, output_size: PhysicalSize) -> Self {
         self.output_size = output_size;
+        self.recalculate_surface_size();
         self
     }
 
     #[must_use]
-    pub const fn scale_factor(&self) -> f32 {
-        self.scale_factor
+    pub fn scale_factor(&self) -> f32 {
+        self.surface.scale_factor().value()
     }
 
     #[must_use]
@@ -38,8 +46,11 @@ impl DisplayMetrics {
     }
 
     #[must_use]
-    pub const fn surface_size(&self) -> PhysicalSize {
-        self.surface_size
+    pub fn surface_size(&self) -> PhysicalSize {
+        PhysicalSize::new(
+            self.surface.physical_width(),
+            self.surface.physical_height(),
+        )
     }
 
     #[must_use]
@@ -49,15 +60,16 @@ impl DisplayMetrics {
 
     #[allow(clippy::cast_precision_loss)]
     pub fn update_scale_factor(&mut self, scale_120ths: u32) -> f32 {
-        let new_scale_factor = scale_120ths as f32 / 120.0;
-        let old_scale_factor = self.scale_factor;
+        let new_scale = DomainScaleFactor::from_120ths(scale_120ths);
+        let new_scale_factor = new_scale.value();
+        let old_scale_factor = self.scale_factor();
 
-        if (self.scale_factor - new_scale_factor).abs() > f32::EPSILON {
+        if (old_scale_factor - new_scale_factor).abs() > f32::EPSILON {
             info!(
                 "DisplayMetrics: Updating scale factor from {} to {} ({}x)",
                 old_scale_factor, new_scale_factor, scale_120ths
             );
-            self.scale_factor = new_scale_factor;
+            self.surface.update_scale_factor(new_scale);
             self.recalculate_surface_size();
         }
 
@@ -76,20 +88,15 @@ impl DisplayMetrics {
     }
 
     pub fn update_surface_size(&mut self, surface_size: PhysicalSize) {
-        self.surface_size = surface_size;
+        let physical = DomainPhysicalSize::from_raw(surface_size.width, surface_size.height);
+        self.surface = SurfaceDimensions::from_physical(physical, self.surface.scale_factor());
     }
 
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::cast_precision_loss
-    )]
     fn recalculate_surface_size(&mut self) {
-        if self.output_size.width > 0 && self.output_size.height > 0 && self.scale_factor > 0.0 {
-            self.surface_size = PhysicalSize::new(
-                (self.output_size.width as f32 / self.scale_factor) as u32,
-                (self.output_size.height as f32 / self.scale_factor) as u32,
-            );
+        if self.output_size.width > 0 && self.output_size.height > 0 && self.scale_factor() > 0.0 {
+            let physical =
+                DomainPhysicalSize::from_raw(self.output_size.width, self.output_size.height);
+            self.surface = SurfaceDimensions::from_physical(physical, self.surface.scale_factor());
         }
     }
 }

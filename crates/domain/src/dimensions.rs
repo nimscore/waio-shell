@@ -40,6 +40,20 @@ impl LogicalSize {
     pub fn as_tuple(&self) -> (f32, f32) {
         (self.width, self.height)
     }
+
+    pub fn clamp_position(
+        &self,
+        position: LogicalPosition,
+        bounds: LogicalSize,
+    ) -> LogicalPosition {
+        let max_x = (bounds.width - self.width).max(0.0);
+        let max_y = (bounds.height - self.height).max(0.0);
+
+        LogicalPosition::new(
+            position.x().max(0.0).min(max_x),
+            position.y().max(0.0).min(max_y),
+        )
+    }
 }
 
 impl Default for LogicalSize {
@@ -115,6 +129,11 @@ impl ScaleFactor {
 
     pub const fn from_raw(factor: f32) -> Self {
         Self(factor)
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    pub fn from_120ths(scale_120ths: u32) -> Self {
+        Self(scale_120ths as f32 / 120.0)
     }
 
     pub const fn value(&self) -> f32 {
