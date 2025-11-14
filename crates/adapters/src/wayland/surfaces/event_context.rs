@@ -1,8 +1,6 @@
 use crate::rendering::femtovg::main_window::FemtoVGWindow;
 use crate::wayland::surfaces::display_metrics::SharedDisplayMetrics;
-use crate::wayland::surfaces::event_bus::EventBus;
 use crate::wayland::surfaces::popup_manager::{ActiveWindow, PopupManager};
-use crate::wayland::surfaces::window_events::{ScaleSource, WindowStateEvent};
 use slint::platform::{WindowAdapter, WindowEvent};
 use slint::{LogicalPosition, PhysicalSize};
 use std::cell::Cell;
@@ -40,7 +38,6 @@ pub struct EventContext {
     main_window: Rc<FemtoVGWindow>,
     main_surface_id: ObjectId,
     popup_manager: Option<Rc<PopupManager>>,
-    event_bus: EventBus,
     display_metrics: SharedDisplayMetrics,
     current_pointer_position: LogicalPosition,
     last_pointer_serial: u32,
@@ -58,7 +55,6 @@ impl EventContext {
             main_window,
             main_surface_id,
             popup_manager: None,
-            event_bus: EventBus::new(),
             display_metrics,
             current_pointer_position: LogicalPosition::new(0.0, 0.0),
             last_pointer_serial: 0,
@@ -68,8 +64,6 @@ impl EventContext {
 
     pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager>) {
         self.popup_manager = Some(popup_manager);
-        self.event_bus
-            .publish(&WindowStateEvent::PopupConfigurationChanged);
     }
 
     pub const fn popup_manager(&self) -> Option<&Rc<PopupManager>> {
@@ -92,12 +86,6 @@ impl EventContext {
             popup_manager.update_scale_factor(new_scale_factor);
         }
 
-        self.event_bus
-            .publish(&WindowStateEvent::ScaleFactorChanged {
-                new_scale: new_scale_factor,
-                source: ScaleSource::FractionalScale,
-            });
-
         new_scale_factor
     }
 
@@ -119,12 +107,6 @@ impl EventContext {
             )
         };
         self.current_pointer_position = logical_position;
-
-        self.event_bus
-            .publish(&WindowStateEvent::PointerPositionChanged {
-                physical_x,
-                physical_y,
-            });
     }
 
     pub const fn last_pointer_serial(&self) -> u32 {
@@ -136,9 +118,6 @@ impl EventContext {
         if let Some(ref shared_serial) = self.shared_pointer_serial {
             shared_serial.update(serial);
         }
-
-        self.event_bus
-            .publish(&WindowStateEvent::PointerSerialUpdated { serial });
     }
 
     pub fn set_shared_pointer_serial(&mut self, shared_serial: Rc<SharedPointerSerial>) {
@@ -165,9 +144,6 @@ impl EventContext {
         if let Some(popup_manager) = &self.popup_manager {
             popup_manager.update_output_size(output_size);
         }
-
-        self.event_bus
-            .publish(&WindowStateEvent::OutputSizeChanged { output_size });
     }
 
     pub fn update_scale_for_fractional_scale_object(
