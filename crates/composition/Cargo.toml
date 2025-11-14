@@ -8,7 +8,7 @@ rust-version.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "A layer shell library crate with Slint UI"
-readme = "../README.md"
+readme = "../../README.md"
 
 [lints]
 workspace = true
