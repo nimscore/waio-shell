@@ -4,6 +4,8 @@ mod composition {
     pub use layer_shika_composition::*;
 }
 
+pub mod prelude;
+
 pub use composition::{
     AnchorEdges, Error, EventLoopHandle, KeyboardInteractivity, Layer, LayerShika, PopupAt,
     PopupHandle, PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result, RuntimeState,
