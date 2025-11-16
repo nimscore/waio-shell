@@ -14,6 +14,7 @@ use layer_shika_adapters::{
 };
 use layer_shika_domain::config::WindowConfig;
 use layer_shika_domain::errors::DomainError;
+use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use layer_shika_domain::value_objects::popup_request::{PopupHandle, PopupRequest, PopupSize};
 use std::cell::Cell;
@@ -139,10 +140,32 @@ impl RuntimeState<'_> {
             .map(WindowState::component_instance)
     }
 
+    #[must_use]
+    pub fn primary_output_handle(&self) -> Option<OutputHandle> {
+        self.app_state.primary_output_handle()
+    }
+
+    #[must_use]
+    pub fn active_output_handle(&self) -> Option<OutputHandle> {
+        self.app_state.active_output_handle()
+    }
+
+    pub fn outputs(&self) -> impl Iterator<Item = (OutputHandle, &ComponentInstance)> {
+        self.app_state
+            .outputs_with_handles()
+            .map(|(handle, window)| (handle, window.component_instance()))
+    }
+
+    pub fn get_output_component(&self, handle: OutputHandle) -> Option<&ComponentInstance> {
+        self.app_state
+            .get_output_by_handle(handle)
+            .map(WindowState::component_instance)
+    }
+
     fn active_or_primary_output(&self) -> Option<&WindowState> {
         self.app_state
             .active_output()
-            .and_then(|key| self.app_state.get_output_by_key(key))
+            .and_then(|key| self.app_state.get_output_by_key(&key))
             .or_else(|| self.app_state.primary_output())
     }
 

@@ -10,14 +10,14 @@
 
 // Core API types
 pub use crate::{
-    Error, EventLoopHandle, LayerShika, PopupWindow, Result, RuntimeState,
-    SlintCallbackContract, SlintCallbackNames, WindowingSystem,
+    Error, EventLoopHandle, LayerShika, PopupWindow, Result, RuntimeState, SlintCallbackContract,
+    SlintCallbackNames, WindowingSystem,
 };
 
 // Domain value objects
 pub use crate::{
-    AnchorEdges, KeyboardInteractivity, Layer, PopupAt, PopupHandle, PopupPositioningMode,
-    PopupRequest, PopupSize,
+    AnchorEdges, KeyboardInteractivity, Layer, OutputHandle, PopupAt, PopupHandle,
+    PopupPositioningMode, PopupRequest, PopupSize,
 };
 
 // Event loop types

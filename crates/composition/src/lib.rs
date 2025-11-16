@@ -14,6 +14,7 @@ pub use layer_shika_adapters::platform::{slint, slint_interpreter};
 pub use layer_shika_domain::value_objects::anchor::AnchorEdges;
 pub use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteractivity;
 pub use layer_shika_domain::value_objects::layer::Layer;
+pub use layer_shika_domain::value_objects::output_handle::OutputHandle;
 pub use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 pub use layer_shika_domain::value_objects::popup_request::{
     PopupAt, PopupHandle, PopupRequest, PopupSize,

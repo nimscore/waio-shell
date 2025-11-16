@@ -138,7 +138,7 @@ impl Dispatch<WlPointer, ()> for AppState {
                 if let Some(window) = state.get_output_by_surface_mut(&surface_id) {
                     window.handle_pointer_enter(serial, &surface, surface_x, surface_y);
 
-                    if let Some(key) = state.get_key_by_surface(&surface_id).cloned() {
+                    if let Some(key) = state.get_key_by_surface(&surface_id) {
                         state.set_active_output(Some(key));
                     }
                 } else {
@@ -158,7 +158,7 @@ impl Dispatch<WlPointer, ()> for AppState {
                 surface_y,
                 ..
             } => {
-                if let Some(output_key) = state.active_output().cloned() {
+                if let Some(output_key) = state.active_output() {
                     if let Some(window) = state.get_output_by_key_mut(&output_key) {
                         window.handle_pointer_motion(surface_x, surface_y);
                     }
@@ -166,7 +166,7 @@ impl Dispatch<WlPointer, ()> for AppState {
             }
 
             wl_pointer::Event::Leave { .. } => {
-                if let Some(output_key) = state.active_output().cloned() {
+                if let Some(output_key) = state.active_output() {
                     if let Some(window) = state.get_output_by_key_mut(&output_key) {
                         window.handle_pointer_leave();
                     }
@@ -179,7 +179,7 @@ impl Dispatch<WlPointer, ()> for AppState {
                 state: button_state,
                 ..
             } => {
-                if let Some(output_key) = state.active_output().cloned() {
+                if let Some(output_key) = state.active_output() {
                     if let Some(window) = state.get_output_by_key_mut(&output_key) {
                         window.handle_pointer_button(serial, button_state);
                     }
