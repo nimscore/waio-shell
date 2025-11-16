@@ -39,7 +39,4 @@ pub enum Error {
 
     #[error("WindowingSystem has been dropped")]
     SystemDropped,
-
-    #[error("Cannot run while EventLoopHandle exists")]
-    EventLoopHandleExists,
 }
