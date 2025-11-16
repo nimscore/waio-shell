@@ -1,4 +1,4 @@
-use crate::wayland::{config::LayerSurfaceParams, surfaces::surface_state::WindowState};
+use crate::wayland::{config::LayerSurfaceConfig, surfaces::surface_state::WindowState};
 use log::info;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::{Layer, ZwlrLayerShellV1},
@@ -38,7 +38,7 @@ pub struct SurfaceCtx {
 impl SurfaceCtx {
     pub(crate) fn setup(
         setup_params: &SurfaceSetupParams<'_>,
-        params: &LayerSurfaceParams,
+        config: &LayerSurfaceConfig,
     ) -> Self {
         let surface = Rc::new(
             setup_params
@@ -64,7 +64,7 @@ impl SurfaceCtx {
             Rc::new(vp.get_viewport(&surface, setup_params.queue_handle, ()))
         });
 
-        Self::configure_layer_surface(&layer_surface, &surface, params);
+        Self::configure_layer_surface(&layer_surface, &surface, config);
         surface.set_buffer_scale(1);
 
         Self {
@@ -78,19 +78,19 @@ impl SurfaceCtx {
     fn configure_layer_surface(
         layer_surface: &Rc<ZwlrLayerSurfaceV1>,
         surface: &WlSurface,
-        params: &LayerSurfaceParams,
+        config: &LayerSurfaceConfig,
     ) {
-        layer_surface.set_anchor(params.anchor);
+        layer_surface.set_anchor(config.anchor);
         layer_surface.set_margin(
-            params.margin.top,
-            params.margin.right,
-            params.margin.bottom,
-            params.margin.left,
+            config.margin.top,
+            config.margin.right,
+            config.margin.bottom,
+            config.margin.left,
         );
 
-        layer_surface.set_exclusive_zone(params.exclusive_zone);
-        layer_surface.set_keyboard_interactivity(params.keyboard_interactivity);
-        layer_surface.set_size(1, params.height);
+        layer_surface.set_exclusive_zone(config.exclusive_zone);
+        layer_surface.set_keyboard_interactivity(config.keyboard_interactivity);
+        layer_surface.set_size(1, config.height);
         surface.commit();
     }
 }

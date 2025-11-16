@@ -11,7 +11,7 @@ use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
 use std::rc::Rc;
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct LayerSurfaceParams {
+pub(crate) struct LayerSurfaceConfig {
     pub anchor: Anchor,
     pub margin: Margins,
     pub exclusive_zone: i32,

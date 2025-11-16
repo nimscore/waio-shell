@@ -1,5 +1,5 @@
 use crate::wayland::{
-    config::{LayerSurfaceParams, WaylandWindowConfig},
+    config::{LayerSurfaceConfig, WaylandWindowConfig},
     globals::context::GlobalContext,
     surfaces::layer_surface::{SurfaceCtx, SurfaceSetupParams},
     surfaces::popup_manager::{PopupContext, PopupManager},
@@ -103,7 +103,7 @@ impl WaylandWindowingSystem {
     ) -> Result<(WindowState, GlobalContext, Rc<CustomSlintPlatform>)> {
         let global_ctx = GlobalContext::initialize(connection, &event_queue.handle())?;
 
-        let layer_surface_params = LayerSurfaceParams {
+        let layer_surface_config = LayerSurfaceConfig {
             anchor: config.anchor,
             margin: config.margin,
             exclusive_zone: config.exclusive_zone,
@@ -122,7 +122,7 @@ impl WaylandWindowingSystem {
             namespace: config.namespace.clone(),
         };
 
-        let surface_ctx = SurfaceCtx::setup(&setup_params, &layer_surface_params);
+        let surface_ctx = SurfaceCtx::setup(&setup_params, &layer_surface_config);
 
         let window =
             Self::initialize_renderer(&surface_ctx.surface, &connection.display(), &config)?;
