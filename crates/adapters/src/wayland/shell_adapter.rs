@@ -2,7 +2,7 @@ use crate::wayland::{
     config::{LayerSurfaceParams, WaylandWindowConfig},
     globals::context::GlobalContext,
     surfaces::layer_surface::{SurfaceCtx, SurfaceSetupParams},
-    surfaces::popup_manager::{CreatePopupParams, PopupContext, PopupManager},
+    surfaces::popup_manager::{PopupContext, PopupManager},
     surfaces::{
         event_context::SharedPointerSerial, surface_builder::WindowStateBuilder,
         surface_state::WindowState,
@@ -183,38 +183,8 @@ impl WaylandWindowingSystem {
 
             let serial = serial_holder.get();
 
-            let (params, request) = if let Some((request, width, height)) =
-                popup_manager_clone.take_pending_popup()
-            {
-                log::info!(
-                    "Using popup request: component='{}', position=({}, {}), size={}x{}, mode={:?}",
-                    request.component,
-                    request.at.position().0,
-                    request.at.position().1,
-                    width,
-                    height,
-                    request.mode
-                );
-
-                let params = CreatePopupParams {
-                    last_pointer_serial: serial,
-                    reference_x: request.at.position().0,
-                    reference_y: request.at.position().1,
-                    width,
-                    height,
-                    positioning_mode: request.mode,
-                };
-                (params, request)
-            } else {
-                log::warn!("Popup creator called without pending popup request - aborting");
-                return Err(PlatformError::Other(
-                    "No popup request available - cannot create popup without parameters"
-                        .to_string(),
-                ));
-            };
-
             let popup_window = popup_manager_clone
-                .create_popup(&queue_handle, &layer_surface, params, request)
+                .create_pending_popup(&queue_handle, &layer_surface, serial)
                 .map_err(|e| PlatformError::Other(format!("Failed to create popup: {e}")))?;
 
             let result = Ok(popup_window as Rc<dyn WindowAdapter>);

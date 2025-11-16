@@ -193,19 +193,11 @@ impl RuntimeState<'_> {
             req.mode
         );
 
-        popup_manager.set_pending_popup(req, initial_dimensions.0, initial_dimensions.1);
+        let popup_handle =
+            popup_manager.request_popup(req, initial_dimensions.0, initial_dimensions.1);
 
         let (instance, popup_key_cell) =
             Self::create_popup_instance(&definition, &popup_manager, resize_sender)?;
-
-        let popup_handle = popup_manager
-            .current_popup_key()
-            .map(PopupHandle::new)
-            .ok_or_else(|| {
-                Error::Domain(DomainError::Configuration {
-                    message: "No popup key available after creation".to_string(),
-                })
-            })?;
 
         popup_key_cell.set(popup_handle.key());
 
