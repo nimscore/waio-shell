@@ -63,6 +63,7 @@ pub struct CreatePopupParams {
     pub width: f32,
     pub height: f32,
     pub positioning_mode: PopupPositioningMode,
+    pub grab: bool,
 }
 
 pub struct PopupContext {
@@ -241,6 +242,7 @@ impl PopupManager {
             width,
             height,
             positioning_mode: request.mode,
+            grab: request.grab,
         };
 
         self.create_popup_internal(queue_handle, parent_layer_surface, params, request, id)
@@ -313,7 +315,12 @@ impl PopupManager {
             scale_factor,
         });
 
-        popup_surface.grab(&self.context.seat, params.last_pointer_serial);
+        if params.grab {
+            popup_surface.grab(&self.context.seat, params.last_pointer_serial);
+        } else {
+            info!("Skipping popup grab (grab disabled in request)");
+            popup_surface.surface.commit();
+        }
 
         let context = EGLContext::builder()
             .with_display_id(self.context.display.id())

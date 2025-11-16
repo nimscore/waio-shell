@@ -21,6 +21,7 @@ pub struct PopupRequest {
     pub at: PopupAt,
     pub size: PopupSize,
     pub mode: PopupPositioningMode,
+    pub grab: bool,
 }
 
 impl PopupRequest {
@@ -36,6 +37,7 @@ impl PopupRequest {
             at,
             size,
             mode,
+            grab: false,
         }
     }
 
@@ -108,6 +110,7 @@ pub struct PopupRequestBuilder {
     at: PopupAt,
     size: PopupSize,
     mode: PopupPositioningMode,
+    grab: bool,
 }
 
 impl PopupRequestBuilder {
@@ -118,6 +121,7 @@ impl PopupRequestBuilder {
             at: PopupAt::Cursor,
             size: PopupSize::Content,
             mode: PopupPositioningMode::default(),
+            grab: false,
         }
     }
 
@@ -140,12 +144,19 @@ impl PopupRequestBuilder {
     }
 
     #[must_use]
+    pub const fn grab(mut self, grab: bool) -> Self {
+        self.grab = grab;
+        self
+    }
+
+    #[must_use]
     pub fn build(self) -> PopupRequest {
         PopupRequest {
             component: self.component,
             at: self.at,
             size: self.size,
             mode: self.mode,
+            grab: self.grab,
         }
     }
 }
