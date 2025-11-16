@@ -14,7 +14,7 @@ readme = "README.md"
 workspace = true
 
 [dependencies]
-layer-shika-composition = { version = "0.1.0", path = "crates/composition" }
+layer-shika-composition.workspace = true
 
 [workspace]
 resolver = "2"
