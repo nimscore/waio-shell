@@ -3,5 +3,6 @@ pub(crate) mod event_handling;
 pub(crate) mod facade;
 pub(crate) mod globals;
 pub(crate) mod managed_proxies;
+pub(crate) mod outputs;
 pub(crate) mod shell_adapter;
 pub(crate) mod surfaces;

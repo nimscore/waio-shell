@@ -1,13 +1,17 @@
 use crate::wayland::{
     config::{LayerSurfaceConfig, WaylandWindowConfig},
     globals::context::GlobalContext,
+    managed_proxies::ManagedWlPointer,
     surfaces::layer_surface::{SurfaceCtx, SurfaceSetupParams},
     surfaces::popup_manager::{PopupContext, PopupManager},
     surfaces::{
-        event_context::SharedPointerSerial, surface_builder::WindowStateBuilder,
+        app_state::AppState,
+        event_context::SharedPointerSerial,
+        surface_builder::{PlatformWrapper, WindowStateBuilder},
         surface_state::WindowState,
     },
 };
+use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use crate::{
     errors::{EventLoopError, LayerShikaError, RenderingError, Result},
     rendering::{
@@ -22,7 +26,7 @@ use layer_shika_domain::ports::windowing::WindowingSystemPort;
 use log::{error, info};
 use slint::{
     LogicalPosition, PhysicalSize, PlatformError, WindowPosition,
-    platform::{WindowAdapter, femtovg_renderer::FemtoVGRenderer, update_timers_and_animations},
+    platform::{WindowAdapter, femtovg_renderer::FemtoVGRenderer, set_platform, update_timers_and_animations},
 };
 use slint_interpreter::ComponentInstance;
 use smithay_client_toolkit::reexports::calloop::{
@@ -30,171 +34,274 @@ use smithay_client_toolkit::reexports::calloop::{
 };
 use std::rc::Rc;
 use wayland_client::{
-    Connection, EventQueue, Proxy,
-    protocol::{wl_display::WlDisplay, wl_surface::WlSurface},
+    Connection, EventQueue, Proxy, QueueHandle,
+    backend::ObjectId,
+    protocol::{wl_display::WlDisplay, wl_pointer::WlPointer, wl_surface::WlSurface},
 };
 
+type PopupManagersAndSurfaces = (Vec<Rc<PopupManager>>, Vec<Rc<ZwlrLayerSurfaceV1>>);
+
+struct OutputSetup {
+    output_id: ObjectId,
+    main_surface_id: ObjectId,
+    window: Rc<FemtoVGWindow>,
+    builder: WindowStateBuilder,
+}
+
 pub struct WaylandWindowingSystem {
-    state: WindowState,
+    state: AppState,
     connection: Rc<Connection>,
-    event_queue: EventQueue<WindowState>,
-    event_loop: EventLoop<'static, WindowState>,
-    popup_manager: Rc<PopupManager>,
+    event_queue: EventQueue<AppState>,
+    event_loop: EventLoop<'static, AppState>,
 }
 
 impl WaylandWindowingSystem {
-    pub fn new(config: WaylandWindowConfig) -> Result<Self> {
+    pub fn new(config: &WaylandWindowConfig) -> Result<Self> {
         info!("Initializing WindowingSystem");
-        let (connection, event_queue) = Self::init_wayland_connection()?;
-        let (state, global_ctx, platform) = Self::init_state(config, &connection, &event_queue)?;
+        let (connection, mut event_queue) = Self::init_wayland_connection()?;
         let event_loop =
             EventLoop::try_new().map_err(|e| EventLoopError::Creation { source: e })?;
 
-        let popup_context = PopupContext::new(
-            global_ctx.compositor,
-            global_ctx.xdg_wm_base,
-            global_ctx.seat,
-            global_ctx.fractional_scale_manager,
-            global_ctx.viewporter,
-            connection.display(),
-            Rc::clone(&connection),
-        );
-
-        let popup_manager = Rc::new(PopupManager::new(
-            popup_context,
-            Rc::clone(state.display_metrics()),
-        ));
-        let shared_serial = Rc::new(SharedPointerSerial::new());
-
-        Self::setup_popup_creator(
-            &popup_manager,
-            &platform,
-            &state,
-            &event_queue,
-            &shared_serial,
-        );
+        let state = Self::init_state(config, &connection, &mut event_queue)?;
 
         Ok(Self {
             state,
             connection,
             event_queue,
             event_loop,
-            popup_manager,
-        })
-        .map(|mut system| {
-            system
-                .state
-                .set_popup_manager(Rc::clone(&system.popup_manager));
-            system.state.set_shared_pointer_serial(shared_serial);
-            system
         })
     }
 
-    fn init_wayland_connection() -> Result<(Rc<Connection>, EventQueue<WindowState>)> {
+    fn init_wayland_connection() -> Result<(Rc<Connection>, EventQueue<AppState>)> {
         let connection = Rc::new(Connection::connect_to_env()?);
         let event_queue = connection.new_event_queue();
         Ok((connection, event_queue))
     }
 
-    fn init_state(
-        config: WaylandWindowConfig,
-        connection: &Connection,
-        event_queue: &EventQueue<WindowState>,
-    ) -> Result<(WindowState, GlobalContext, Rc<CustomSlintPlatform>)> {
-        let global_ctx = GlobalContext::initialize(connection, &event_queue.handle())?;
-
-        let layer_surface_config = LayerSurfaceConfig {
+    fn create_layer_surface_config(config: &WaylandWindowConfig) -> LayerSurfaceConfig {
+        LayerSurfaceConfig {
             anchor: config.anchor,
             margin: config.margin,
             exclusive_zone: config.exclusive_zone,
             keyboard_interactivity: config.keyboard_interactivity,
             height: config.height,
-        };
-
-        let setup_params = SurfaceSetupParams {
-            compositor: &global_ctx.compositor,
-            output: &global_ctx.output,
-            layer_shell: &global_ctx.layer_shell,
-            fractional_scale_manager: global_ctx.fractional_scale_manager.as_ref(),
-            viewporter: global_ctx.viewporter.as_ref(),
-            queue_handle: &event_queue.handle(),
-            layer: config.layer,
-            namespace: config.namespace.clone(),
-        };
-
-        let surface_ctx = SurfaceCtx::setup(&setup_params, &layer_surface_config);
-
-        let window =
-            Self::initialize_renderer(&surface_ctx.surface, &connection.display(), &config)?;
-
-        let pointer = Rc::new(global_ctx.seat.get_pointer(&event_queue.handle(), ()));
-
-        let mut builder = WindowStateBuilder::new()
-            .with_component_definition(config.component_definition)
-            .with_compilation_result(config.compilation_result)
-            .with_surface(Rc::clone(&surface_ctx.surface))
-            .with_layer_surface(Rc::clone(&surface_ctx.layer_surface))
-            .with_scale_factor(config.scale_factor)
-            .with_height(config.height)
-            .with_exclusive_zone(config.exclusive_zone)
-            .with_connection(Rc::new(connection.clone()))
-            .with_pointer(Rc::clone(&pointer))
-            .with_window(window);
-
-        if let Some(fs) = &surface_ctx.fractional_scale {
-            builder = builder.with_fractional_scale(Rc::clone(fs));
         }
-
-        if let Some(vp) = &surface_ctx.viewport {
-            builder = builder.with_viewport(Rc::clone(vp));
-        }
-
-        let (state, platform) =
-            builder
-                .build()
-                .map_err(|e| LayerShikaError::WindowConfiguration {
-                    message: e.to_string(),
-                })?;
-
-        Ok((state, global_ctx, platform))
     }
 
-    fn setup_popup_creator(
-        popup_manager: &Rc<PopupManager>,
+    fn create_output_setups(
+        config: &WaylandWindowConfig,
+        global_ctx: &GlobalContext,
+        connection: &Connection,
+        event_queue: &mut EventQueue<AppState>,
+        pointer: &Rc<WlPointer>,
+        layer_surface_config: &LayerSurfaceConfig,
+    ) -> Result<Vec<OutputSetup>> {
+        let mut setups = Vec::new();
+
+        for output in &global_ctx.outputs {
+            let output_id = output.id();
+
+            let setup_params = SurfaceSetupParams {
+                compositor: &global_ctx.compositor,
+                output,
+                layer_shell: &global_ctx.layer_shell,
+                fractional_scale_manager: global_ctx.fractional_scale_manager.as_ref(),
+                viewporter: global_ctx.viewporter.as_ref(),
+                queue_handle: &event_queue.handle(),
+                layer: config.layer,
+                namespace: config.namespace.clone(),
+            };
+
+            let surface_ctx = SurfaceCtx::setup(&setup_params, layer_surface_config);
+            let main_surface_id = surface_ctx.surface.id();
+
+            let window =
+                Self::initialize_renderer(&surface_ctx.surface, &connection.display(), config)?;
+
+            let mut builder = WindowStateBuilder::new()
+                .with_component_definition(config.component_definition.clone())
+                .with_compilation_result(config.compilation_result.clone())
+                .with_surface(Rc::clone(&surface_ctx.surface))
+                .with_layer_surface(Rc::clone(&surface_ctx.layer_surface))
+                .with_scale_factor(config.scale_factor)
+                .with_height(config.height)
+                .with_exclusive_zone(config.exclusive_zone)
+                .with_connection(Rc::new(connection.clone()))
+                .with_pointer(Rc::clone(pointer))
+                .with_window(Rc::clone(&window));
+
+            if let Some(fs) = &surface_ctx.fractional_scale {
+                builder = builder.with_fractional_scale(Rc::clone(fs));
+            }
+
+            if let Some(vp) = &surface_ctx.viewport {
+                builder = builder.with_viewport(Rc::clone(vp));
+            }
+
+            setups.push(OutputSetup {
+                output_id,
+                main_surface_id,
+                window,
+                builder,
+            });
+        }
+
+        Ok(setups)
+    }
+
+    fn setup_platform(setups: &[OutputSetup]) -> Result<Rc<CustomSlintPlatform>> {
+        let first_setup = setups
+            .first()
+            .ok_or_else(|| LayerShikaError::InvalidInput {
+                message: "No outputs available".into(),
+            })?;
+
+        let platform = CustomSlintPlatform::new(&first_setup.window);
+
+        for setup in setups.iter().skip(1) {
+            platform.add_window(Rc::clone(&setup.window));
+        }
+
+        set_platform(Box::new(PlatformWrapper(Rc::clone(&platform))))
+            .map_err(|e| LayerShikaError::PlatformSetup { source: e })?;
+
+        Ok(platform)
+    }
+
+    fn create_window_states(
+        setups: Vec<OutputSetup>,
+        popup_context: &PopupContext,
+        shared_serial: &Rc<SharedPointerSerial>,
+        app_state: &mut AppState,
+    ) -> Result<PopupManagersAndSurfaces> {
+        let mut popup_managers = Vec::new();
+        let mut layer_surfaces = Vec::new();
+
+        for setup in setups {
+            let mut per_output_window = WindowState::new(setup.builder).map_err(|e| {
+                LayerShikaError::WindowConfiguration {
+                    message: e.to_string(),
+                }
+            })?;
+
+            let popup_manager = Rc::new(PopupManager::new(
+                popup_context.clone(),
+                Rc::clone(per_output_window.display_metrics()),
+            ));
+
+            per_output_window.set_popup_manager(Rc::clone(&popup_manager));
+            per_output_window.set_shared_pointer_serial(Rc::clone(shared_serial));
+
+            popup_managers.push(Rc::clone(&popup_manager));
+            layer_surfaces.push(per_output_window.layer_surface());
+
+            app_state.add_output(setup.output_id, setup.main_surface_id, per_output_window);
+        }
+
+        Ok((popup_managers, layer_surfaces))
+    }
+
+    fn init_state(
+        config: &WaylandWindowConfig,
+        connection: &Connection,
+        event_queue: &mut EventQueue<AppState>,
+    ) -> Result<AppState> {
+        let global_ctx = GlobalContext::initialize(connection, &event_queue.handle())?;
+        let layer_surface_config = Self::create_layer_surface_config(config);
+
+        let pointer = Rc::new(global_ctx.seat.get_pointer(&event_queue.handle(), ()));
+        let shared_serial = Rc::new(SharedPointerSerial::new());
+
+        let mut app_state = AppState::new(
+            ManagedWlPointer::new(Rc::clone(&pointer), Rc::new(connection.clone())),
+            Rc::clone(&shared_serial),
+        );
+
+        let popup_context = PopupContext::new(
+            global_ctx.compositor.clone(),
+            global_ctx.xdg_wm_base.clone(),
+            global_ctx.seat.clone(),
+            global_ctx.fractional_scale_manager.clone(),
+            global_ctx.viewporter.clone(),
+            connection.display(),
+            Rc::new(connection.clone()),
+        );
+
+        let setups = Self::create_output_setups(
+            config,
+            &global_ctx,
+            connection,
+            event_queue,
+            &pointer,
+            &layer_surface_config,
+        )?;
+
+        let platform = Self::setup_platform(&setups)?;
+
+        let (popup_managers, layer_surfaces) =
+            Self::create_window_states(setups, &popup_context, &shared_serial, &mut app_state)?;
+
+        Self::setup_shared_popup_creator(
+            popup_managers,
+            layer_surfaces,
+            &platform,
+            &event_queue.handle(),
+            &shared_serial,
+        );
+
+        Ok(app_state)
+    }
+
+    fn setup_shared_popup_creator(
+        popup_managers: Vec<Rc<PopupManager>>,
+        layer_surfaces: Vec<Rc<ZwlrLayerSurfaceV1>>,
         platform: &Rc<CustomSlintPlatform>,
-        state: &WindowState,
-        event_queue: &EventQueue<WindowState>,
+        queue_handle: &QueueHandle<AppState>,
         shared_serial: &Rc<SharedPointerSerial>,
     ) {
-        if !popup_manager.has_xdg_shell() {
+        let Some(first_manager) = popup_managers.first() else {
+            info!("No popup managers available");
+            return;
+        };
+
+        if !first_manager.has_xdg_shell() {
             info!("xdg-shell not available, popups will not be supported");
             return;
         }
 
-        info!("Setting up popup creator with xdg-shell support");
+        info!(
+            "Setting up shared popup creator for {} output(s)",
+            popup_managers.len()
+        );
 
-        let popup_manager_clone = Rc::clone(popup_manager);
-        let layer_surface = state.layer_surface();
-        let queue_handle = event_queue.handle();
+        let queue_handle_clone = queue_handle.clone();
         let serial_holder = Rc::clone(shared_serial);
 
         platform.set_popup_creator(move || {
-            info!("Popup creator called! Creating popup window...");
+            info!("Popup creator called! Searching for pending popup...");
 
             let serial = serial_holder.get();
 
-            let popup_window = popup_manager_clone
-                .create_pending_popup(&queue_handle, &layer_surface, serial)
-                .map_err(|e| PlatformError::Other(format!("Failed to create popup: {e}")))?;
+            for (idx, (popup_manager, layer_surface)) in
+                popup_managers.iter().zip(layer_surfaces.iter()).enumerate()
+            {
+                if popup_manager.has_pending_popup() {
+                    info!("Found pending popup in output #{}", idx);
 
-            let result = Ok(popup_window as Rc<dyn WindowAdapter>);
+                    let popup_window = popup_manager
+                        .create_pending_popup(&queue_handle_clone, layer_surface, serial)
+                        .map_err(|e| {
+                            PlatformError::Other(format!("Failed to create popup: {e}"))
+                        })?;
 
-            match &result {
-                Ok(_) => info!("Popup created successfully"),
-                Err(e) => info!("Popup creation failed: {e:?}"),
+                    info!("Popup created successfully for output #{}", idx);
+                    return Ok(popup_window as Rc<dyn WindowAdapter>);
+                }
             }
 
-            result
+            Err(PlatformError::Other(
+                "No pending popup request found in any output".into(),
+            ))
         });
     }
 
@@ -222,7 +329,7 @@ impl WaylandWindowingSystem {
         Ok(femtovg_window)
     }
 
-    pub fn event_loop_handle(&self) -> LoopHandle<'static, WindowState> {
+    pub fn event_loop_handle(&self) -> LoopHandle<'static, AppState> {
         self.event_loop.handle()
     }
 
@@ -236,25 +343,25 @@ impl WaylandWindowingSystem {
                 .map_err(|e| LayerShikaError::WaylandProtocol { source: e })?;
 
             update_timers_and_animations();
-            self.state
-                .window()
-                .render_frame_if_dirty()
-                .map_err(|e| RenderingError::Operation {
-                    message: e.to_string(),
-                })?;
+
+            for window in self.state.all_outputs() {
+                window
+                    .window()
+                    .render_frame_if_dirty()
+                    .map_err(|e| RenderingError::Operation {
+                        message: e.to_string(),
+                    })?;
+            }
         }
 
         self.setup_wayland_event_source()?;
 
         let event_queue = &mut self.event_queue;
         let connection = &self.connection;
-        let popup_manager = Rc::clone(&self.popup_manager);
 
         self.event_loop
             .run(None, &mut self.state, move |shared_data| {
-                if let Err(e) =
-                    Self::process_events(connection, event_queue, shared_data, &popup_manager)
-                {
+                if let Err(e) = Self::process_events(connection, event_queue, shared_data) {
                     error!("Error processing events: {e}");
                 }
             })
@@ -281,9 +388,8 @@ impl WaylandWindowingSystem {
 
     fn process_events(
         connection: &Connection,
-        event_queue: &mut EventQueue<WindowState>,
-        shared_data: &mut WindowState,
-        popup_manager: &PopupManager,
+        event_queue: &mut EventQueue<AppState>,
+        shared_data: &mut AppState,
     ) -> Result<()> {
         if let Some(guard) = event_queue.prepare_read() {
             guard
@@ -295,18 +401,22 @@ impl WaylandWindowingSystem {
 
         update_timers_and_animations();
 
-        shared_data
-            .window()
-            .render_frame_if_dirty()
-            .map_err(|e| RenderingError::Operation {
-                message: e.to_string(),
-            })?;
+        for window in shared_data.all_outputs() {
+            window
+                .window()
+                .render_frame_if_dirty()
+                .map_err(|e| RenderingError::Operation {
+                    message: e.to_string(),
+                })?;
 
-        popup_manager
-            .render_popups()
-            .map_err(|e| RenderingError::Operation {
-                message: e.to_string(),
-            })?;
+            if let Some(popup_manager) = window.popup_manager() {
+                popup_manager
+                    .render_popups()
+                    .map_err(|e| RenderingError::Operation {
+                        message: e.to_string(),
+                    })?;
+            }
+        }
 
         connection
             .flush()
@@ -315,11 +425,24 @@ impl WaylandWindowingSystem {
         Ok(())
     }
 
-    pub const fn component_instance(&self) -> &ComponentInstance {
-        self.state.component_instance()
+    pub fn component_instance(&self) -> Result<&ComponentInstance> {
+        self.state
+            .primary_output()
+            .ok_or_else(|| LayerShikaError::InvalidInput {
+                message: "No outputs available".into(),
+            })
+            .map(WindowState::component_instance)
     }
 
-    pub const fn state(&self) -> &WindowState {
+    pub fn state(&self) -> Result<&WindowState> {
+        self.state
+            .primary_output()
+            .ok_or_else(|| LayerShikaError::InvalidInput {
+                message: "No outputs available".into(),
+            })
+    }
+
+    pub fn app_state(&self) -> &AppState {
         &self.state
     }
 }

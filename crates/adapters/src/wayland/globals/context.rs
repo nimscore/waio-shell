@@ -10,11 +10,11 @@ use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_man
 use wayland_protocols::wp::viewporter::client::wp_viewporter::WpViewporter;
 use wayland_protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
 
-use crate::wayland::surfaces::surface_state::WindowState;
+use crate::wayland::surfaces::app_state::AppState;
 
 pub struct GlobalContext {
     pub compositor: WlCompositor,
-    pub output: WlOutput,
+    pub outputs: Vec<WlOutput>,
     pub layer_shell: ZwlrLayerShellV1,
     pub seat: WlSeat,
     pub xdg_wm_base: Option<XdgWmBase>,
@@ -25,20 +25,56 @@ pub struct GlobalContext {
 impl GlobalContext {
     pub fn initialize(
         connection: &Connection,
-        queue_handle: &QueueHandle<WindowState>,
+        queue_handle: &QueueHandle<AppState>,
     ) -> Result<Self, LayerShikaError> {
-        let global_list = registry_queue_init::<WindowState>(connection)
+        let global_list = registry_queue_init::<AppState>(connection)
             .map(|(global_list, _)| global_list)
             .map_err(|e| LayerShikaError::GlobalInitialization { source: e })?;
 
-        let (compositor, output, layer_shell, seat) = bind_globals!(
+        let (compositor, layer_shell, seat) = bind_globals!(
             &global_list,
             queue_handle,
             (WlCompositor, compositor, 3..=6),
-            (WlOutput, output, 1..=4),
             (ZwlrLayerShellV1, layer_shell, 1..=5),
             (WlSeat, seat, 1..=9)
         )?;
+
+        let output_names: Vec<u32> = global_list
+            .contents()
+            .clone_list()
+            .into_iter()
+            .filter(|global| global.interface == "wl_output")
+            .map(|global| {
+                info!(
+                    "Found wl_output global with name: {} at version {}",
+                    global.name, global.version
+                );
+                global.name
+            })
+            .collect();
+
+        info!(
+            "Total unique wl_output globals found: {}",
+            output_names.len()
+        );
+
+        let outputs: Vec<WlOutput> = output_names
+            .iter()
+            .map(|&name| {
+                info!("Binding wl_output with name: {}", name);
+                global_list
+                    .registry()
+                    .bind::<WlOutput, _, _>(name, 4, queue_handle, ())
+            })
+            .collect();
+
+        if outputs.is_empty() {
+            return Err(LayerShikaError::InvalidInput {
+                message: "No outputs found".into(),
+            });
+        }
+
+        info!("Discovered {} output(s)", outputs.len());
 
         let xdg_wm_base = global_list
             .bind::<XdgWmBase, _, _>(queue_handle, 1..=6, ())
@@ -66,7 +102,7 @@ impl GlobalContext {
 
         Ok(Self {
             compositor,
-            output,
+            outputs,
             layer_shell,
             seat,
             xdg_wm_base,

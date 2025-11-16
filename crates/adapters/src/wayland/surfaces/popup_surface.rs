@@ -21,7 +21,7 @@ use wayland_protocols::xdg::shell::client::{
     xdg_wm_base::XdgWmBase,
 };
 
-use super::surface_state::WindowState;
+use super::app_state::AppState;
 
 pub struct PopupSurfaceParams<'a> {
     pub compositor: &'a WlCompositor,
@@ -29,7 +29,7 @@ pub struct PopupSurfaceParams<'a> {
     pub parent_layer_surface: &'a ZwlrLayerSurfaceV1,
     pub fractional_scale_manager: Option<&'a WpFractionalScaleManagerV1>,
     pub viewporter: Option<&'a WpViewporter>,
-    pub queue_handle: &'a QueueHandle<WindowState>,
+    pub queue_handle: &'a QueueHandle<AppState>,
     pub popup_config: PopupConfig,
     pub physical_size: PhysicalSize,
     pub scale_factor: f32,

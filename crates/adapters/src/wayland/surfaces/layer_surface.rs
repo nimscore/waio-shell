@@ -1,4 +1,4 @@
-use crate::wayland::{config::LayerSurfaceConfig, surfaces::surface_state::WindowState};
+use crate::wayland::{config::LayerSurfaceConfig, surfaces::app_state::AppState};
 use log::info;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::{Layer, ZwlrLayerShellV1},
@@ -23,7 +23,7 @@ pub struct SurfaceSetupParams<'a> {
     pub layer_shell: &'a ZwlrLayerShellV1,
     pub fractional_scale_manager: Option<&'a WpFractionalScaleManagerV1>,
     pub viewporter: Option<&'a WpViewporter>,
-    pub queue_handle: &'a QueueHandle<WindowState>,
+    pub queue_handle: &'a QueueHandle<AppState>,
     pub layer: Layer,
     pub namespace: String,
 }

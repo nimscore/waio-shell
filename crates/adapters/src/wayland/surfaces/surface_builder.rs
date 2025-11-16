@@ -15,7 +15,7 @@ use crate::rendering::slint_integration::platform::CustomSlintPlatform;
 
 use super::surface_state::WindowState;
 
-struct PlatformWrapper(Rc<CustomSlintPlatform>);
+pub struct PlatformWrapper(pub Rc<CustomSlintPlatform>);
 
 impl Platform for PlatformWrapper {
     fn create_window_adapter(&self) -> StdResult<Rc<dyn WindowAdapter>, PlatformError> {
@@ -107,7 +107,10 @@ impl WindowStateBuilder {
     }
 
     #[must_use]
-    pub fn with_compilation_result(mut self, compilation_result: Option<Rc<CompilationResult>>) -> Self {
+    pub fn with_compilation_result(
+        mut self,
+        compilation_result: Option<Rc<CompilationResult>>,
+    ) -> Self {
         self.compilation_result = compilation_result;
         self
     }

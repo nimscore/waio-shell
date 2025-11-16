@@ -1,3 +1,4 @@
+pub mod app_state;
 pub mod component_state;
 pub mod dimensions;
 pub mod display_metrics;

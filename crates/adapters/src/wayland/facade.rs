@@ -25,7 +25,7 @@ impl WindowingSystemFacade {
         &mut self.inner
     }
 
-    pub fn component_instance(&self) -> &ComponentInstance {
+    pub fn component_instance(&self) -> Result<&ComponentInstance> {
         self.inner.component_instance()
     }
 

@@ -9,7 +9,9 @@ use layer_shika_adapters::platform::slint::ComponentHandle;
 use layer_shika_adapters::platform::slint_interpreter::{
     CompilationResult, ComponentDefinition, ComponentInstance,
 };
-use layer_shika_adapters::{PopupManager, WaylandWindowConfig, WindowState, WindowingSystemFacade};
+use layer_shika_adapters::{
+    AppState, PopupManager, WaylandWindowConfig, WindowState, WindowingSystemFacade,
+};
 use layer_shika_domain::config::WindowConfig;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
@@ -49,8 +51,8 @@ impl EventLoopHandle {
         let loop_handle = system.borrow().inner_ref().event_loop_handle();
 
         loop_handle
-            .insert_source(source, move |event, metadata, window_state| {
-                let runtime_state = RuntimeState { window_state };
+            .insert_source(source, move |event, metadata, app_state| {
+                let runtime_state = RuntimeState { app_state };
                 callback(event, metadata, runtime_state)
             })
             .map_err(|e| {
@@ -120,22 +122,42 @@ impl EventLoopHandle {
 }
 
 pub struct RuntimeState<'a> {
-    window_state: &'a mut WindowState,
+    app_state: &'a mut AppState,
 }
 
 impl RuntimeState<'_> {
     #[must_use]
-    pub fn component_instance(&self) -> &ComponentInstance {
-        self.window_state.component_instance()
+    pub fn component_instance(&self) -> Option<&ComponentInstance> {
+        self.app_state
+            .primary_output()
+            .map(WindowState::component_instance)
+    }
+
+    pub fn all_component_instances(&self) -> impl Iterator<Item = &ComponentInstance> {
+        self.app_state
+            .all_outputs()
+            .map(WindowState::component_instance)
+    }
+
+    fn active_or_primary_output(&self) -> Option<&WindowState> {
+        self.app_state
+            .active_output()
+            .and_then(|key| self.app_state.get_output_by_key(key))
+            .or_else(|| self.app_state.primary_output())
     }
 
     pub fn render_frame_if_dirty(&mut self) -> Result<()> {
-        Ok(self.window_state.render_frame_if_dirty()?)
+        for window in self.app_state.all_outputs() {
+            window.render_frame_if_dirty()?;
+        }
+        Ok(())
     }
 
     #[must_use]
     pub fn compilation_result(&self) -> Option<Rc<CompilationResult>> {
-        self.window_state.compilation_result()
+        self.app_state
+            .primary_output()
+            .and_then(WindowState::compilation_result)
     }
 
     pub fn show_popup(
@@ -162,7 +184,19 @@ impl RuntimeState<'_> {
 
         self.close_current_popup()?;
 
-        let popup_manager = self.window_state.popup_manager().ok_or_else(|| {
+        let is_using_active = self.app_state.active_output().is_some();
+        let active_window = self.active_or_primary_output().ok_or_else(|| {
+            Error::Domain(DomainError::Configuration {
+                message: "No active or primary output available".to_string(),
+            })
+        })?;
+
+        log::info!(
+            "Creating popup on {} output",
+            if is_using_active { "active" } else { "primary" }
+        );
+
+        let popup_manager = active_window.popup_manager().ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
                 message: "No popup manager available".to_string(),
             })
@@ -209,15 +243,19 @@ impl RuntimeState<'_> {
     }
 
     pub fn close_popup(&mut self, handle: PopupHandle) -> Result<()> {
-        if let Some(popup_manager) = self.window_state.popup_manager() {
-            popup_manager.close(handle)?;
+        if let Some(active_window) = self.active_or_primary_output() {
+            if let Some(popup_manager) = active_window.popup_manager() {
+                popup_manager.close(handle)?;
+            }
         }
         Ok(())
     }
 
     pub fn close_current_popup(&mut self) -> Result<()> {
-        if let Some(popup_manager) = self.window_state.popup_manager() {
-            popup_manager.close_current_popup();
+        if let Some(active_window) = self.active_or_primary_output() {
+            if let Some(popup_manager) = active_window.popup_manager() {
+                popup_manager.close_current_popup();
+            }
         }
         Ok(())
     }
@@ -229,7 +267,13 @@ impl RuntimeState<'_> {
         height: f32,
         resize_sender: Option<channel::Sender<PopupCommand>>,
     ) -> Result<()> {
-        let popup_manager = self.window_state.popup_manager().ok_or_else(|| {
+        let active_window = self.active_or_primary_output().ok_or_else(|| {
+            Error::Domain(DomainError::Configuration {
+                message: "No active or primary output available".to_string(),
+            })
+        })?;
+
+        let popup_manager = active_window.popup_manager().ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
                 message: "No popup manager available".to_string(),
             })
@@ -322,7 +366,7 @@ impl WindowingSystem {
             compilation_result,
             config,
         );
-        let inner = layer_shika_adapters::WaylandWindowingSystem::new(wayland_config)?;
+        let inner = layer_shika_adapters::WaylandWindowingSystem::new(&wayland_config)?;
         let facade = WindowingSystemFacade::new(inner);
         let inner_rc = Rc::new(RefCell::new(facade));
 
@@ -339,7 +383,7 @@ impl WindowingSystem {
         };
 
         system.setup_popup_command_handler(receiver)?;
-        system.register_popup_callbacks()?;
+        system.register_popup_callbacks();
 
         Ok(system)
     }
@@ -349,9 +393,9 @@ impl WindowingSystem {
         let sender_for_handler = self.popup_command_sender.clone();
 
         loop_handle
-            .insert_source(receiver, move |event, (), window_state| {
+            .insert_source(receiver, move |event, (), app_state| {
                 if let channel::Event::Msg(command) = event {
-                    let mut runtime_state = RuntimeState { window_state };
+                    let mut runtime_state = RuntimeState { app_state };
 
                     match command {
                         PopupCommand::Show(request) => {
@@ -395,11 +439,15 @@ impl WindowingSystem {
         Ok(())
     }
 
-    fn register_popup_callbacks(&self) -> Result<()> {
-        self.with_component_instance(|component_instance| {
-            self.callback_contract
+    fn register_popup_callbacks(&self) {
+        self.with_all_component_instances(|component_instance| {
+            if let Err(e) = self
+                .callback_contract
                 .register_on_main_component(component_instance)
-        })
+            {
+                log::error!("Failed to register popup callbacks on output: {}", e);
+            }
+        });
     }
 
     #[must_use]
@@ -434,10 +482,23 @@ impl WindowingSystem {
         Ok(())
     }
 
-    pub fn with_component_instance<F, R>(&self, f: F) -> R
+    pub fn with_component_instance<F, R>(&self, f: F) -> Result<R>
     where
         F: FnOnce(&ComponentInstance) -> R,
     {
-        f(self.inner.borrow().component_instance())
+        let facade = self.inner.borrow();
+        let instance = facade.component_instance()?;
+        Ok(f(instance))
+    }
+
+    pub fn with_all_component_instances<F>(&self, mut f: F)
+    where
+        F: FnMut(&ComponentInstance),
+    {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+        for window in system.app_state().all_outputs() {
+            f(window.component_instance());
+        }
     }
 }

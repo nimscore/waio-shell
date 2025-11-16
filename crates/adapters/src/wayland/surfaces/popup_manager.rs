@@ -23,8 +23,8 @@ use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1:
 use wayland_protocols::wp::viewporter::client::wp_viewporter::WpViewporter;
 use wayland_protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
 
+use super::app_state::AppState;
 use super::popup_surface::PopupSurface;
-use super::surface_state::WindowState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveWindow {
@@ -66,6 +66,7 @@ pub struct CreatePopupParams {
     pub grab: bool,
 }
 
+#[derive(Clone)]
 pub struct PopupContext {
     compositor: WlCompositor,
     xdg_wm_base: Option<XdgWmBase>,
@@ -185,6 +186,11 @@ impl PopupManager {
     }
 
     #[must_use]
+    pub fn has_pending_popup(&self) -> bool {
+        self.state.borrow().pending_popup.is_some()
+    }
+
+    #[must_use]
     pub fn scale_factor(&self) -> f32 {
         self.scale_factor.get()
     }
@@ -225,7 +231,7 @@ impl PopupManager {
 
     pub fn create_pending_popup(
         self: &Rc<Self>,
-        queue_handle: &QueueHandle<WindowState>,
+        queue_handle: &QueueHandle<AppState>,
         parent_layer_surface: &ZwlrLayerSurfaceV1,
         last_pointer_serial: u32,
     ) -> Result<Rc<PopupWindow>> {
@@ -250,7 +256,7 @@ impl PopupManager {
 
     fn create_popup_internal(
         self: &Rc<Self>,
-        queue_handle: &QueueHandle<WindowState>,
+        queue_handle: &QueueHandle<AppState>,
         parent_layer_surface: &ZwlrLayerSurfaceV1,
         params: CreatePopupParams,
         request: PopupRequest,
