@@ -23,7 +23,7 @@
 //! use layer_shika::prelude::*;
 //!
 //! let (window, system) = LayerShika::from_file("ui/main.slint", "AppWindow")?
-//!     .with_height(42)?
+//!     .with_height(42)
 //!     .with_anchor(AnchorEdges::top_bar())
 //!     .with_exclusive_zone(42)
 //!     .build()?;

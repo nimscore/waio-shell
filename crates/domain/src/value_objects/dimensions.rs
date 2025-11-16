@@ -1,17 +1,14 @@
-use crate::errors::{DomainError, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WindowHeight(u32);
 
 impl WindowHeight {
-    pub fn new(height: u32) -> Result<Self> {
+    pub fn new(height: u32) -> Self {
         if height == 0 {
-            return Err(DomainError::InvalidDimensions {
-                width: 0,
-                height: 0,
-            });
+            Self::default()
+        } else {
+            Self(height)
         }
-        Ok(Self(height))
     }
 
     pub const fn from_raw(height: u32) -> Self {
@@ -29,10 +26,8 @@ impl Default for WindowHeight {
     }
 }
 
-impl TryFrom<u32> for WindowHeight {
-    type Error = DomainError;
-
-    fn try_from(height: u32) -> Result<Self> {
+impl From<u32> for WindowHeight {
+    fn from(height: u32) -> Self {
         Self::new(height)
     }
 }

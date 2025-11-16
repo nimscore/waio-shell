@@ -135,9 +135,10 @@ impl LayerShika<NeedsComponent> {
 }
 
 impl LayerShika<HasComponent> {
-    pub fn with_height(mut self, height: u32) -> Result<Self> {
-        self.config.height = WindowHeight::new(height)?;
-        Ok(self)
+    #[must_use]
+    pub fn with_height(mut self, height: u32) -> Self {
+        self.config.height = WindowHeight::new(height);
+        self
     }
 
     #[must_use]
