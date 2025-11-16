@@ -2,6 +2,7 @@ use layer_shika_domain::dimensions::{
     LogicalSize as DomainLogicalSize, PhysicalSize as DomainPhysicalSize,
     ScaleFactor as DomainScaleFactor,
 };
+use layer_shika_domain::errors::Result as DomainResult;
 use layer_shika_domain::surface_dimensions::SurfaceDimensions;
 use log::info;
 use slint::PhysicalSize;
@@ -41,6 +42,11 @@ impl DisplayMetrics {
     }
 
     #[must_use]
+    pub fn scale_factor_typed(&self) -> DomainScaleFactor {
+        self.surface.scale_factor()
+    }
+
+    #[must_use]
     pub const fn output_size(&self) -> PhysicalSize {
         self.output_size
     }
@@ -54,8 +60,25 @@ impl DisplayMetrics {
     }
 
     #[must_use]
+    pub const fn surface_dimensions(&self) -> &SurfaceDimensions {
+        &self.surface
+    }
+
+    #[must_use]
     pub const fn has_fractional_scale(&self) -> bool {
         self.has_fractional_scale
+    }
+
+    pub fn calculate_dimensions(
+        &self,
+        logical_width: u32,
+        logical_height: u32,
+    ) -> DomainResult<SurfaceDimensions> {
+        SurfaceDimensions::calculate(logical_width, logical_height, self.scale_factor())
+    }
+
+    pub fn scale_factor_from_120ths(scale_120ths: u32) -> f32 {
+        DomainScaleFactor::from_120ths(scale_120ths).value()
     }
 
     #[allow(clippy::cast_precision_loss)]

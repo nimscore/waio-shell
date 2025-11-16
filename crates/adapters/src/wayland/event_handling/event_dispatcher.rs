@@ -227,8 +227,8 @@ impl Dispatch<WpFractionalScaleV1, ()> for WindowState {
         _qhandle: &QueueHandle<Self>,
     ) {
         if let wp_fractional_scale_v1::Event::PreferredScale { scale } = event {
-            #[allow(clippy::cast_precision_loss)]
-            let scale_float = scale as f32 / 120.0;
+            use crate::wayland::surfaces::display_metrics::DisplayMetrics;
+            let scale_float = DisplayMetrics::scale_factor_from_120ths(scale);
             info!("Fractional scale received: {scale_float} ({scale}x)");
             state.update_scale_for_fractional_scale_object(proxy, scale);
         }

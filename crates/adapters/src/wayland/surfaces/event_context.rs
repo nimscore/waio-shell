@@ -75,7 +75,6 @@ impl EventContext {
         self.display_metrics.borrow().scale_factor()
     }
 
-    #[allow(clippy::cast_precision_loss)]
     pub fn update_scale_factor(&mut self, scale_120ths: u32) -> f32 {
         let new_scale_factor = self
             .display_metrics

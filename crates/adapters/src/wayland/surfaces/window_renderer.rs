@@ -156,6 +156,11 @@ impl<W: RenderableWindow> WindowRenderer<W> {
                 return;
             }
         };
+
+        self.apply_surface_dimensions(dimensions, scale_factor);
+    }
+
+    pub fn apply_surface_dimensions(&mut self, dimensions: SurfaceDimensions, scale_factor: f32) {
         let scaling_mode = self.determine_scaling_mode();
 
         info!(

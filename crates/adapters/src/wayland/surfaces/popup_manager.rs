@@ -1,8 +1,8 @@
 use crate::errors::{LayerShikaError, Result};
 use crate::rendering::egl::context::EGLContext;
 use crate::rendering::femtovg::{popup_window::PopupWindow, renderable_window::RenderableWindow};
-use crate::wayland::surfaces::display_metrics::SharedDisplayMetrics;
-use layer_shika_domain::dimensions::{LogicalSize as DomainLogicalSize, ScaleFactor as DomainScaleFactor};
+use crate::wayland::surfaces::display_metrics::{DisplayMetrics, SharedDisplayMetrics};
+use layer_shika_domain::dimensions::LogicalSize as DomainLogicalSize;
 use layer_shika_domain::surface_dimensions::SurfaceDimensions;
 use layer_shika_domain::value_objects::popup_config::PopupConfig;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
@@ -179,15 +179,8 @@ impl PopupManager {
         self.state.borrow().display_metrics.borrow().output_size()
     }
 
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn update_scale_factor(&self, scale_factor: f32) {
         self.scale_factor.set(scale_factor);
-        let scale_120ths = (scale_factor * 120.0) as u32;
-        self.state
-            .borrow()
-            .display_metrics
-            .borrow_mut()
-            .update_scale_factor(scale_120ths);
 
         for popup in self.state.borrow().popups.values() {
             popup.window.set_scale_factor(scale_factor);
@@ -246,7 +239,12 @@ impl PopupManager {
         );
 
         let popup_logical_size = DomainLogicalSize::from_raw(params.width, params.height);
-        let domain_scale = DomainScaleFactor::from_raw(scale_factor);
+        let domain_scale = self
+            .state
+            .borrow()
+            .display_metrics
+            .borrow()
+            .scale_factor_typed();
         let popup_dimensions = SurfaceDimensions::from_logical(popup_logical_size, domain_scale);
 
         let popup_config = PopupConfig::new(
@@ -490,8 +488,7 @@ impl PopupManager {
 
         if let Some(popup_key) = self.find_popup_key_by_fractional_scale_id(&fractional_scale_id) {
             if let Some(popup_window) = self.get_popup_window(popup_key) {
-                let new_scale = DomainScaleFactor::from_120ths(scale_120ths);
-                let new_scale_factor = new_scale.value();
+                let new_scale_factor = DisplayMetrics::scale_factor_from_120ths(scale_120ths);
                 info!("Updating popup scale factor to {new_scale_factor} ({scale_120ths}x)");
                 popup_window.set_scale_factor(new_scale_factor);
                 popup_window.request_redraw();
