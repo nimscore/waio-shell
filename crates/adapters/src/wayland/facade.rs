@@ -44,7 +44,7 @@ impl<'a> RuntimeStateFacade<'a> {
     }
 
     pub fn popup_manager(&self) -> Option<Rc<PopupManager>> {
-        self.window_state.popup_manager().cloned()
+        self.window_state.popup_manager()
     }
 
     pub fn component_instance(&self) -> &ComponentInstance {

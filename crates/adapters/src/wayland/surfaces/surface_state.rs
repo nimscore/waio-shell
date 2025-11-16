@@ -26,12 +26,10 @@ use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1:
 pub struct WindowState {
     component: ComponentState,
     rendering: RenderingState<FemtoVGWindow>,
-    event_context: EventContext,
+    event_context: RefCell<EventContext>,
     display_metrics: SharedDisplayMetrics,
     #[allow(dead_code)]
     pointer: ManagedWlPointer,
-    active_popup_key: RefCell<Option<usize>>,
-    main_surface: Rc<WlSurface>,
 }
 
 impl WindowState {
@@ -115,22 +113,21 @@ impl WindowState {
         Ok(Self {
             component,
             rendering,
-            event_context,
+            event_context: RefCell::new(event_context),
             display_metrics,
             pointer,
-            active_popup_key: RefCell::new(None),
-            main_surface: surface_rc,
         })
     }
 
     pub fn update_size(&mut self, width: u32, height: u32) {
-        let scale_factor = self.event_context.scale_factor();
+        let scale_factor = self.event_context.borrow().scale_factor();
         self.rendering.update_size(width, height, scale_factor);
     }
 
     #[allow(clippy::cast_possible_truncation)]
     pub fn set_current_pointer_position(&mut self, physical_x: f64, physical_y: f64) {
         self.event_context
+            .borrow_mut()
             .set_current_pointer_position(physical_x, physical_y);
     }
 
@@ -139,7 +136,7 @@ impl WindowState {
     }
 
     pub fn current_pointer_position(&self) -> LogicalPosition {
-        self.event_context.current_pointer_position()
+        self.event_context.borrow().current_pointer_position()
     }
 
     pub(crate) fn window(&self) -> Rc<FemtoVGWindow> {
@@ -158,7 +155,7 @@ impl WindowState {
         self.display_metrics
             .borrow_mut()
             .update_output_size(output_size);
-        self.event_context.update_output_size(output_size);
+        self.event_context.borrow().update_output_size(output_size);
     }
 
     pub fn output_size(&self) -> PhysicalSize {
@@ -180,7 +177,9 @@ impl WindowState {
 
     #[allow(clippy::cast_precision_loss)]
     pub fn update_scale_factor(&mut self, scale_120ths: u32) {
-        self.event_context.update_scale_factor(scale_120ths);
+        self.event_context
+            .borrow_mut()
+            .update_scale_factor(scale_120ths);
 
         let current_logical_size = self.rendering.logical_size();
         if current_logical_size.width > 0 && current_logical_size.height > 0 {
@@ -189,7 +188,7 @@ impl WindowState {
     }
 
     pub fn scale_factor(&self) -> f32 {
-        self.event_context.scale_factor()
+        self.event_context.borrow().scale_factor()
     }
 
     pub const fn display_metrics(&self) -> &SharedDisplayMetrics {
@@ -197,49 +196,37 @@ impl WindowState {
     }
 
     pub fn last_pointer_serial(&self) -> u32 {
-        self.event_context.last_pointer_serial()
+        self.event_context.borrow().last_pointer_serial()
     }
 
     pub fn set_last_pointer_serial(&mut self, serial: u32) {
-        self.event_context.set_last_pointer_serial(serial);
+        self.event_context
+            .borrow_mut()
+            .set_last_pointer_serial(serial);
     }
 
     pub fn set_shared_pointer_serial(&mut self, shared_serial: Rc<SharedPointerSerial>) {
-        self.event_context.set_shared_pointer_serial(shared_serial);
+        self.event_context
+            .borrow_mut()
+            .set_shared_pointer_serial(shared_serial);
     }
 
     pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager>) {
-        self.event_context.set_popup_manager(popup_manager);
+        self.event_context
+            .borrow_mut()
+            .set_popup_manager(popup_manager);
     }
 
     pub fn set_entered_surface(&self, surface: &WlSurface) {
-        if let Some(popup_manager) = self.event_context.popup_manager() {
-            if let Some(popup_key) = popup_manager.find_popup_key_by_surface_id(&surface.id()) {
-                *self.active_popup_key.borrow_mut() = Some(popup_key);
-                return;
-            }
-        }
-        *self.active_popup_key.borrow_mut() = None;
+        self.event_context.borrow_mut().set_entered_surface(surface);
     }
 
     pub fn clear_entered_surface(&self) {
-        *self.active_popup_key.borrow_mut() = None;
+        self.event_context.borrow_mut().clear_entered_surface();
     }
 
     pub fn dispatch_to_active_window(&self, event: WindowEvent) {
-        let active_popup = *self.active_popup_key.borrow();
-
-        if let Some(popup_key) = active_popup {
-            if let Some(popup_manager) = self.event_context.popup_manager() {
-                if let Some(popup_window) = popup_manager.get_popup_window(popup_key) {
-                    popup_window.dispatch_event(event);
-                    return;
-                }
-            }
-        }
-
-        self.event_context
-            .dispatch_to_active_window(event, &self.main_surface);
+        self.event_context.borrow().dispatch_to_active_window(event);
     }
 
     #[allow(clippy::cast_precision_loss)]
@@ -258,11 +245,12 @@ impl WindowState {
         }
 
         self.event_context
+            .borrow()
             .update_scale_for_fractional_scale_object(fractional_scale_proxy, scale_120ths);
     }
 
-    pub fn popup_manager(&self) -> Option<&Rc<PopupManager>> {
-        self.event_context.popup_manager()
+    pub fn popup_manager(&self) -> Option<Rc<PopupManager>> {
+        self.event_context.borrow().popup_manager().cloned()
     }
 }
 
