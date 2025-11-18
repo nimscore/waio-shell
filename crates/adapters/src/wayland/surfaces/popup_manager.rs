@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use wayland_client::{
     backend::ObjectId,
-    protocol::{wl_compositor::WlCompositor, wl_display::WlDisplay, wl_seat::WlSeat, wl_surface::WlSurface},
+    protocol::{wl_compositor::WlCompositor, wl_seat::WlSeat, wl_surface::WlSurface},
     Connection, Proxy, QueueHandle,
 };
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1;
@@ -73,7 +73,6 @@ pub struct PopupContext {
     seat: WlSeat,
     fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
     viewporter: Option<WpViewporter>,
-    display: WlDisplay,
     render_factory: Rc<RenderContextFactory>,
 }
 
@@ -86,7 +85,6 @@ impl PopupContext {
         seat: WlSeat,
         fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
         viewporter: Option<WpViewporter>,
-        display: WlDisplay,
         _connection: Rc<Connection>,
         render_factory: Rc<RenderContextFactory>,
     ) -> Self {
@@ -96,7 +94,6 @@ impl PopupContext {
             seat,
             fractional_scale_manager,
             viewporter,
-            display,
             render_factory,
         }
     }
@@ -332,11 +329,10 @@ impl PopupManager {
             popup_surface.surface.commit();
         }
 
-        let context = self.context.render_factory.create_context(
-            &self.context.display.id(),
-            &popup_surface.surface.id(),
-            popup_size,
-        )?;
+        let context = self
+            .context
+            .render_factory
+            .create_context(&popup_surface.surface.id(), popup_size)?;
 
         let renderer = FemtoVGRenderer::new(context)
             .map_err(|e| LayerShikaError::FemtoVGRendererCreation { source: e })?;

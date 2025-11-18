@@ -38,7 +38,7 @@ use std::rc::Rc;
 use wayland_client::{
     Connection, EventQueue, Proxy, QueueHandle,
     backend::ObjectId,
-    protocol::{wl_display::WlDisplay, wl_pointer::WlPointer, wl_surface::WlSurface},
+    protocol::{wl_pointer::WlPointer, wl_surface::WlSurface},
 };
 
 type PopupManagersAndSurfaces = (Vec<Rc<PopupManager>>, Vec<Rc<ZwlrLayerSurfaceV1>>);
@@ -55,8 +55,6 @@ pub struct WaylandWindowingSystem {
     connection: Rc<Connection>,
     event_queue: EventQueue<AppState>,
     event_loop: EventLoop<'static, AppState>,
-    #[allow(dead_code)]
-    render_factory: Rc<RenderContextFactory>,
 }
 
 impl WaylandWindowingSystem {
@@ -66,15 +64,13 @@ impl WaylandWindowingSystem {
         let event_loop =
             EventLoop::try_new().map_err(|e| EventLoopError::Creation { source: e })?;
 
-        let render_factory = RenderContextFactory::new();
-        let state = Self::init_state(config, &connection, &mut event_queue, &render_factory)?;
+        let state = Self::init_state(config, &connection, &mut event_queue)?;
 
         Ok(Self {
             state,
             connection,
             event_queue,
             event_loop,
-            render_factory,
         })
     }
 
@@ -101,7 +97,6 @@ impl WaylandWindowingSystem {
         event_queue: &mut EventQueue<AppState>,
         pointer: &Rc<WlPointer>,
         layer_surface_config: &LayerSurfaceConfig,
-        render_factory: &Rc<RenderContextFactory>,
     ) -> Result<Vec<OutputSetup>> {
         let mut setups = Vec::new();
 
@@ -132,8 +127,10 @@ impl WaylandWindowingSystem {
             let surface_ctx = SurfaceCtx::setup(&setup_params, layer_surface_config);
             let main_surface_id = surface_ctx.surface.id();
 
-            let window =
-                Self::initialize_renderer(&surface_ctx.surface, &connection.display(), config, render_factory)?;
+            let render_factory =
+                RenderContextFactory::new(Rc::clone(&global_ctx.render_context_manager));
+
+            let window = Self::initialize_renderer(&surface_ctx.surface, config, &render_factory)?;
 
             let mut builder = WindowStateBuilder::new()
                 .with_component_definition(config.component_definition.clone())
@@ -222,7 +219,6 @@ impl WaylandWindowingSystem {
         config: &WaylandWindowConfig,
         connection: &Connection,
         event_queue: &mut EventQueue<AppState>,
-        render_factory: &Rc<RenderContextFactory>,
     ) -> Result<AppState> {
         let global_ctx = GlobalContext::initialize(connection, &event_queue.handle())?;
         let layer_surface_config = Self::create_layer_surface_config(config);
@@ -235,15 +231,17 @@ impl WaylandWindowingSystem {
             Rc::clone(&shared_serial),
         );
 
+        let render_factory =
+            RenderContextFactory::new(Rc::clone(&global_ctx.render_context_manager));
+
         let popup_context = PopupContext::new(
             global_ctx.compositor.clone(),
             global_ctx.xdg_wm_base.clone(),
             global_ctx.seat.clone(),
             global_ctx.fractional_scale_manager.clone(),
             global_ctx.viewporter.clone(),
-            connection.display(),
             Rc::new(connection.clone()),
-            Rc::clone(render_factory),
+            Rc::clone(&render_factory),
         );
 
         let setups = Self::create_output_setups(
@@ -253,7 +251,6 @@ impl WaylandWindowingSystem {
             event_queue,
             &pointer,
             &layer_surface_config,
-            render_factory,
         )?;
 
         let platform = Self::setup_platform(&setups)?;
@@ -327,17 +324,12 @@ impl WaylandWindowingSystem {
 
     fn initialize_renderer(
         surface: &Rc<WlSurface>,
-        display: &WlDisplay,
         config: &WaylandWindowConfig,
         render_factory: &Rc<RenderContextFactory>,
     ) -> Result<Rc<FemtoVGWindow>> {
         let init_size = PhysicalSize::new(1, 1);
 
-        let context = render_factory.create_context(
-            &display.id(),
-            &surface.id(),
-            init_size,
-        )?;
+        let context = render_factory.create_context(&surface.id(), init_size)?;
 
         let renderer = FemtoVGRenderer::new(context)
             .map_err(|e| LayerShikaError::FemtoVGRendererCreation { source: e })?;

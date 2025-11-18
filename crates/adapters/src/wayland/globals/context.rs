@@ -1,10 +1,14 @@
-use crate::{bind_globals, errors::LayerShikaError};
+use crate::{
+    bind_globals, errors::LayerShikaError,
+    rendering::egl::render_context_manager::RenderContextManager,
+};
 use log::info;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1;
+use std::rc::Rc;
 use wayland_client::{
     globals::registry_queue_init,
     protocol::{wl_compositor::WlCompositor, wl_output::WlOutput, wl_seat::WlSeat},
-    Connection, QueueHandle,
+    Connection, Proxy, QueueHandle,
 };
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1;
 use wayland_protocols::wp::viewporter::client::wp_viewporter::WpViewporter;
@@ -20,6 +24,7 @@ pub struct GlobalContext {
     pub xdg_wm_base: Option<XdgWmBase>,
     pub fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
     pub viewporter: Option<WpViewporter>,
+    pub render_context_manager: Rc<RenderContextManager>,
 }
 
 impl GlobalContext {
@@ -100,6 +105,9 @@ impl GlobalContext {
             info!("Viewporter protocol not available");
         }
 
+        let render_context_manager =
+            RenderContextManager::new(&connection.display().id())?;
+
         Ok(Self {
             compositor,
             outputs,
@@ -108,6 +116,7 @@ impl GlobalContext {
             xdg_wm_base,
             fractional_scale_manager,
             viewporter,
+            render_context_manager,
         })
     }
 }
