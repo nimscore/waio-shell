@@ -1,5 +1,6 @@
 use crate::wayland::surfaces::app_state::AppState;
 use crate::wayland::surfaces::display_metrics::DisplayMetrics;
+use layer_shika_domain::value_objects::output_info::OutputGeometry;
 use log::info;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::ZwlrLayerShellV1,
@@ -77,21 +78,38 @@ impl Dispatch<WlOutput, ()> for AppState {
         _conn: &Connection,
         _qhandle: &QueueHandle<Self>,
     ) {
+        let output_id = proxy.id();
+        let handle = state.get_handle_by_output_id(&output_id);
+
         match event {
             wl_output::Event::Mode { width, height, .. } => {
-                let output_id = proxy.id();
                 if let Some(window) = state.get_output_by_output_id_mut(&output_id) {
                     window.handle_output_mode(width, height);
                 }
             }
             wl_output::Event::Description { ref description } => {
                 info!("WlOutput description: {description:?}");
+                if let Some(handle) = handle {
+                    if let Some(info) = state.get_output_info_mut(handle) {
+                        info.set_description(description.clone());
+                    }
+                }
             }
             wl_output::Event::Scale { ref factor } => {
                 info!("WlOutput factor scale: {factor:?}");
+                if let Some(handle) = handle {
+                    if let Some(info) = state.get_output_info_mut(handle) {
+                        info.set_scale(*factor);
+                    }
+                }
             }
             wl_output::Event::Name { ref name } => {
                 info!("WlOutput name: {name:?}");
+                if let Some(handle) = handle {
+                    if let Some(info) = state.get_output_info_mut(handle) {
+                        info.set_name(name.clone());
+                    }
+                }
             }
             wl_output::Event::Geometry {
                 x,
@@ -106,6 +124,19 @@ impl Dispatch<WlOutput, ()> for AppState {
                 info!(
                     "WlOutput geometry: x={x}, y={y}, physical_width={physical_width}, physical_height={physical_height}, subpixel={subpixel:?}, make={make:?}, model={model:?}, transform={transform:?}"
                 );
+                if let Some(handle) = handle {
+                    if let Some(info) = state.get_output_info_mut(handle) {
+                        let mut geometry =
+                            OutputGeometry::new(x, y, physical_width, physical_height);
+                        if !make.is_empty() {
+                            geometry = geometry.with_make(make);
+                        }
+                        if !model.is_empty() {
+                            geometry = geometry.with_model(model);
+                        }
+                        info.set_geometry(geometry);
+                    }
+                }
             }
             wl_output::Event::Done => {
                 info!("WlOutput done");

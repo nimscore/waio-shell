@@ -3,6 +3,7 @@ use super::surface_state::WindowState;
 use crate::wayland::managed_proxies::ManagedWlPointer;
 use crate::wayland::outputs::OutputKey;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
+use layer_shika_domain::value_objects::output_info::OutputInfo;
 use std::collections::HashMap;
 use std::rc::Rc;
 use wayland_client::Proxy;
@@ -12,6 +13,7 @@ pub type PerOutputWindow = WindowState;
 
 pub struct AppState {
     outputs: HashMap<OutputHandle, PerOutputWindow>,
+    output_info: HashMap<OutputHandle, OutputInfo>,
     surface_to_output: HashMap<ObjectId, OutputHandle>,
     output_to_handle: HashMap<ObjectId, OutputHandle>,
     _pointer: ManagedWlPointer,
@@ -24,6 +26,7 @@ impl AppState {
     pub fn new(pointer: ManagedWlPointer, shared_serial: Rc<SharedPointerSerial>) -> Self {
         Self {
             outputs: HashMap::new(),
+            output_info: HashMap::new(),
             surface_to_output: HashMap::new(),
             output_to_handle: HashMap::new(),
             _pointer: pointer,
@@ -44,9 +47,14 @@ impl AppState {
         self.output_to_handle.insert(output_id, handle);
         self.surface_to_output.insert(main_surface_id, handle);
 
-        if self.primary_output.is_none() {
+        let is_primary = self.primary_output.is_none();
+        if is_primary {
             self.primary_output = Some(handle);
         }
+
+        let mut info = OutputInfo::new(handle);
+        info.set_primary(is_primary);
+        self.output_info.insert(handle, info);
 
         self.outputs.insert(handle, window);
     }
@@ -218,5 +226,23 @@ impl AppState {
                 .and_then(|pm| pm.find_by_surface(popup_surface_id))
                 .map(|_| handle)
         })
+    }
+
+    pub fn get_output_info(&self, handle: OutputHandle) -> Option<&OutputInfo> {
+        self.output_info.get(&handle)
+    }
+
+    pub fn get_output_info_mut(&mut self, handle: OutputHandle) -> Option<&mut OutputInfo> {
+        self.output_info.get_mut(&handle)
+    }
+
+    pub fn all_output_info(&self) -> impl Iterator<Item = &OutputInfo> {
+        self.output_info.values()
+    }
+
+    pub fn outputs_with_info(&self) -> impl Iterator<Item = (&OutputInfo, &PerOutputWindow)> {
+        self.output_info
+            .iter()
+            .filter_map(|(handle, info)| self.outputs.get(handle).map(|window| (info, window)))
     }
 }

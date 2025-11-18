@@ -3,7 +3,8 @@ use crate::system::WindowingSystem;
 use layer_shika_adapters::platform::slint_interpreter::{CompilationResult, Compiler};
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::prelude::{
-    AnchorEdges, KeyboardInteractivity, Layer, Margins, ScaleFactor, WindowConfig, WindowHeight,
+    AnchorEdges, KeyboardInteractivity, Layer, Margins, OutputPolicy, ScaleFactor, WindowConfig,
+    WindowHeight,
 };
 use spin_on::spin_on;
 use std::path::{Path, PathBuf};
@@ -184,6 +185,12 @@ impl LayerShika<HasComponent> {
     #[must_use]
     pub const fn with_keyboard_interactivity(mut self, mode: KeyboardInteractivity) -> Self {
         self.config.keyboard_interactivity = mode;
+        self
+    }
+
+    #[must_use]
+    pub fn with_output_policy(mut self, policy: OutputPolicy) -> Self {
+        self.config.output_policy = policy;
         self
     }
 

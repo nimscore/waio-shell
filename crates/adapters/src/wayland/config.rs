@@ -3,6 +3,7 @@ use layer_shika_domain::value_objects::anchor::AnchorEdges;
 use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteractivity as DomainKeyboardInteractivity;
 use layer_shika_domain::value_objects::layer::Layer;
 use layer_shika_domain::value_objects::margins::Margins;
+use layer_shika_domain::value_objects::output_policy::OutputPolicy;
 use slint_interpreter::{CompilationResult, ComponentDefinition};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::{self},
@@ -31,6 +32,7 @@ pub struct WaylandWindowConfig {
     pub namespace: String,
     pub component_definition: ComponentDefinition,
     pub compilation_result: Option<Rc<CompilationResult>>,
+    pub output_policy: OutputPolicy,
 }
 
 impl WaylandWindowConfig {
@@ -53,6 +55,7 @@ impl WaylandWindowConfig {
             namespace: domain_config.namespace,
             component_definition,
             compilation_result,
+            output_policy: domain_config.output_policy,
         }
     }
 }

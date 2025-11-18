@@ -15,6 +15,7 @@ use layer_shika_adapters::{
 use layer_shika_domain::config::WindowConfig;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
+use layer_shika_domain::value_objects::output_info::OutputInfo;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use layer_shika_domain::value_objects::popup_request::{PopupHandle, PopupRequest, PopupSize};
 use std::cell::Cell;
@@ -160,6 +161,20 @@ impl RuntimeState<'_> {
         self.app_state
             .get_output_by_handle(handle)
             .map(WindowState::component_instance)
+    }
+
+    pub fn get_output_info(&self, handle: OutputHandle) -> Option<&OutputInfo> {
+        self.app_state.get_output_info(handle)
+    }
+
+    pub fn all_output_info(&self) -> impl Iterator<Item = &OutputInfo> {
+        self.app_state.all_output_info()
+    }
+
+    pub fn outputs_with_info(&self) -> impl Iterator<Item = (&OutputInfo, &ComponentInstance)> {
+        self.app_state
+            .outputs_with_info()
+            .map(|(info, window)| (info, window.component_instance()))
     }
 
     fn active_or_primary_output(&self) -> Option<&WindowState> {
@@ -523,5 +538,45 @@ impl WindowingSystem {
         for window in system.app_state().all_outputs() {
             f(window.component_instance());
         }
+    }
+
+    pub fn with_output<F, R>(&self, handle: OutputHandle, f: F) -> Result<R>
+    where
+        F: FnOnce(&ComponentInstance) -> R,
+    {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+        let window = system
+            .app_state()
+            .get_output_by_handle(handle)
+            .ok_or_else(|| {
+                Error::Domain(DomainError::Configuration {
+                    message: format!("Output with handle {:?} not found", handle),
+                })
+            })?;
+        Ok(f(window.component_instance()))
+    }
+
+    pub fn with_all_outputs<F>(&self, mut f: F)
+    where
+        F: FnMut(OutputHandle, &ComponentInstance),
+    {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+        for (handle, window) in system.app_state().outputs_with_handles() {
+            f(handle, window.component_instance());
+        }
+    }
+
+    pub fn get_output_info(&self, handle: OutputHandle) -> Option<OutputInfo> {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+        system.app_state().get_output_info(handle).cloned()
+    }
+
+    pub fn all_output_info(&self) -> Vec<OutputInfo> {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+        system.app_state().all_output_info().cloned().collect()
     }
 }

@@ -23,6 +23,8 @@ use crate::{
 use core::result::Result as CoreResult;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::ports::windowing::WindowingSystemPort;
+use layer_shika_domain::value_objects::output_handle::OutputHandle;
+use layer_shika_domain::value_objects::output_info::OutputInfo;
 use log::{error, info};
 use slint::{
     LogicalPosition, PhysicalSize, PlatformError, WindowPosition,
@@ -98,7 +100,17 @@ impl WaylandWindowingSystem {
     ) -> Result<Vec<OutputSetup>> {
         let mut setups = Vec::new();
 
-        for output in &global_ctx.outputs {
+        for (index, output) in global_ctx.outputs.iter().enumerate() {
+            let is_primary = index == 0;
+
+            let mut temp_info = OutputInfo::new(OutputHandle::new());
+            temp_info.set_primary(is_primary);
+
+            if !config.output_policy.should_render(&temp_info) {
+                info!("Skipping output {} due to output policy", index);
+                continue;
+            }
+
             let output_id = output.id();
 
             let setup_params = SurfaceSetupParams {

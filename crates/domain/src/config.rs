@@ -4,6 +4,7 @@ use crate::value_objects::dimensions::WindowHeight;
 use crate::value_objects::keyboard_interactivity::KeyboardInteractivity;
 use crate::value_objects::layer::Layer;
 use crate::value_objects::margins::Margins;
+use crate::value_objects::output_policy::OutputPolicy;
 
 #[derive(Debug, Clone)]
 pub struct WindowConfig {
@@ -15,6 +16,7 @@ pub struct WindowConfig {
     pub layer: Layer,
     pub anchor: AnchorEdges,
     pub keyboard_interactivity: KeyboardInteractivity,
+    pub output_policy: OutputPolicy,
 }
 
 impl WindowConfig {
@@ -29,6 +31,7 @@ impl WindowConfig {
             layer: Layer::default(),
             anchor: AnchorEdges::default(),
             keyboard_interactivity: KeyboardInteractivity::default(),
+            output_policy: OutputPolicy::default(),
         }
     }
 }
