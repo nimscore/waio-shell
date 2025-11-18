@@ -46,7 +46,7 @@ pub mod prelude;
 
 pub use layer_shika_composition::{
     AnchorEdges, Error, EventLoopHandle, KeyboardInteractivity, Layer, LayerShika, OutputGeometry,
-    OutputHandle, OutputInfo, OutputPolicy, PopupAt, PopupHandle, PopupPositioningMode,
+    OutputHandle, OutputInfo, OutputPolicy, OutputRegistry, PopupAt, PopupHandle, PopupPositioningMode,
     PopupRequest, PopupSize, PopupWindow, Result, RuntimeState, SlintCallbackContract,
     SlintCallbackNames, WindowingSystem,
 };

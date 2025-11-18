@@ -1,7 +1,8 @@
 use super::event_context::SharedPointerSerial;
 use super::surface_state::WindowState;
 use crate::wayland::managed_proxies::ManagedWlPointer;
-use crate::wayland::outputs::OutputKey;
+use crate::wayland::outputs::OutputMapping;
+use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
 use std::collections::HashMap;
@@ -12,27 +13,23 @@ use wayland_client::backend::ObjectId;
 pub type PerOutputWindow = WindowState;
 
 pub struct AppState {
-    outputs: HashMap<OutputHandle, PerOutputWindow>,
-    output_info: HashMap<OutputHandle, OutputInfo>,
+    output_registry: OutputRegistry,
+    output_mapping: OutputMapping,
+    windows: HashMap<OutputHandle, PerOutputWindow>,
     surface_to_output: HashMap<ObjectId, OutputHandle>,
-    output_to_handle: HashMap<ObjectId, OutputHandle>,
     _pointer: ManagedWlPointer,
     shared_pointer_serial: Rc<SharedPointerSerial>,
-    active_output: Option<OutputHandle>,
-    primary_output: Option<OutputHandle>,
 }
 
 impl AppState {
     pub fn new(pointer: ManagedWlPointer, shared_serial: Rc<SharedPointerSerial>) -> Self {
         Self {
-            outputs: HashMap::new(),
-            output_info: HashMap::new(),
+            output_registry: OutputRegistry::new(),
+            output_mapping: OutputMapping::new(),
+            windows: HashMap::new(),
             surface_to_output: HashMap::new(),
-            output_to_handle: HashMap::new(),
             _pointer: pointer,
             shared_pointer_serial: shared_serial,
-            active_output: None,
-            primary_output: None,
         }
     }
 
@@ -42,61 +39,48 @@ impl AppState {
         main_surface_id: ObjectId,
         window: PerOutputWindow,
     ) {
-        let key = OutputKey::new(&output_id);
-        let handle = key.handle();
-        self.output_to_handle.insert(output_id, handle);
+        let handle = self.output_mapping.insert(output_id);
         self.surface_to_output.insert(main_surface_id, handle);
 
-        let is_primary = self.primary_output.is_none();
-        if is_primary {
-            self.primary_output = Some(handle);
-        }
+        let is_primary = self.output_registry.is_empty();
 
         let mut info = OutputInfo::new(handle);
         info.set_primary(is_primary);
-        self.output_info.insert(handle, info);
 
-        self.outputs.insert(handle, window);
-    }
-
-    pub fn get_output_by_key(&self, key: &OutputKey) -> Option<&PerOutputWindow> {
-        self.outputs.get(&key.handle())
-    }
-
-    pub fn get_output_by_key_mut(&mut self, key: &OutputKey) -> Option<&mut PerOutputWindow> {
-        self.outputs.get_mut(&key.handle())
+        self.output_registry.add(info);
+        self.windows.insert(handle, window);
     }
 
     pub fn get_output_by_handle(&self, handle: OutputHandle) -> Option<&PerOutputWindow> {
-        self.outputs.get(&handle)
+        self.windows.get(&handle)
     }
 
     pub fn get_output_by_handle_mut(
         &mut self,
         handle: OutputHandle,
     ) -> Option<&mut PerOutputWindow> {
-        self.outputs.get_mut(&handle)
+        self.windows.get_mut(&handle)
     }
 
     pub fn get_output_by_output_id(&self, output_id: &ObjectId) -> Option<&PerOutputWindow> {
-        self.output_to_handle
+        self.output_mapping
             .get(output_id)
-            .and_then(|handle| self.outputs.get(handle))
+            .and_then(|handle| self.windows.get(&handle))
     }
 
     pub fn get_output_by_output_id_mut(
         &mut self,
         output_id: &ObjectId,
     ) -> Option<&mut PerOutputWindow> {
-        self.output_to_handle
+        self.output_mapping
             .get(output_id)
-            .and_then(|handle| self.outputs.get_mut(handle))
+            .and_then(|handle| self.windows.get_mut(&handle))
     }
 
     pub fn get_output_by_surface(&self, surface_id: &ObjectId) -> Option<&PerOutputWindow> {
         self.surface_to_output
             .get(surface_id)
-            .and_then(|handle| self.outputs.get(handle))
+            .and_then(|handle| self.windows.get(handle))
     }
 
     pub fn get_output_by_surface_mut(
@@ -105,28 +89,16 @@ impl AppState {
     ) -> Option<&mut PerOutputWindow> {
         self.surface_to_output
             .get(surface_id)
-            .and_then(|handle| self.outputs.get_mut(handle))
+            .and_then(|handle| self.windows.get_mut(handle))
     }
 
     pub fn get_output_by_layer_surface_mut(
         &mut self,
         layer_surface_id: &ObjectId,
     ) -> Option<&mut PerOutputWindow> {
-        self.outputs
+        self.windows
             .values_mut()
             .find(|window| window.layer_surface().as_ref().id() == *layer_surface_id)
-    }
-
-    pub fn get_key_by_surface(&self, surface_id: &ObjectId) -> Option<OutputKey> {
-        self.surface_to_output
-            .get(surface_id)
-            .map(|&handle| OutputKey::from(handle))
-    }
-
-    pub fn get_key_by_output_id(&self, output_id: &ObjectId) -> Option<OutputKey> {
-        self.output_to_handle
-            .get(output_id)
-            .map(|&handle| OutputKey::from(handle))
     }
 
     pub fn get_handle_by_surface(&self, surface_id: &ObjectId) -> Option<OutputHandle> {
@@ -134,49 +106,52 @@ impl AppState {
     }
 
     pub fn get_handle_by_output_id(&self, output_id: &ObjectId) -> Option<OutputHandle> {
-        self.output_to_handle.get(output_id).copied()
+        self.output_mapping.get(output_id)
     }
 
-    pub fn register_popup_surface(&mut self, popup_surface_id: ObjectId, output_key: OutputKey) {
+    pub fn register_popup_surface(
+        &mut self,
+        popup_surface_id: ObjectId,
+        output_handle: OutputHandle,
+    ) {
         self.surface_to_output
-            .insert(popup_surface_id, output_key.handle());
-    }
-
-    pub fn set_active_output(&mut self, key: Option<OutputKey>) {
-        self.active_output = key.map(|k| k.handle());
+            .insert(popup_surface_id, output_handle);
     }
 
     pub fn set_active_output_handle(&mut self, handle: Option<OutputHandle>) {
-        self.active_output = handle;
-    }
-
-    pub fn active_output(&self) -> Option<OutputKey> {
-        self.active_output.map(OutputKey::from)
+        self.output_registry.set_active(handle);
     }
 
     pub fn active_output_handle(&self) -> Option<OutputHandle> {
-        self.active_output
+        self.output_registry.active_handle()
     }
 
     pub fn primary_output(&self) -> Option<&PerOutputWindow> {
-        self.primary_output
-            .and_then(|handle| self.outputs.get(&handle))
+        self.output_registry
+            .primary_handle()
+            .and_then(|handle| self.windows.get(&handle))
     }
 
     pub fn primary_output_handle(&self) -> Option<OutputHandle> {
-        self.primary_output
+        self.output_registry.primary_handle()
+    }
+
+    pub fn active_output(&self) -> Option<&PerOutputWindow> {
+        self.output_registry
+            .active_handle()
+            .and_then(|handle| self.windows.get(&handle))
     }
 
     pub fn all_outputs(&self) -> impl Iterator<Item = &PerOutputWindow> {
-        self.outputs.values()
+        self.windows.values()
     }
 
     pub fn all_outputs_mut(&mut self) -> impl Iterator<Item = &mut PerOutputWindow> {
-        self.outputs.values_mut()
+        self.windows.values_mut()
     }
 
     pub fn outputs_with_handles(&self) -> impl Iterator<Item = (OutputHandle, &PerOutputWindow)> {
-        self.outputs
+        self.windows
             .iter()
             .map(|(&handle, window)| (handle, window))
     }
@@ -186,7 +161,7 @@ impl AppState {
     }
 
     pub fn find_output_by_popup(&self, popup_surface_id: &ObjectId) -> Option<&PerOutputWindow> {
-        self.outputs.values().find(|window| {
+        self.windows.values().find(|window| {
             window
                 .popup_manager()
                 .as_ref()
@@ -199,7 +174,7 @@ impl AppState {
         &mut self,
         popup_surface_id: &ObjectId,
     ) -> Option<&mut PerOutputWindow> {
-        self.outputs.values_mut().find(|window| {
+        self.windows.values_mut().find(|window| {
             window
                 .popup_manager()
                 .as_ref()
@@ -208,18 +183,8 @@ impl AppState {
         })
     }
 
-    pub fn get_key_by_popup(&self, popup_surface_id: &ObjectId) -> Option<OutputKey> {
-        self.outputs.iter().find_map(|(&handle, window)| {
-            window
-                .popup_manager()
-                .as_ref()
-                .and_then(|pm| pm.find_by_surface(popup_surface_id))
-                .map(|_| OutputKey::from(handle))
-        })
-    }
-
     pub fn get_handle_by_popup(&self, popup_surface_id: &ObjectId) -> Option<OutputHandle> {
-        self.outputs.iter().find_map(|(&handle, window)| {
+        self.windows.iter().find_map(|(&handle, window)| {
             window
                 .popup_manager()
                 .as_ref()
@@ -229,20 +194,24 @@ impl AppState {
     }
 
     pub fn get_output_info(&self, handle: OutputHandle) -> Option<&OutputInfo> {
-        self.output_info.get(&handle)
+        self.output_registry.get(handle)
     }
 
     pub fn get_output_info_mut(&mut self, handle: OutputHandle) -> Option<&mut OutputInfo> {
-        self.output_info.get_mut(&handle)
+        self.output_registry.get_mut(handle)
     }
 
     pub fn all_output_info(&self) -> impl Iterator<Item = &OutputInfo> {
-        self.output_info.values()
+        self.output_registry.all_info()
     }
 
     pub fn outputs_with_info(&self) -> impl Iterator<Item = (&OutputInfo, &PerOutputWindow)> {
-        self.output_info
-            .iter()
-            .filter_map(|(handle, info)| self.outputs.get(handle).map(|window| (info, window)))
+        self.output_registry
+            .all()
+            .filter_map(|(handle, info)| self.windows.get(&handle).map(|window| (info, window)))
+    }
+
+    pub const fn output_registry(&self) -> &OutputRegistry {
+        &self.output_registry
     }
 }

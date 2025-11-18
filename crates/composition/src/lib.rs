@@ -11,6 +11,7 @@ use std::result::Result as StdResult;
 pub use builder::LayerShika;
 pub use layer_shika_adapters::PopupWindow;
 pub use layer_shika_adapters::platform::{slint, slint_interpreter};
+pub use layer_shika_domain::entities::output_registry::OutputRegistry;
 pub use layer_shika_domain::value_objects::anchor::AnchorEdges;
 pub use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteractivity;
 pub use layer_shika_domain::value_objects::layer::Layer;

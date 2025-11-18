@@ -13,6 +13,7 @@ use layer_shika_adapters::{
     AppState, PopupManager, WaylandWindowConfig, WindowState, WindowingSystemFacade,
 };
 use layer_shika_domain::config::WindowConfig;
+use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
@@ -141,6 +142,10 @@ impl RuntimeState<'_> {
             .map(WindowState::component_instance)
     }
 
+    pub const fn output_registry(&self) -> &OutputRegistry {
+        self.app_state.output_registry()
+    }
+
     #[must_use]
     pub fn primary_output_handle(&self) -> Option<OutputHandle> {
         self.app_state.primary_output_handle()
@@ -180,7 +185,6 @@ impl RuntimeState<'_> {
     fn active_or_primary_output(&self) -> Option<&WindowState> {
         self.app_state
             .active_output()
-            .and_then(|key| self.app_state.get_output_by_key(&key))
             .or_else(|| self.app_state.primary_output())
     }
 
@@ -578,5 +582,11 @@ impl WindowingSystem {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
         system.app_state().all_output_info().cloned().collect()
+    }
+
+    pub fn output_registry(&self) -> OutputRegistry {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+        system.app_state().output_registry().clone()
     }
 }
