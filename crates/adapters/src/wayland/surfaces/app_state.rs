@@ -1,10 +1,11 @@
 use super::event_context::SharedPointerSerial;
 use super::surface_state::WindowState;
 use crate::wayland::managed_proxies::ManagedWlPointer;
-use crate::wayland::outputs::OutputMapping;
+use crate::wayland::outputs::{OutputManager, OutputMapping};
 use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use wayland_client::Proxy;
@@ -19,6 +20,8 @@ pub struct AppState {
     surface_to_output: HashMap<ObjectId, OutputHandle>,
     _pointer: ManagedWlPointer,
     shared_pointer_serial: Rc<SharedPointerSerial>,
+    output_manager: Option<Rc<RefCell<OutputManager>>>,
+    registry_name_to_output_id: HashMap<u32, ObjectId>,
 }
 
 impl AppState {
@@ -30,7 +33,29 @@ impl AppState {
             surface_to_output: HashMap::new(),
             _pointer: pointer,
             shared_pointer_serial: shared_serial,
+            output_manager: None,
+            registry_name_to_output_id: HashMap::new(),
         }
+    }
+
+    pub fn set_output_manager(&mut self, manager: Rc<RefCell<OutputManager>>) {
+        self.output_manager = Some(manager);
+    }
+
+    pub fn output_manager(&self) -> Option<Rc<RefCell<OutputManager>>> {
+        self.output_manager.as_ref().map(Rc::clone)
+    }
+
+    pub fn register_registry_name(&mut self, name: u32, output_id: ObjectId) {
+        self.registry_name_to_output_id.insert(name, output_id);
+    }
+
+    pub fn find_output_id_by_registry_name(&self, name: u32) -> Option<ObjectId> {
+        self.registry_name_to_output_id.get(&name).cloned()
+    }
+
+    pub fn unregister_registry_name(&mut self, name: u32) -> Option<ObjectId> {
+        self.registry_name_to_output_id.remove(&name)
     }
 
     pub fn add_output(
@@ -49,6 +74,16 @@ impl AppState {
 
         self.output_registry.add(info);
         self.windows.insert(handle, window);
+    }
+
+    pub fn remove_output(&mut self, handle: OutputHandle) -> Option<PerOutputWindow> {
+        self.output_registry.remove(handle);
+
+        let window = self.windows.remove(&handle);
+
+        self.surface_to_output.retain(|_, h| *h != handle);
+
+        window
     }
 
     pub fn get_output_by_handle(&self, handle: OutputHandle) -> Option<&PerOutputWindow> {

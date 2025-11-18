@@ -1,7 +1,8 @@
 use crate::wayland::surfaces::app_state::AppState;
 use crate::wayland::surfaces::display_metrics::DisplayMetrics;
+use crate::wayland::surfaces::surface_state::WindowState;
 use layer_shika_domain::value_objects::output_info::OutputGeometry;
-use log::info;
+use log::{debug, info};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::ZwlrLayerShellV1,
     zwlr_layer_surface_v1::{self, ZwlrLayerSurfaceV1},
@@ -13,6 +14,7 @@ use wayland_client::{
         wl_compositor::WlCompositor,
         wl_output::{self, WlOutput},
         wl_pointer::{self, WlPointer},
+        wl_registry::Event,
         wl_registry::WlRegistry,
         wl_seat::WlSeat,
         wl_surface::WlSurface,
@@ -76,7 +78,7 @@ impl Dispatch<WlOutput, ()> for AppState {
         event: <WlOutput as Proxy>::Event,
         _data: &(),
         _conn: &Connection,
-        _qhandle: &QueueHandle<Self>,
+        qhandle: &QueueHandle<Self>,
     ) {
         let output_id = proxy.id();
         let handle = state.get_handle_by_output_id(&output_id);
@@ -139,7 +141,24 @@ impl Dispatch<WlOutput, ()> for AppState {
                 }
             }
             wl_output::Event::Done => {
-                info!("WlOutput done");
+                info!("WlOutput done for output {:?}", output_id);
+
+                if let Some(manager) = state.output_manager() {
+                    let manager_ref = manager.borrow();
+                    if manager_ref.has_pending_output(&output_id) {
+                        drop(manager_ref);
+
+                        info!(
+                            "Output {:?} configuration complete, finalizing...",
+                            output_id
+                        );
+
+                        let manager_ref = manager.borrow();
+                        if let Err(e) = manager_ref.finalize_output(&output_id, state, qhandle) {
+                            info!("Failed to finalize output {:?}: {e}", output_id);
+                        }
+                    }
+                }
             }
             _ => {}
         }
@@ -251,7 +270,6 @@ impl Dispatch<XdgWmBase, ()> for AppState {
         _qhandle: &QueueHandle<Self>,
     ) {
         if let xdg_wm_base::Event::Ping { serial } = event {
-            use crate::wayland::surfaces::surface_state::WindowState;
             WindowState::handle_xdg_wm_base_ping(xdg_wm_base, serial);
         }
     }
@@ -330,6 +348,57 @@ impl Dispatch<XdgSurface, ()> for AppState {
     }
 }
 
+impl Dispatch<WlRegistry, GlobalListContents> for AppState {
+    fn event(
+        state: &mut Self,
+        registry: &WlRegistry,
+        event: <WlRegistry as Proxy>::Event,
+        _data: &GlobalListContents,
+        _conn: &Connection,
+        qhandle: &QueueHandle<Self>,
+    ) {
+        match event {
+            Event::Global {
+                name,
+                interface,
+                version,
+            } => {
+                if interface == "wl_output" {
+                    info!(
+                        "Hot-plugged output detected! Binding wl_output with name {name}, version {version}"
+                    );
+
+                    let output = registry.bind::<WlOutput, _, _>(name, 4.min(version), qhandle, ());
+                    let output_id = output.id();
+
+                    if let Some(manager) = state.output_manager() {
+                        let mut manager_ref = manager.borrow_mut();
+                        let handle = manager_ref.register_output(output, qhandle);
+                        info!("Registered hot-plugged output with handle {handle:?}");
+
+                        state.register_registry_name(name, output_id);
+                    } else {
+                        info!("No output manager available yet (startup initialization)");
+                    }
+                }
+            }
+            Event::GlobalRemove { name } => {
+                info!("Registry global removed: name {name}");
+
+                if let Some(output_id) = state.unregister_registry_name(name) {
+                    info!("Output with registry name {name} removed, cleaning up...");
+
+                    if let Some(manager) = state.output_manager() {
+                        let mut manager_ref = manager.borrow_mut();
+                        manager_ref.remove_output(&output_id, state);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 macro_rules! impl_empty_dispatch_app {
     ($(($t:ty, $u:ty)),+) => {
         $(
@@ -342,7 +411,7 @@ macro_rules! impl_empty_dispatch_app {
                     _conn: &Connection,
                     _qhandle: &QueueHandle<Self>,
                 ) {
-                  info!("Implement empty dispatch event for {:?}", stringify!($t));
+                  debug!("Implement empty dispatch event for {:?}", stringify!($t));
                 }
             }
         )+
@@ -350,7 +419,6 @@ macro_rules! impl_empty_dispatch_app {
 }
 
 impl_empty_dispatch_app!(
-    (WlRegistry, GlobalListContents),
     (WlCompositor, ()),
     (WlSurface, ()),
     (ZwlrLayerShellV1, ()),

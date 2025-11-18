@@ -2,6 +2,7 @@ use crate::wayland::{
     config::{LayerSurfaceConfig, WaylandWindowConfig},
     globals::context::GlobalContext,
     managed_proxies::ManagedWlPointer,
+    outputs::{OutputManager, OutputManagerContext},
     surfaces::layer_surface::{SurfaceCtx, SurfaceSetupParams},
     surfaces::popup_manager::{PopupContext, PopupManager},
     surfaces::{
@@ -34,6 +35,7 @@ use slint_interpreter::ComponentInstance;
 use smithay_client_toolkit::reexports::calloop::{
     EventLoop, Interest, LoopHandle, Mode, PostAction, generic::Generic,
 };
+use std::cell::RefCell;
 use std::rc::Rc;
 use wayland_client::{
     Connection, EventQueue, Proxy, QueueHandle,
@@ -48,6 +50,17 @@ struct OutputSetup {
     main_surface_id: ObjectId,
     window: Rc<FemtoVGWindow>,
     builder: WindowStateBuilder,
+}
+
+struct OutputManagerParams<'a> {
+    config: &'a WaylandWindowConfig,
+    global_ctx: &'a GlobalContext,
+    connection: &'a Connection,
+    layer_surface_config: LayerSurfaceConfig,
+    render_factory: &'a Rc<RenderContextFactory>,
+    popup_context: &'a PopupContext,
+    pointer: &'a Rc<WlPointer>,
+    shared_serial: &'a Rc<SharedPointerSerial>,
 }
 
 pub struct WaylandWindowingSystem {
@@ -266,7 +279,40 @@ impl WaylandWindowingSystem {
             &shared_serial,
         );
 
+        let output_manager = Self::create_output_manager(&OutputManagerParams {
+            config,
+            global_ctx: &global_ctx,
+            connection,
+            layer_surface_config,
+            render_factory: &render_factory,
+            popup_context: &popup_context,
+            pointer: &pointer,
+            shared_serial: &shared_serial,
+        });
+
+        app_state.set_output_manager(Rc::new(RefCell::new(output_manager)));
+
         Ok(app_state)
+    }
+
+    fn create_output_manager(params: &OutputManagerParams<'_>) -> OutputManager {
+        let manager_context = OutputManagerContext {
+            compositor: params.global_ctx.compositor.clone(),
+            layer_shell: params.global_ctx.layer_shell.clone(),
+            fractional_scale_manager: params.global_ctx.fractional_scale_manager.clone(),
+            viewporter: params.global_ctx.viewporter.clone(),
+            render_factory: Rc::clone(params.render_factory),
+            popup_context: params.popup_context.clone(),
+            pointer: Rc::clone(params.pointer),
+            shared_serial: Rc::clone(params.shared_serial),
+            connection: Rc::new(params.connection.clone()),
+        };
+
+        OutputManager::new(
+            manager_context,
+            params.config.clone(),
+            params.layer_surface_config,
+        )
     }
 
     fn setup_shared_popup_creator(
@@ -322,7 +368,7 @@ impl WaylandWindowingSystem {
         });
     }
 
-    fn initialize_renderer(
+    pub(crate) fn initialize_renderer(
         surface: &Rc<WlSurface>,
         config: &WaylandWindowConfig,
         render_factory: &Rc<RenderContextFactory>,

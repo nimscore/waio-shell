@@ -2,7 +2,10 @@ use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use std::collections::HashMap;
 use wayland_client::backend::ObjectId;
 
-pub struct OutputMapping {
+pub(crate) use output_manager::{OutputManager, OutputManagerContext};
+pub(crate) mod output_manager;
+
+pub(crate) struct OutputMapping {
     object_to_handle: HashMap<ObjectId, OutputHandle>,
 }
 
@@ -23,7 +26,6 @@ impl OutputMapping {
         self.object_to_handle.get(object_id).copied()
     }
 
-    #[allow(dead_code)]
     pub fn remove(&mut self, object_id: &ObjectId) -> Option<OutputHandle> {
         self.object_to_handle.remove(object_id)
     }
