@@ -1,5 +1,5 @@
 use crate::errors::{LayerShikaError, Result};
-use crate::rendering::egl::context::EGLContext;
+use crate::rendering::egl::context_factory::RenderContextFactory;
 use crate::rendering::femtovg::{popup_window::PopupWindow, renderable_window::RenderableWindow};
 use crate::wayland::surfaces::display_metrics::{DisplayMetrics, SharedDisplayMetrics};
 use layer_shika_domain::dimensions::LogicalSize as DomainLogicalSize;
@@ -74,10 +74,12 @@ pub struct PopupContext {
     fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
     viewporter: Option<WpViewporter>,
     display: WlDisplay,
+    render_factory: Rc<RenderContextFactory>,
 }
 
 impl PopupContext {
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         compositor: WlCompositor,
         xdg_wm_base: Option<XdgWmBase>,
@@ -86,6 +88,7 @@ impl PopupContext {
         viewporter: Option<WpViewporter>,
         display: WlDisplay,
         _connection: Rc<Connection>,
+        render_factory: Rc<RenderContextFactory>,
     ) -> Self {
         Self {
             compositor,
@@ -94,6 +97,7 @@ impl PopupContext {
             fractional_scale_manager,
             viewporter,
             display,
+            render_factory,
         }
     }
 }
@@ -328,11 +332,11 @@ impl PopupManager {
             popup_surface.surface.commit();
         }
 
-        let context = EGLContext::builder()
-            .with_display_id(self.context.display.id())
-            .with_surface_id(popup_surface.surface.id())
-            .with_size(popup_size)
-            .build()?;
+        let context = self.context.render_factory.create_context(
+            &self.context.display.id(),
+            &popup_surface.surface.id(),
+            popup_size,
+        )?;
 
         let renderer = FemtoVGRenderer::new(context)
             .map_err(|e| LayerShikaError::FemtoVGRendererCreation { source: e })?;

@@ -107,6 +107,14 @@ impl EGLContext {
         EGLContextBuilder::new()
     }
 
+    #[must_use]
+    pub(super) fn from_raw(
+        surface: Surface<WindowSurface>,
+        context: PossiblyCurrentContext,
+    ) -> Self {
+        Self { surface, context }
+    }
+
     fn ensure_current(&self) -> Result<()> {
         if !self.context.is_current() {
             self.context
