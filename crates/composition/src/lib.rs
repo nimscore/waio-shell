@@ -23,7 +23,7 @@ pub use layer_shika_domain::value_objects::popup_request::{
     PopupAt, PopupHandle, PopupRequest, PopupSize,
 };
 pub use slint_callbacks::{SlintCallbackContract, SlintCallbackNames};
-pub use system::{EventLoopHandle, RuntimeState, WindowingSystem};
+pub use system::{EventLoopHandle, ShellContext, WindowingSystem};
 
 pub mod calloop {
     pub use layer_shika_adapters::platform::calloop::{

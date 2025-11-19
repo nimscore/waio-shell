@@ -10,7 +10,7 @@
 
 // Core API types
 pub use crate::{
-    Error, EventLoopHandle, LayerShika, PopupWindow, Result, RuntimeState, SlintCallbackContract,
+    Error, EventLoopHandle, LayerShika, PopupWindow, Result, ShellContext, SlintCallbackContract,
     SlintCallbackNames, WindowingSystem,
 };
 

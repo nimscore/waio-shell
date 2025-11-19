@@ -3,7 +3,7 @@ use crate::wayland::shell_adapter::WaylandWindowingSystem;
 use crate::wayland::surfaces::popup_manager::PopupManager;
 use crate::wayland::surfaces::surface_state::WindowState;
 use layer_shika_domain::errors::DomainError;
-use layer_shika_domain::ports::windowing::RuntimeStatePort;
+use layer_shika_domain::ports::windowing::ShellContextPort;
 use slint_interpreter::ComponentInstance;
 use std::rc::Rc;
 use std::result::Result as StdResult;
@@ -34,11 +34,11 @@ impl WindowingSystemFacade {
     }
 }
 
-pub struct RuntimeStateFacade<'a> {
+pub struct ShellContextFacade<'a> {
     window_state: &'a mut WindowState,
 }
 
-impl<'a> RuntimeStateFacade<'a> {
+impl<'a> ShellContextFacade<'a> {
     pub fn new(window_state: &'a mut WindowState) -> Self {
         Self { window_state }
     }
@@ -60,7 +60,7 @@ impl<'a> RuntimeStateFacade<'a> {
     }
 }
 
-impl RuntimeStatePort for RuntimeStateFacade<'_> {
+impl ShellContextPort for ShellContextFacade<'_> {
     fn render_frame_if_dirty(&mut self) -> StdResult<(), DomainError> {
         self.window_state
             .render_frame_if_dirty()

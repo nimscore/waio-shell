@@ -7,7 +7,7 @@ pub(crate) mod wayland;
 pub use rendering::femtovg::popup_window::PopupWindow;
 
 pub use wayland::config::WaylandWindowConfig;
-pub use wayland::facade::{PopupManagerFacade, RuntimeStateFacade, WindowingSystemFacade};
+pub use wayland::facade::{PopupManagerFacade, ShellContextFacade, WindowingSystemFacade};
 pub use wayland::shell_adapter::WaylandWindowingSystem;
 pub use wayland::surfaces::app_state::AppState;
 pub use wayland::surfaces::popup_manager::PopupManager;

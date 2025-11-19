@@ -15,7 +15,7 @@ use crate::rendering::femtovg::main_window::FemtoVGWindow;
 use crate::errors::{LayerShikaError, Result};
 use core::result::Result as CoreResult;
 use layer_shika_domain::errors::DomainError;
-use layer_shika_domain::ports::windowing::RuntimeStatePort;
+use layer_shika_domain::ports::windowing::ShellContextPort;
 use slint::{LogicalPosition, PhysicalSize};
 use slint::platform::WindowEvent;
 use slint_interpreter::{ComponentInstance, CompilationResult};
@@ -254,7 +254,7 @@ impl WindowState {
     }
 }
 
-impl RuntimeStatePort for WindowState {
+impl ShellContextPort for WindowState {
     fn render_frame_if_dirty(&mut self) -> CoreResult<(), DomainError> {
         WindowState::render_frame_if_dirty(self).map_err(|e| DomainError::Adapter {
             source: Box::new(e),

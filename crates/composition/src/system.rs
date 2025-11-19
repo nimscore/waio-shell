@@ -48,15 +48,15 @@ impl EventLoopHandle {
     ) -> StdResult<RegistrationToken, Error>
     where
         S: EventSource<Ret = R> + 'static,
-        F: FnMut(S::Event, &mut S::Metadata, RuntimeState<'_>) -> R + 'static,
+        F: FnMut(S::Event, &mut S::Metadata, ShellContext<'_>) -> R + 'static,
     {
         let system = self.system.upgrade().ok_or(Error::SystemDropped)?;
         let loop_handle = system.borrow().inner_ref().event_loop_handle();
 
         loop_handle
             .insert_source(source, move |event, metadata, app_state| {
-                let runtime_state = RuntimeState { app_state };
-                callback(event, metadata, runtime_state)
+                let shell_context = ShellContext { app_state };
+                callback(event, metadata, shell_context)
             })
             .map_err(|e| {
                 Error::Adapter(
@@ -70,21 +70,21 @@ impl EventLoopHandle {
 
     pub fn add_timer<F>(&self, duration: Duration, mut callback: F) -> Result<RegistrationToken>
     where
-        F: FnMut(Instant, RuntimeState<'_>) -> TimeoutAction + 'static,
+        F: FnMut(Instant, ShellContext<'_>) -> TimeoutAction + 'static,
     {
         let timer = Timer::from_duration(duration);
-        self.insert_source(timer, move |deadline, (), runtime_state| {
-            callback(deadline, runtime_state)
+        self.insert_source(timer, move |deadline, (), shell_context| {
+            callback(deadline, shell_context)
         })
     }
 
     pub fn add_timer_at<F>(&self, deadline: Instant, mut callback: F) -> Result<RegistrationToken>
     where
-        F: FnMut(Instant, RuntimeState<'_>) -> TimeoutAction + 'static,
+        F: FnMut(Instant, ShellContext<'_>) -> TimeoutAction + 'static,
     {
         let timer = Timer::from_deadline(deadline);
-        self.insert_source(timer, move |deadline, (), runtime_state| {
-            callback(deadline, runtime_state)
+        self.insert_source(timer, move |deadline, (), shell_context| {
+            callback(deadline, shell_context)
         })
     }
 
@@ -94,12 +94,12 @@ impl EventLoopHandle {
     ) -> Result<(RegistrationToken, channel::Sender<T>)>
     where
         T: 'static,
-        F: FnMut(T, RuntimeState<'_>) + 'static,
+        F: FnMut(T, ShellContext<'_>) + 'static,
     {
         let (sender, receiver) = channel::channel();
-        let token = self.insert_source(receiver, move |event, (), runtime_state| {
+        let token = self.insert_source(receiver, move |event, (), shell_context| {
             if let channel::Event::Msg(msg) = event {
-                callback(msg, runtime_state);
+                callback(msg, shell_context);
             }
         })?;
         Ok((token, sender))
@@ -114,21 +114,21 @@ impl EventLoopHandle {
     ) -> Result<RegistrationToken>
     where
         T: AsFd + 'static,
-        F: FnMut(RuntimeState<'_>) + 'static,
+        F: FnMut(ShellContext<'_>) + 'static,
     {
         let generic = Generic::new(fd, interest, mode);
-        self.insert_source(generic, move |_readiness, _fd, runtime_state| {
-            callback(runtime_state);
+        self.insert_source(generic, move |_readiness, _fd, shell_context| {
+            callback(shell_context);
             Ok(PostAction::Continue)
         })
     }
 }
 
-pub struct RuntimeState<'a> {
+pub struct ShellContext<'a> {
     app_state: &'a mut AppState,
 }
 
-impl RuntimeState<'_> {
+impl ShellContext<'_> {
     #[must_use]
     pub fn component_instance(&self) -> Option<&ComponentInstance> {
         self.app_state
@@ -437,18 +437,18 @@ impl WindowingSystem {
         loop_handle
             .insert_source(receiver, move |event, (), app_state| {
                 if let channel::Event::Msg(command) = event {
-                    let mut runtime_state = RuntimeState { app_state };
+                    let mut shell_context = ShellContext { app_state };
 
                     match command {
                         PopupCommand::Show(request) => {
                             if let Err(e) =
-                                runtime_state.show_popup(request, Some(sender_for_handler.clone()))
+                                shell_context.show_popup(request, Some(sender_for_handler.clone()))
                             {
                                 log::error!("Failed to show popup: {}", e);
                             }
                         }
                         PopupCommand::Close(handle) => {
-                            if let Err(e) = runtime_state.close_popup(handle) {
+                            if let Err(e) = shell_context.close_popup(handle) {
                                 log::error!("Failed to close popup: {}", e);
                             }
                         }
@@ -457,7 +457,7 @@ impl WindowingSystem {
                             width,
                             height,
                         } => {
-                            if let Err(e) = runtime_state.resize_popup(
+                            if let Err(e) = shell_context.resize_popup(
                                 handle,
                                 width,
                                 height,
