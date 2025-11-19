@@ -22,14 +22,11 @@
 //! ```rust,no_run
 //! use layer_shika::prelude::*;
 //!
-//! let system = LayerShika::from_file("ui/main.slint", Some("AppWindow"))?
+//! LayerShika::from_file("ui/main.slint", Some("AppWindow"))?
 //!     .with_height(42)
 //!     .with_anchor(AnchorEdges::top_bar())
 //!     .with_exclusive_zone(42)
-//!     .build()?;
-//!
-//! let mut system = system;
-//! system.run()?;
+//!     .run()?;
 //! # Ok::<(), layer_shika::Error>(())
 //! ```
 //!
@@ -45,10 +42,10 @@
 pub mod prelude;
 
 pub use layer_shika_composition::{
-    AnchorEdges, Error, EventLoopHandle, KeyboardInteractivity, Layer, LayerShika, OutputGeometry,
-    OutputHandle, OutputInfo, OutputPolicy, OutputRegistry, PopupAt, PopupHandle, PopupPositioningMode,
-    PopupRequest, PopupSize, PopupWindow, Result, ShellContext, SlintCallbackContract,
-    SlintCallbackNames, WindowingSystem,
+    AnchorEdges, App, Error, EventLoopHandle, KeyboardInteractivity, Layer, LayerShika,
+    OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry, PopupAt, PopupHandle,
+    PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result, ShellContext,
+    SlintCallbackContract, SlintCallbackNames,
 };
 
 pub use layer_shika_composition::{slint, slint_interpreter};

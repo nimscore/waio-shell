@@ -1,5 +1,5 @@
 use crate::Result;
-use crate::system::WindowingSystem;
+use crate::system::App;
 use layer_shika_adapters::platform::slint_interpreter::{CompilationResult, Compiler};
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::prelude::{
@@ -194,7 +194,7 @@ impl LayerShika<HasComponent> {
         self
     }
 
-    pub fn build(self) -> Result<WindowingSystem> {
+    pub fn build(self) -> Result<App> {
         let component_definition = self
             .state
             .compilation_result
@@ -206,10 +206,15 @@ impl LayerShika<HasComponent> {
                 ),
             })?;
 
-        WindowingSystem::new(
+        App::new(
             component_definition,
             Some(self.state.compilation_result),
             self.config,
         )
+    }
+
+    pub fn run(self) -> Result<()> {
+        let mut app = self.build()?;
+        app.run()
     }
 }

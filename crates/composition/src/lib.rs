@@ -23,7 +23,7 @@ pub use layer_shika_domain::value_objects::popup_request::{
     PopupAt, PopupHandle, PopupRequest, PopupSize,
 };
 pub use slint_callbacks::{SlintCallbackContract, SlintCallbackNames};
-pub use system::{EventLoopHandle, ShellContext, WindowingSystem};
+pub use system::{App, EventLoopHandle, ShellContext};
 
 pub mod calloop {
     pub use layer_shika_adapters::platform::calloop::{
@@ -41,6 +41,19 @@ pub enum Error {
     #[error("Domain error: {0}")]
     Domain(#[from] DomainError),
 
-    #[error("WindowingSystem has been dropped")]
+    #[error("App has been dropped")]
     SystemDropped,
+}
+
+pub mod prelude {
+    pub use crate::{
+        AnchorEdges, App, EventLoopHandle, KeyboardInteractivity, Layer, LayerShika,
+        OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry, PopupAt,
+        PopupHandle, PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result,
+        ShellContext, SlintCallbackContract, SlintCallbackNames,
+    };
+
+    pub use crate::calloop::{Generic, Interest, Mode, PostAction, RegistrationToken, Timer};
+
+    pub use crate::{slint, slint_interpreter};
 }

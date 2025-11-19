@@ -391,13 +391,13 @@ impl ShellContext<'_> {
     }
 }
 
-pub struct WindowingSystem {
+pub struct App {
     inner: Rc<RefCell<WindowingSystemFacade>>,
     popup_command_sender: channel::Sender<PopupCommand>,
     callback_contract: SlintCallbackContract,
 }
 
-impl WindowingSystem {
+impl App {
     pub(crate) fn new(
         component_definition: ComponentDefinition,
         compilation_result: Option<Rc<CompilationResult>>,
