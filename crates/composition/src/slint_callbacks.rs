@@ -236,11 +236,26 @@ impl SlintCallbackContract {
                     popup_key
                 );
 
-                if let Some(popup_window) = popup_manager_for_resize
-                    .upgrade()
-                    .and_then(|mgr| mgr.get_popup_window(popup_key))
-                {
-                    popup_window.request_resize(width, height);
+                if let Some(popup_manager) = popup_manager_for_resize.upgrade() {
+                    if let Some(popup_window) = popup_manager.get_popup_window(popup_key) {
+                        popup_window.request_resize(width, height);
+
+                        #[allow(clippy::cast_possible_truncation)]
+                        #[allow(clippy::cast_possible_wrap)]
+                        let logical_width = width as i32;
+                        #[allow(clippy::cast_possible_truncation)]
+                        #[allow(clippy::cast_possible_wrap)]
+                        let logical_height = height as i32;
+
+                        popup_manager.update_popup_viewport(popup_key, logical_width, logical_height);
+                        log::debug!(
+                            "Updated popup viewport to logical size: {}x{} (from direct resize to {}x{})",
+                            logical_width,
+                            logical_height,
+                            width,
+                            height
+                        );
+                    }
                 }
                 Value::Void
             })

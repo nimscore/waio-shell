@@ -355,6 +355,22 @@ impl ShellContext<'_> {
         } else if size_changed {
             if let Some(popup_window) = popup_manager.get_popup_window(handle.key()) {
                 popup_window.request_resize(width, height);
+
+                #[allow(clippy::cast_possible_truncation)]
+                #[allow(clippy::cast_possible_wrap)]
+                let logical_width = width as i32;
+                #[allow(clippy::cast_possible_truncation)]
+                #[allow(clippy::cast_possible_wrap)]
+                let logical_height = height as i32;
+
+                popup_manager.update_popup_viewport(handle.key(), logical_width, logical_height);
+                log::debug!(
+                    "Updated popup viewport to logical size: {}x{} (from resize to {}x{})",
+                    logical_width,
+                    logical_height,
+                    width,
+                    height
+                );
             }
         }
 

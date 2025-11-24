@@ -141,11 +141,13 @@ impl PopupSurface {
 
     pub fn update_viewport_size(&self, logical_width: i32, logical_height: i32) {
         if let Some(ref vp) = self.viewport {
-            info!(
+            log::debug!(
                 "Updating popup viewport destination to logical size: {}x{}",
-                logical_width, logical_height
+                logical_width,
+                logical_height
             );
             vp.set_destination(logical_width, logical_height);
+            self.surface.commit();
         }
     }
 
