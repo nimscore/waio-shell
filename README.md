@@ -10,21 +10,43 @@ Please note that this library is currently in early development and is not yet r
 
 ## Current Status
 
-May be not updated:
+- **Architecture**: Clean hexagonal architecture with domain, adapters, and composition layers
+- **Rendering**: EGL context management with `femtovg` renderer integration
+- **Wayland**: Comprehensive layer shell protocol support using `smithay-client-toolkit`
+  - Output management and configuration
+  - Surface lifecycle management
+  - Basic xdg popup support (currently with double creation workaround, due dependencies limitations)
+  - Event handling system
+- **UI Integration**: Slint integration layer with custom rendering backend
+- **Documentation**: Work in progress
+- **Examples**: Coming soon (examples directory prepared)
 
-- The core functionality is under active development
-- `femtovg` renderer
-- Basic layer shell protocol support using `smithay-client-toolkit`, but this may change in future stable versions
-- Partial support for pointer events
+**What's Working:**
+
+- EGL context creation and management
+- Wayland layer shell surface creation
+- XDG popup support (with some limitations, new window and resizing needed to work with current workaround)
+- Basic rendering with femtovg
+- Output detection and management
+- Event handling framework
+
+**Known Limitations:**
+
 - Not all features are fully implemented or tested
-- Documentation is incomplete or non-existent
-- Examples are coming soon
+- API is still unstable and may change
+- Examples and comprehensive documentation pending
 
-It's recommended to wait for a stable release before using this library in any production projects. Development is trying to be as fast as a running skippy deer.
+It's recommended to wait for a stable release before using this library in production projects. Development is trying to be as fast as a running skippy deer!
 
 ## Usage
 
-Examples and usage instructions are coming soon. Hoping that they will not be too deer-ifying, like the current state of this library.
+Examples and usage instructions are coming soon. Hoping that they will not be too deer-ifying, like the current state of this library. If you want to use it now, use this repo as dependency instead of crates.io outdated versions.
+
+## First Stable Release
+
+It aim to have the first stable release by the end of 2025, with a focus on core functionality and API stability.
+
+Stay tuned!
 
 ## Contributing
 
