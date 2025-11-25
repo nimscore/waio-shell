@@ -31,3 +31,35 @@ impl From<u32> for WindowHeight {
         Self::new(height)
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PopupDimensions {
+    pub width: f32,
+    pub height: f32,
+}
+
+impl Default for PopupDimensions {
+    fn default() -> Self {
+        Self {
+            width: 200.0,
+            height: 150.0,
+        }
+    }
+}
+
+impl PopupDimensions {
+    #[must_use]
+    pub const fn new(width: f32, height: f32) -> Self {
+        Self { width, height }
+    }
+
+    #[must_use]
+    pub const fn width(&self) -> f32 {
+        self.width
+    }
+
+    #[must_use]
+    pub const fn height(&self) -> f32 {
+        self.height
+    }
+}

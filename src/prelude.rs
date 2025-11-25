@@ -10,8 +10,7 @@
 
 // Core API types
 pub use crate::{
-    App, Error, EventLoopHandle, LayerShika, PopupWindow, Result, ShellContext,
-    SlintCallbackContract, SlintCallbackNames,
+    App, Error, EventLoopHandle, LayerShika, PopupWindow, Result, ShellContext, ShellControl,
 };
 
 // Domain value objects

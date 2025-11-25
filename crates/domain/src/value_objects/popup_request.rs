@@ -22,6 +22,8 @@ pub struct PopupRequest {
     pub size: PopupSize,
     pub mode: PopupPositioningMode,
     pub grab: bool,
+    pub close_callback: Option<String>,
+    pub resize_callback: Option<String>,
 }
 
 impl PopupRequest {
@@ -38,6 +40,8 @@ impl PopupRequest {
             size,
             mode,
             grab: false,
+            close_callback: None,
+            resize_callback: None,
         }
     }
 
@@ -111,6 +115,8 @@ pub struct PopupRequestBuilder {
     size: PopupSize,
     mode: PopupPositioningMode,
     grab: bool,
+    close_callback: Option<String>,
+    resize_callback: Option<String>,
 }
 
 impl PopupRequestBuilder {
@@ -122,6 +128,8 @@ impl PopupRequestBuilder {
             size: PopupSize::Content,
             mode: PopupPositioningMode::default(),
             grab: false,
+            close_callback: None,
+            resize_callback: None,
         }
     }
 
@@ -150,6 +158,18 @@ impl PopupRequestBuilder {
     }
 
     #[must_use]
+    pub fn close_on(mut self, callback_name: impl Into<String>) -> Self {
+        self.close_callback = Some(callback_name.into());
+        self
+    }
+
+    #[must_use]
+    pub fn resize_on(mut self, callback_name: impl Into<String>) -> Self {
+        self.resize_callback = Some(callback_name.into());
+        self
+    }
+
+    #[must_use]
     pub fn build(self) -> PopupRequest {
         PopupRequest {
             component: self.component,
@@ -157,6 +177,8 @@ impl PopupRequestBuilder {
             size: self.size,
             mode: self.mode,
             grab: self.grab,
+            close_callback: self.close_callback,
+            resize_callback: self.resize_callback,
         }
     }
 }

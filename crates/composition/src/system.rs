@@ -1,4 +1,3 @@
-use crate::slint_callbacks::SlintCallbackContract;
 use crate::{Error, Result};
 use layer_shika_adapters::errors::EventLoopError;
 use layer_shika_adapters::platform::calloop::{
@@ -7,7 +6,7 @@ use layer_shika_adapters::platform::calloop::{
 };
 use layer_shika_adapters::platform::slint::ComponentHandle;
 use layer_shika_adapters::platform::slint_interpreter::{
-    CompilationResult, ComponentDefinition, ComponentInstance,
+    CompilationResult, ComponentDefinition, ComponentInstance, Value,
 };
 use layer_shika_adapters::{
     AppState, PopupManager, WaylandWindowConfig, WindowState, WindowingSystemFacade,
@@ -17,7 +16,7 @@ use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
-use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
+use layer_shika_domain::value_objects::dimensions::PopupDimensions;
 use layer_shika_domain::value_objects::popup_request::{PopupHandle, PopupRequest, PopupSize};
 use std::cell::Cell;
 use std::cell::RefCell;
@@ -34,6 +33,47 @@ pub enum PopupCommand {
         width: f32,
         height: f32,
     },
+}
+
+#[derive(Clone)]
+pub struct ShellControl {
+    sender: channel::Sender<PopupCommand>,
+}
+
+impl ShellControl {
+    pub fn show_popup(&self, request: &PopupRequest) -> Result<()> {
+        self.sender
+            .send(PopupCommand::Show(request.clone()))
+            .map_err(|_| {
+                Error::Domain(DomainError::Configuration {
+                    message: "Failed to send popup show command: channel closed".to_string(),
+                })
+            })
+    }
+
+    pub fn close_popup(&self, handle: PopupHandle) -> Result<()> {
+        self.sender
+            .send(PopupCommand::Close(handle))
+            .map_err(|_| {
+                Error::Domain(DomainError::Configuration {
+                    message: "Failed to send popup close command: channel closed".to_string(),
+                })
+            })
+    }
+
+    pub fn resize_popup(&self, handle: PopupHandle, width: f32, height: f32) -> Result<()> {
+        self.sender
+            .send(PopupCommand::Resize {
+                handle,
+                width,
+                height,
+            })
+            .map_err(|_| {
+                Error::Domain(DomainError::Configuration {
+                    message: "Failed to send popup resize command: channel closed".to_string(),
+                })
+            })
+    }
 }
 
 pub struct EventLoopHandle {
@@ -128,6 +168,18 @@ pub struct ShellContext<'a> {
     app_state: &'a mut AppState,
 }
 
+fn extract_dimensions_from_callback(args: &[Value]) -> PopupDimensions {
+    let defaults = PopupDimensions::default();
+    PopupDimensions::new(
+        args.first()
+            .and_then(|v| v.clone().try_into().ok())
+            .unwrap_or(defaults.width),
+        args.get(1)
+            .and_then(|v| v.clone().try_into().ok())
+            .unwrap_or(defaults.height),
+    )
+}
+
 impl ShellContext<'_> {
     #[must_use]
     pub fn component_instance(&self) -> Option<&ComponentInstance> {
@@ -204,8 +256,8 @@ impl ShellContext<'_> {
 
     pub fn show_popup(
         &mut self,
-        req: PopupRequest,
-        resize_sender: Option<channel::Sender<PopupCommand>>,
+        req: &PopupRequest,
+        resize_control: Option<ShellControl>,
     ) -> Result<PopupHandle> {
         let compilation_result = self.compilation_result().ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
@@ -266,10 +318,10 @@ impl ShellContext<'_> {
         );
 
         let popup_handle =
-            popup_manager.request_popup(req, initial_dimensions.0, initial_dimensions.1);
+            popup_manager.request_popup(req.clone(), initial_dimensions.0, initial_dimensions.1);
 
         let (instance, popup_key_cell) =
-            Self::create_popup_instance(&definition, &popup_manager, resize_sender)?;
+            Self::create_popup_instance(&definition, &popup_manager, resize_control, req)?;
 
         popup_key_cell.set(popup_handle.key());
 
@@ -307,7 +359,7 @@ impl ShellContext<'_> {
         handle: PopupHandle,
         width: f32,
         height: f32,
-        resize_sender: Option<channel::Sender<PopupCommand>>,
+        resize_control: Option<ShellControl>,
     ) -> Result<()> {
         let active_window = self.active_or_primary_output().ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
@@ -345,13 +397,21 @@ impl ShellContext<'_> {
 
             self.close_popup(handle)?;
 
-            let new_request = PopupRequest::builder(request.component)
+            let mut builder = PopupRequest::builder(request.component)
                 .at(request.at)
                 .size(PopupSize::fixed(width, height))
-                .mode(request.mode)
-                .build();
+                .mode(request.mode);
 
-            self.show_popup(new_request, resize_sender)?;
+            if let Some(close_cb) = &request.close_callback {
+                builder = builder.close_on(close_cb.clone());
+            }
+            if let Some(resize_cb) = &request.resize_callback {
+                builder = builder.resize_on(resize_cb.clone());
+            }
+
+            let new_request = builder.build();
+
+            self.show_popup(&new_request, resize_control)?;
         } else if size_changed {
             if let Some(popup_window) = popup_manager.get_popup_window(handle.key()) {
                 popup_window.request_resize(width, height);
@@ -380,7 +440,8 @@ impl ShellContext<'_> {
     fn create_popup_instance(
         definition: &ComponentDefinition,
         popup_manager: &Rc<PopupManager>,
-        resize_sender: Option<channel::Sender<PopupCommand>>,
+        resize_control: Option<ShellControl>,
+        req: &PopupRequest,
     ) -> Result<(ComponentInstance, Rc<Cell<usize>>)> {
         let instance = definition.create().map_err(|e| {
             Error::Domain(DomainError::Configuration {
@@ -390,11 +451,12 @@ impl ShellContext<'_> {
 
         let popup_key_cell = Rc::new(Cell::new(0));
 
-        SlintCallbackContract::register_on_popup_component(
+        Self::register_popup_callbacks(
             &instance,
             popup_manager,
-            resize_sender,
+            resize_control,
             &popup_key_cell,
+            req,
         )?;
 
         instance.show().map_err(|e| {
@@ -405,12 +467,158 @@ impl ShellContext<'_> {
 
         Ok((instance, popup_key_cell))
     }
+
+    fn register_popup_callbacks(
+        instance: &ComponentInstance,
+        popup_manager: &Rc<PopupManager>,
+        resize_control: Option<ShellControl>,
+        popup_key_cell: &Rc<Cell<usize>>,
+        req: &PopupRequest,
+    ) -> Result<()> {
+        if let Some(close_callback_name) = &req.close_callback {
+            Self::register_close_callback(instance, popup_manager, close_callback_name)?;
+        }
+
+        if let Some(resize_callback_name) = &req.resize_callback {
+            Self::register_resize_callback(
+                instance,
+                popup_manager,
+                resize_control,
+                popup_key_cell,
+                resize_callback_name,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn register_close_callback(
+        instance: &ComponentInstance,
+        popup_manager: &Rc<PopupManager>,
+        callback_name: &str,
+    ) -> Result<()> {
+        let popup_manager_weak = Rc::downgrade(popup_manager);
+        instance
+            .set_callback(callback_name, move |_| {
+                if let Some(popup_manager) = popup_manager_weak.upgrade() {
+                    popup_manager.close_current_popup();
+                }
+                Value::Void
+            })
+            .map_err(|e| {
+                Error::Domain(DomainError::Configuration {
+                    message: format!("Failed to set '{}' callback: {}", callback_name, e),
+                })
+            })
+    }
+
+    fn register_resize_callback(
+        instance: &ComponentInstance,
+        popup_manager: &Rc<PopupManager>,
+        resize_control: Option<ShellControl>,
+        popup_key_cell: &Rc<Cell<usize>>,
+        callback_name: &str,
+    ) -> Result<()> {
+        if let Some(control) = resize_control {
+            Self::register_resize_with_control(instance, popup_key_cell, &control, callback_name)
+        } else {
+            Self::register_resize_direct(instance, popup_manager, popup_key_cell, callback_name)
+        }
+    }
+
+    fn register_resize_with_control(
+        instance: &ComponentInstance,
+        popup_key_cell: &Rc<Cell<usize>>,
+        control: &ShellControl,
+        callback_name: &str,
+    ) -> Result<()> {
+        let key_cell = Rc::clone(popup_key_cell);
+        let control = control.clone();
+        instance
+            .set_callback(callback_name, move |args| {
+                let dimensions = extract_dimensions_from_callback(args);
+                let popup_key = key_cell.get();
+
+                log::info!(
+                    "Resize callback invoked: {}x{} for key {}",
+                    dimensions.width,
+                    dimensions.height,
+                    popup_key
+                );
+
+                if control
+                    .resize_popup(PopupHandle::new(popup_key), dimensions.width, dimensions.height)
+                    .is_err()
+                {
+                    log::error!("Failed to resize popup through control");
+                }
+                Value::Void
+            })
+            .map_err(|e| {
+                Error::Domain(DomainError::Configuration {
+                    message: format!("Failed to set '{}' callback: {}", callback_name, e),
+                })
+            })
+    }
+
+    fn register_resize_direct(
+        instance: &ComponentInstance,
+        popup_manager: &Rc<PopupManager>,
+        popup_key_cell: &Rc<Cell<usize>>,
+        callback_name: &str,
+    ) -> Result<()> {
+        let popup_manager_weak = Rc::downgrade(popup_manager);
+        let key_cell = Rc::clone(popup_key_cell);
+        instance
+            .set_callback(callback_name, move |args| {
+                let dimensions = extract_dimensions_from_callback(args);
+                let popup_key = key_cell.get();
+
+                log::info!(
+                    "Resize callback invoked: {}x{} for key {}",
+                    dimensions.width,
+                    dimensions.height,
+                    popup_key
+                );
+
+                if let Some(popup_manager) = popup_manager_weak.upgrade() {
+                    if let Some(popup_window) = popup_manager.get_popup_window(popup_key) {
+                        popup_window.request_resize(dimensions.width, dimensions.height);
+
+                        #[allow(clippy::cast_possible_truncation)]
+                        #[allow(clippy::cast_possible_wrap)]
+                        let logical_width = dimensions.width as i32;
+                        #[allow(clippy::cast_possible_truncation)]
+                        #[allow(clippy::cast_possible_wrap)]
+                        let logical_height = dimensions.height as i32;
+
+                        popup_manager.update_popup_viewport(
+                            popup_key,
+                            logical_width,
+                            logical_height,
+                        );
+                        log::debug!(
+                            "Updated popup viewport to logical size: {}x{} (from direct resize to {}x{})",
+                            logical_width,
+                            logical_height,
+                            dimensions.width,
+                            dimensions.height
+                        );
+                    }
+                }
+                Value::Void
+            })
+            .map_err(|e| {
+                Error::Domain(DomainError::Configuration {
+                    message: format!("Failed to set '{}' callback: {}", callback_name, e),
+                })
+            })
+    }
 }
 
 pub struct App {
     inner: Rc<RefCell<WindowingSystemFacade>>,
     popup_command_sender: channel::Sender<PopupCommand>,
-    callback_contract: SlintCallbackContract,
 }
 
 impl App {
@@ -430,25 +638,19 @@ impl App {
 
         let (sender, receiver) = channel::channel();
 
-        let popup_positioning_mode = Rc::new(RefCell::new(PopupPositioningMode::Center));
-        let callback_contract =
-            SlintCallbackContract::new(Rc::clone(&popup_positioning_mode), sender.clone());
-
         let system = Self {
             inner: Rc::clone(&inner_rc),
             popup_command_sender: sender,
-            callback_contract,
         };
 
         system.setup_popup_command_handler(receiver)?;
-        system.register_popup_callbacks();
 
         Ok(system)
     }
 
     fn setup_popup_command_handler(&self, receiver: channel::Channel<PopupCommand>) -> Result<()> {
         let loop_handle = self.inner.borrow().inner_ref().event_loop_handle();
-        let sender_for_handler = self.popup_command_sender.clone();
+        let control = self.control();
 
         loop_handle
             .insert_source(receiver, move |event, (), app_state| {
@@ -457,8 +659,7 @@ impl App {
 
                     match command {
                         PopupCommand::Show(request) => {
-                            if let Err(e) =
-                                shell_context.show_popup(request, Some(sender_for_handler.clone()))
+                            if let Err(e) = shell_context.show_popup(&request, Some(control.clone()))
                             {
                                 log::error!("Failed to show popup: {}", e);
                             }
@@ -473,12 +674,9 @@ impl App {
                             width,
                             height,
                         } => {
-                            if let Err(e) = shell_context.resize_popup(
-                                handle,
-                                width,
-                                height,
-                                Some(sender_for_handler.clone()),
-                            ) {
+                            if let Err(e) =
+                                shell_context.resize_popup(handle, width, height, Some(control.clone()))
+                            {
                                 log::error!("Failed to resize popup: {}", e);
                             }
                         }
@@ -497,15 +695,11 @@ impl App {
         Ok(())
     }
 
-    fn register_popup_callbacks(&self) {
-        self.with_all_component_instances(|component_instance| {
-            if let Err(e) = self
-                .callback_contract
-                .register_on_main_component(component_instance)
-            {
-                log::error!("Failed to register popup callbacks on output: {}", e);
-            }
-        });
+    #[must_use]
+    pub fn control(&self) -> ShellControl {
+        ShellControl {
+            sender: self.popup_command_sender.clone(),
+        }
     }
 
     #[must_use]
@@ -515,24 +709,55 @@ impl App {
         }
     }
 
-    pub fn request_show_popup(&self, request: PopupRequest) -> Result<()> {
-        self.popup_command_sender
-            .send(PopupCommand::Show(request))
-            .map_err(|_| {
-                Error::Domain(DomainError::Configuration {
-                    message: "Failed to send popup show command: channel closed".to_string(),
-                })
-            })
+    pub fn on_callback<F>(&self, callback_name: &str, handler: F) -> Result<()>
+    where
+        F: Fn(&[Value], ShellControl) -> Value + 'static,
+    {
+        let control = self.control();
+        let handler = Rc::new(handler);
+        self.with_all_component_instances(|instance| {
+            let handler_rc = Rc::clone(&handler);
+            let control_clone = control.clone();
+            if let Err(e) = instance.set_callback(callback_name, move |args| {
+                handler_rc(args, control_clone.clone())
+            }) {
+                log::error!(
+                    "Failed to register callback '{}' on component: {}",
+                    callback_name,
+                    e
+                );
+            }
+        });
+        Ok(())
     }
 
-    pub fn request_close_popup(&self, handle: PopupHandle) -> Result<()> {
-        self.popup_command_sender
-            .send(PopupCommand::Close(handle))
-            .map_err(|_| {
-                Error::Domain(DomainError::Configuration {
-                    message: "Failed to send popup close command: channel closed".to_string(),
-                })
-            })
+    pub fn bind_popup<F>(&self, callback_name: &str, config_builder: F) -> Result<()>
+    where
+        F: Fn() -> PopupRequest + 'static,
+    {
+        let control = self.control();
+        let builder = Rc::new(config_builder);
+
+        self.with_all_component_instances(|instance| {
+            let builder_clone = Rc::clone(&builder);
+            let control_clone = control.clone();
+
+            if let Err(e) = instance.set_callback(callback_name, move |_args| {
+                let request = builder_clone();
+                if let Err(e) = control_clone.show_popup(&request) {
+                    log::error!("Failed to show popup: {}", e);
+                }
+                Value::Void
+            }) {
+                log::error!(
+                    "Failed to bind popup callback '{}': {}",
+                    callback_name,
+                    e
+                );
+            }
+        });
+
+        Ok(())
     }
 
     pub fn run(&mut self) -> Result<()> {

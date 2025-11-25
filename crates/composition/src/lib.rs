@@ -1,7 +1,6 @@
 #![allow(clippy::pub_use)]
 
 mod builder;
-mod slint_callbacks;
 mod system;
 
 use layer_shika_adapters::errors::LayerShikaError;
@@ -22,8 +21,7 @@ pub use layer_shika_domain::value_objects::popup_positioning_mode::PopupPosition
 pub use layer_shika_domain::value_objects::popup_request::{
     PopupAt, PopupHandle, PopupRequest, PopupSize,
 };
-pub use slint_callbacks::{SlintCallbackContract, SlintCallbackNames};
-pub use system::{App, EventLoopHandle, ShellContext};
+pub use system::{App, EventLoopHandle, ShellContext, ShellControl};
 
 pub mod calloop {
     pub use layer_shika_adapters::platform::calloop::{
@@ -50,7 +48,7 @@ pub mod prelude {
         AnchorEdges, App, EventLoopHandle, KeyboardInteractivity, Layer, LayerShika,
         OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry, PopupAt,
         PopupHandle, PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result,
-        ShellContext, SlintCallbackContract, SlintCallbackNames,
+        ShellContext, ShellControl,
     };
 
     pub use crate::calloop::{Generic, Interest, Mode, PostAction, RegistrationToken, Timer};
