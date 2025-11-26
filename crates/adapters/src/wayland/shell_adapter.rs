@@ -413,6 +413,23 @@ impl WaylandWindowingSystem {
             }
         }
 
+        info!("Initial configuration complete, requesting final render");
+        for window in self.state.all_outputs() {
+            RenderableWindow::request_redraw(window.window().as_ref());
+        }
+        update_timers_and_animations();
+        for window in self.state.all_outputs() {
+            window
+                .window()
+                .render_frame_if_dirty()
+                .map_err(|e| RenderingError::Operation {
+                    message: e.to_string(),
+                })?;
+        }
+        self.connection
+            .flush()
+            .map_err(|e| LayerShikaError::WaylandProtocol { source: e })?;
+
         self.setup_wayland_event_source()?;
 
         let event_queue = &mut self.event_queue;
