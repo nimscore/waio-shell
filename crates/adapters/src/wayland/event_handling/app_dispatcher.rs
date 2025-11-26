@@ -8,7 +8,7 @@ use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_surface_v1::{self, ZwlrLayerSurfaceV1},
 };
 use wayland_client::{
-    Connection, Dispatch, Proxy, QueueHandle,
+    Connection, Dispatch, Proxy, QueueHandle, WEnum,
     globals::GlobalListContents,
     protocol::{
         wl_compositor::WlCompositor,
@@ -72,6 +72,7 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for AppState {
 }
 
 impl Dispatch<WlOutput, ()> for AppState {
+    #[allow(clippy::cognitive_complexity)]
     fn event(
         state: &mut Self,
         proxy: &WlOutput,
@@ -84,10 +85,26 @@ impl Dispatch<WlOutput, ()> for AppState {
         let handle = state.get_handle_by_output_id(&output_id);
 
         match event {
-            wl_output::Event::Mode { width, height, .. } => {
-                if let Some(window) = state.get_output_by_output_id_mut(&output_id) {
-                    window.handle_output_mode(width, height);
+            wl_output::Event::Mode {
+                flags: WEnum::Value(mode_flags),
+                width,
+                height,
+                ..
+            } => {
+                let is_current = mode_flags.contains(wl_output::Mode::Current);
+                let is_preferred = mode_flags.contains(wl_output::Mode::Preferred);
+                info!(
+                    "WlOutput mode: {}x{} (current: {}, preferred: {})",
+                    width, height, is_current, is_preferred
+                );
+                if is_current {
+                    if let Some(window) = state.get_output_by_output_id_mut(&output_id) {
+                        window.handle_output_mode(width, height);
+                    }
                 }
+            }
+            wl_output::Event::Mode { .. } => {
+                debug!("WlOutput mode event with unknown flags value");
             }
             wl_output::Event::Description { ref description } => {
                 info!("WlOutput description: {description:?}");
