@@ -1,7 +1,9 @@
 #![allow(clippy::pub_use)]
 
 mod builder;
+mod popup_builder;
 mod system;
+mod value_conversion;
 
 use layer_shika_adapters::errors::LayerShikaError;
 use layer_shika_domain::errors::DomainError;
@@ -21,6 +23,7 @@ pub use layer_shika_domain::value_objects::popup_positioning_mode::PopupPosition
 pub use layer_shika_domain::value_objects::popup_request::{
     PopupAt, PopupHandle, PopupRequest, PopupSize,
 };
+pub use popup_builder::PopupBuilder;
 pub use system::{App, EventLoopHandle, ShellContext, ShellControl};
 
 pub mod calloop {
@@ -47,8 +50,8 @@ pub mod prelude {
     pub use crate::{
         AnchorEdges, App, EventLoopHandle, KeyboardInteractivity, Layer, LayerShika,
         OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry, PopupAt,
-        PopupHandle, PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result,
-        ShellContext, ShellControl,
+        PopupBuilder, PopupHandle, PopupPositioningMode, PopupRequest, PopupSize, PopupWindow,
+        Result, ShellContext, ShellControl,
     };
 
     pub use crate::calloop::{Generic, Interest, Mode, PostAction, RegistrationToken, Timer};
