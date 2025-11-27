@@ -8,6 +8,7 @@ pub use crate::entities::output_registry::OutputRegistry;
 pub use crate::errors::{DomainError, Result};
 pub use crate::surface_dimensions::SurfaceDimensions;
 pub use crate::value_objects::anchor::AnchorEdges;
+pub use crate::value_objects::anchor_strategy::AnchorStrategy;
 pub use crate::value_objects::dimensions::{PopupDimensions, WindowHeight};
 pub use crate::value_objects::keyboard_interactivity::KeyboardInteractivity;
 pub use crate::value_objects::layer::Layer;

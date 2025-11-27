@@ -1,6 +1,7 @@
 use crate::Result;
 use crate::system::App;
 use layer_shika_adapters::platform::slint_interpreter::Value;
+use layer_shika_domain::prelude::AnchorStrategy;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use layer_shika_domain::value_objects::popup_request::{PopupAt, PopupRequest, PopupSize};
 
@@ -187,6 +188,104 @@ impl<'a> PopupBuilder<'a> {
             }) {
                 log::error!(
                     "Failed to bind toggle popup callback '{}': {}",
+                    trigger_callback,
+                    e
+                );
+            }
+        });
+
+        Ok(())
+    }
+
+    pub fn bind_anchored(self, trigger_callback: &str, strategy: AnchorStrategy) -> Result<()> {
+        let component_name = self.component.clone();
+        let grab = self.grab;
+        let close_callback = self.close_callback.clone();
+        let resize_callback = self.resize_callback.clone();
+        let control = self.app.control();
+
+        self.app.with_all_component_instances(|instance| {
+            let component_clone = component_name.clone();
+            let control_clone = control.clone();
+            let close_cb = close_callback.clone();
+            let resize_cb = resize_callback.clone();
+
+            if let Err(e) = instance.set_callback(trigger_callback, move |args| {
+                if args.len() < 4 {
+                    log::error!(
+                        "bind_anchored callback expects 4 arguments (x, y, width, height), got {}",
+                        args.len()
+                    );
+                    return Value::Void;
+                }
+
+                let anchor_x = args
+                    .first()
+                    .and_then(|v| v.clone().try_into().ok())
+                    .unwrap_or(0.0);
+                let anchor_y = args
+                    .get(1)
+                    .and_then(|v| v.clone().try_into().ok())
+                    .unwrap_or(0.0);
+                let anchor_w = args
+                    .get(2)
+                    .and_then(|v| v.clone().try_into().ok())
+                    .unwrap_or(0.0);
+                let anchor_h = args
+                    .get(3)
+                    .and_then(|v| v.clone().try_into().ok())
+                    .unwrap_or(0.0);
+
+                log::debug!(
+                    "Anchored popup triggered for '{}' at rect: ({}, {}, {}, {})",
+                    component_clone,
+                    anchor_x,
+                    anchor_y,
+                    anchor_w,
+                    anchor_h
+                );
+
+                let mut builder = PopupRequest::builder(component_clone.clone())
+                    .at(PopupAt::AnchorRect {
+                        x: anchor_x,
+                        y: anchor_y,
+                        w: anchor_w,
+                        h: anchor_h,
+                    })
+                    .size(PopupSize::Content)
+                    .grab(grab);
+
+                let mode = match strategy {
+                    AnchorStrategy::CenterBottom => PopupPositioningMode::TopCenter,
+                    AnchorStrategy::CenterTop => PopupPositioningMode::BottomCenter,
+                    AnchorStrategy::RightBottom => PopupPositioningMode::TopRight,
+                    AnchorStrategy::LeftTop => PopupPositioningMode::BottomLeft,
+                    AnchorStrategy::RightTop => PopupPositioningMode::BottomRight,
+                    AnchorStrategy::LeftBottom | AnchorStrategy::Cursor => {
+                        PopupPositioningMode::TopLeft
+                    }
+                };
+
+                builder = builder.mode(mode);
+
+                if let Some(ref close_cb) = close_cb {
+                    builder = builder.close_on(close_cb.clone());
+                }
+
+                if let Some(ref resize_cb) = resize_cb {
+                    builder = builder.resize_on(resize_cb.clone());
+                }
+
+                let request = builder.build();
+
+                if let Err(e) = control_clone.show_popup(&request) {
+                    log::error!("Failed to show anchored popup: {}", e);
+                }
+
+                Value::Void
+            }) {
+                log::error!(
+                    "Failed to bind anchored popup callback '{}': {}",
                     trigger_callback,
                     e
                 );

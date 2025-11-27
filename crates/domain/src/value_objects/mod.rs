@@ -1,4 +1,5 @@
 pub mod anchor;
+pub mod anchor_strategy;
 pub mod dimensions;
 pub mod keyboard_interactivity;
 pub mod layer;
