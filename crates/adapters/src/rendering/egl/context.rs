@@ -131,7 +131,7 @@ impl Drop for EGLContext {
             if let Err(e) = self.context.make_not_current_in_place() {
                 log::error!("Failed to make EGL context not current during cleanup: {e}");
             } else {
-                log::debug!("Successfully made EGL context not current during cleanup");
+                log::info!("Successfully made EGL context not current during cleanup");
             }
         }
     }

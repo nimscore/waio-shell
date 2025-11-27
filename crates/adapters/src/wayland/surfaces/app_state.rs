@@ -144,15 +144,6 @@ impl AppState {
         self.output_mapping.get(output_id)
     }
 
-    pub fn register_popup_surface(
-        &mut self,
-        popup_surface_id: ObjectId,
-        output_handle: OutputHandle,
-    ) {
-        self.surface_to_output
-            .insert(popup_surface_id, output_handle);
-    }
-
     pub fn set_active_output_handle(&mut self, handle: Option<OutputHandle>) {
         self.output_registry.set_active(handle);
     }

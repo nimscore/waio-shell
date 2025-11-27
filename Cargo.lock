@@ -1866,7 +1866,6 @@ dependencies = [
  "layer-shika-domain",
  "log",
  "raw-window-handle",
- "slab",
  "slint",
  "slint-interpreter",
  "smithay-client-toolkit 0.20.0",
@@ -3329,12 +3328,12 @@ dependencies = [
 
 [[package]]
 name = "smithay-clipboard"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc8216eec463674a0e90f29e0ae41a4db573ec5b56b1c6c1c71615d249b6d846"
+checksum = "71704c03f739f7745053bde45fa203a46c58d25bc5c4efba1d9a60e9dba81226"
 dependencies = [
  "libc",
- "smithay-client-toolkit 0.19.2",
+ "smithay-client-toolkit 0.20.0",
  "wayland-backend",
 ]
 

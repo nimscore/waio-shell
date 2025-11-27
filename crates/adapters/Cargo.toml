@@ -18,7 +18,6 @@ glutin.workspace = true
 layer-shika-domain.workspace = true
 log.workspace = true
 raw-window-handle.workspace = true
-slab.workspace = true
 slint.workspace = true
 slint-interpreter.workspace = true
 smithay-client-toolkit.workspace = true

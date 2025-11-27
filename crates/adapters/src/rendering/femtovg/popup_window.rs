@@ -9,7 +9,7 @@ use slint::{
     platform::{Renderer, WindowAdapter, WindowEvent, femtovg_renderer::FemtoVGRenderer},
 };
 use slint_interpreter::ComponentInstance;
-use std::cell::{Cell, OnceCell};
+use std::cell::{Cell, OnceCell, RefCell};
 use std::rc::{Rc, Weak};
 
 pub struct PopupWindow {
@@ -21,7 +21,7 @@ pub struct PopupWindow {
     popup_handle: Cell<Option<PopupHandle>>,
     on_close: OnceCell<OnCloseCallback>,
     configured: Cell<bool>,
-    component_instance: OnceCell<ComponentInstance>,
+    component_instance: RefCell<Option<ComponentInstance>>,
 }
 
 impl PopupWindow {
@@ -38,7 +38,7 @@ impl PopupWindow {
                 popup_handle: Cell::new(None),
                 on_close: OnceCell::new(),
                 configured: Cell::new(false),
-                component_instance: OnceCell::new(),
+                component_instance: RefCell::new(None),
             }
         })
     }
@@ -54,12 +54,25 @@ impl PopupWindow {
         self.popup_handle.set(Some(handle));
     }
 
-    pub fn close_popup(&self) {
-        info!("Closing popup window - cleaning up resources");
+    pub(crate) fn cleanup_resources(&self) {
+        info!("Cleaning up popup window resources to break reference cycles");
 
         if let Err(e) = self.window.hide() {
             info!("Failed to hide popup window: {e}");
         }
+
+        if let Some(component) = self.component_instance.borrow_mut().take() {
+            info!("Dropping ComponentInstance to break reference cycle");
+            drop(component);
+        }
+
+        info!("Popup window resource cleanup complete");
+    }
+
+    pub fn close_popup(&self) {
+        info!("Closing popup window - cleaning up resources");
+
+        self.cleanup_resources();
 
         if let Some(handle) = self.popup_handle.get() {
             info!("Destroying popup with handle {:?}", handle);
@@ -88,9 +101,11 @@ impl PopupWindow {
 
     pub fn set_component_instance(&self, instance: ComponentInstance) {
         info!("Setting component instance for popup window");
-        if self.component_instance.set(instance).is_err() {
-            info!("Component instance already set for popup window");
+        let mut comp = self.component_instance.borrow_mut();
+        if comp.is_some() {
+            info!("Component instance already set for popup window - replacing");
         }
+        *comp = Some(instance);
     }
 
     pub fn request_resize(&self, width: f32, height: f32) {
@@ -177,6 +192,13 @@ impl Deref for PopupWindow {
 
 impl Drop for PopupWindow {
     fn drop(&mut self) {
-        info!("PopupWindow being dropped - resources will be released");
+        info!("PopupWindow being dropped - cleaning up resources");
+
+        if let Some(component) = self.component_instance.borrow_mut().take() {
+            info!("Dropping any remaining ComponentInstance in PopupWindow::drop");
+            drop(component);
+        }
+
+        info!("PopupWindow drop complete");
     }
 }

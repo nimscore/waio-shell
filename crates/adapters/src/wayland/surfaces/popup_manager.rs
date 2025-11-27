@@ -425,7 +425,7 @@ impl PopupManager {
     fn destroy_popup(&self, id: PopupId) {
         if let Some(popup) = self.state.borrow_mut().popups.remove(&id) {
             info!("Destroying popup with id {:?}", id);
-
+            popup.window.cleanup_resources();
             popup.surface.destroy();
         }
     }
