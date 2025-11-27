@@ -384,13 +384,7 @@ impl ShellContext<'_> {
         Ok(())
     }
 
-    pub fn resize_popup(
-        &mut self,
-        handle: PopupHandle,
-        width: f32,
-        height: f32,
-        resize_control: Option<ShellControl>,
-    ) -> Result<()> {
+    pub fn resize_popup(&mut self, handle: PopupHandle, width: f32, height: f32) -> Result<()> {
         let active_window = self.active_or_primary_output().ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
                 message: "No active or primary output available".to_string(),
@@ -415,34 +409,7 @@ impl ShellContext<'_> {
         let size_changed =
             current_size.is_none_or(|(w, h)| (w - width).abs() > 0.01 || (h - height).abs() > 0.01);
 
-        let needs_repositioning = request.mode.center_x() || request.mode.center_y();
-
-        if needs_repositioning && size_changed {
-            log::info!(
-                "Popup needs repositioning due to mode {:?} and size change - recreating with new size {}x{}",
-                request.mode,
-                width,
-                height
-            );
-
-            self.close_popup(handle)?;
-
-            let mut builder = PopupRequest::builder(request.component)
-                .at(request.at)
-                .size(PopupSize::fixed(width, height))
-                .mode(request.mode);
-
-            if let Some(close_cb) = &request.close_callback {
-                builder = builder.close_on(close_cb.clone());
-            }
-            if let Some(resize_cb) = &request.resize_callback {
-                builder = builder.resize_on(resize_cb.clone());
-            }
-
-            let new_request = builder.build();
-
-            self.show_popup(&new_request, resize_control)?;
-        } else if size_changed {
+        if size_changed {
             if let Some(popup_window) = popup_manager.get_popup_window(handle.key()) {
                 popup_window.request_resize(width, height);
 
@@ -709,12 +676,7 @@ impl App {
                             width,
                             height,
                         } => {
-                            if let Err(e) = shell_context.resize_popup(
-                                handle,
-                                width,
-                                height,
-                                Some(control.clone()),
-                            ) {
+                            if let Err(e) = shell_context.resize_popup(handle, width, height) {
                                 log::error!("Failed to resize popup: {}", e);
                             }
                         }

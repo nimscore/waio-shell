@@ -15,7 +15,7 @@ Please note that this library is currently in early development and is not yet r
 - **Wayland**: Comprehensive layer shell protocol support using `smithay-client-toolkit`
   - Output management and configuration
   - Surface lifecycle management
-  - Basic xdg popup support (currently with double creation workaround, due dependencies limitations)
+  - Basic xdg popup support
   - Event handling system
 - **UI Integration**: Slint integration layer with custom rendering backend
 - **Documentation**: Work in progress
@@ -25,7 +25,7 @@ Please note that this library is currently in early development and is not yet r
 
 - EGL context creation and management
 - Wayland layer shell surface creation
-- XDG popup support (with some limitations, new window and resizing needed to work with current workaround)
+- XDG popup support (with some limitations: resizing needed)
 - Basic rendering with femtovg
 - Output detection and management
 - Event handling framework
