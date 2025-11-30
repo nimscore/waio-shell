@@ -137,55 +137,55 @@ impl LayerShika<NeedsComponent> {
 
 impl LayerShika<HasComponent> {
     #[must_use]
-    pub fn with_height(mut self, height: u32) -> Self {
+    pub fn height(mut self, height: u32) -> Self {
         self.config.height = WindowHeight::new(height);
         self
     }
 
     #[must_use]
-    pub const fn with_layer(mut self, layer: Layer) -> Self {
+    pub const fn layer(mut self, layer: Layer) -> Self {
         self.config.layer = layer;
         self
     }
 
     #[must_use]
-    pub fn with_margin(mut self, margin: impl Into<Margins>) -> Self {
+    pub fn margin(mut self, margin: impl Into<Margins>) -> Self {
         self.config.margin = margin.into();
         self
     }
 
     #[must_use]
-    pub const fn with_anchor(mut self, anchor: AnchorEdges) -> Self {
+    pub const fn anchor(mut self, anchor: AnchorEdges) -> Self {
         self.config.anchor = anchor;
         self
     }
 
     #[must_use]
-    pub const fn with_exclusive_zone(mut self, zone: i32) -> Self {
+    pub const fn exclusive_zone(mut self, zone: i32) -> Self {
         self.config.exclusive_zone = zone;
         self
     }
 
     #[must_use]
-    pub fn with_namespace(mut self, namespace: impl Into<String>) -> Self {
+    pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
         self.config.namespace = namespace.into();
         self
     }
 
     #[must_use]
-    pub fn with_scale_factor(mut self, sf: impl TryInto<ScaleFactor, Error = DomainError>) -> Self {
+    pub fn scale_factor(mut self, sf: impl TryInto<ScaleFactor, Error = DomainError>) -> Self {
         self.config.scale_factor = sf.try_into().unwrap_or_default();
         self
     }
 
     #[must_use]
-    pub const fn with_keyboard_interactivity(mut self, mode: KeyboardInteractivity) -> Self {
+    pub const fn keyboard_interactivity(mut self, mode: KeyboardInteractivity) -> Self {
         self.config.keyboard_interactivity = mode;
         self
     }
 
     #[must_use]
-    pub fn with_output_policy(mut self, policy: OutputPolicy) -> Self {
+    pub fn output_policy(mut self, policy: OutputPolicy) -> Self {
         self.config.output_policy = policy;
         self
     }

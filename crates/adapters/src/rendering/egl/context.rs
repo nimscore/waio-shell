@@ -46,19 +46,19 @@ impl EGLContextBuilder {
     }
 
     #[must_use]
-    pub fn with_display_id(mut self, display_id: ObjectId) -> Self {
+    pub fn display_id(mut self, display_id: ObjectId) -> Self {
         self.display_id = Some(display_id);
         self
     }
 
     #[must_use]
-    pub fn with_surface_id(mut self, surface_id: ObjectId) -> Self {
+    pub fn surface_id(mut self, surface_id: ObjectId) -> Self {
         self.surface_id = Some(surface_id);
         self
     }
 
     #[must_use]
-    pub const fn with_size(mut self, size: PhysicalSize) -> Self {
+    pub const fn size(mut self, size: PhysicalSize) -> Self {
         self.size = Some(size);
         self
     }

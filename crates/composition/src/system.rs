@@ -118,14 +118,14 @@ impl EventLoopHandle {
     ) -> StdResult<RegistrationToken, Error>
     where
         S: EventSource<Ret = R> + 'static,
-        F: FnMut(S::Event, &mut S::Metadata, ShellContext<'_>) -> R + 'static,
+        F: FnMut(S::Event, &mut S::Metadata, EventContext<'_>) -> R + 'static,
     {
         let system = self.system.upgrade().ok_or(Error::SystemDropped)?;
         let loop_handle = system.borrow().inner_ref().event_loop_handle();
 
         loop_handle
             .insert_source(source, move |event, metadata, app_state| {
-                let shell_context = ShellContext { app_state };
+                let shell_context = EventContext { app_state };
                 callback(event, metadata, shell_context)
             })
             .map_err(|e| {
@@ -140,7 +140,7 @@ impl EventLoopHandle {
 
     pub fn add_timer<F>(&self, duration: Duration, mut callback: F) -> Result<RegistrationToken>
     where
-        F: FnMut(Instant, ShellContext<'_>) -> TimeoutAction + 'static,
+        F: FnMut(Instant, EventContext<'_>) -> TimeoutAction + 'static,
     {
         let timer = Timer::from_duration(duration);
         self.insert_source(timer, move |deadline, (), shell_context| {
@@ -150,7 +150,7 @@ impl EventLoopHandle {
 
     pub fn add_timer_at<F>(&self, deadline: Instant, mut callback: F) -> Result<RegistrationToken>
     where
-        F: FnMut(Instant, ShellContext<'_>) -> TimeoutAction + 'static,
+        F: FnMut(Instant, EventContext<'_>) -> TimeoutAction + 'static,
     {
         let timer = Timer::from_deadline(deadline);
         self.insert_source(timer, move |deadline, (), shell_context| {
@@ -164,7 +164,7 @@ impl EventLoopHandle {
     ) -> Result<(RegistrationToken, channel::Sender<T>)>
     where
         T: 'static,
-        F: FnMut(T, ShellContext<'_>) + 'static,
+        F: FnMut(T, EventContext<'_>) + 'static,
     {
         let (sender, receiver) = channel::channel();
         let token = self.insert_source(receiver, move |event, (), shell_context| {
@@ -184,7 +184,7 @@ impl EventLoopHandle {
     ) -> Result<RegistrationToken>
     where
         T: AsFd + 'static,
-        F: FnMut(ShellContext<'_>) + 'static,
+        F: FnMut(EventContext<'_>) + 'static,
     {
         let generic = Generic::new(fd, interest, mode);
         self.insert_source(generic, move |_readiness, _fd, shell_context| {
@@ -194,7 +194,7 @@ impl EventLoopHandle {
     }
 }
 
-pub struct ShellContext<'a> {
+pub struct EventContext<'a> {
     app_state: &'a mut AppState,
 }
 
@@ -210,7 +210,7 @@ fn extract_dimensions_from_callback(args: &[Value]) -> PopupDimensions {
     )
 }
 
-impl ShellContext<'_> {
+impl EventContext<'_> {
     #[must_use]
     pub fn component_instance(&self) -> Option<&ComponentInstance> {
         self.app_state
@@ -660,7 +660,7 @@ impl App {
         loop_handle
             .insert_source(receiver, move |event, (), app_state| {
                 if let channel::Event::Msg(command) = event {
-                    let mut shell_context = ShellContext { app_state };
+                    let mut shell_context = EventContext { app_state };
 
                     match command {
                         PopupCommand::Show(request) => {

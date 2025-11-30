@@ -25,7 +25,7 @@ pub use layer_shika_domain::value_objects::popup_request::{
     PopupAt, PopupHandle, PopupRequest, PopupSize,
 };
 pub use popup_builder::PopupBuilder;
-pub use system::{App, EventLoopHandle, ShellContext, ShellControl};
+pub use system::{App, EventContext, EventLoopHandle, ShellControl};
 
 pub mod calloop {
     pub use layer_shika_adapters::platform::calloop::{
@@ -49,10 +49,10 @@ pub enum Error {
 
 pub mod prelude {
     pub use crate::{
-        AnchorEdges, AnchorStrategy, App, EventLoopHandle, KeyboardInteractivity, Layer,
-        LayerShika, OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry,
+        AnchorEdges, AnchorStrategy, App, EventContext, EventLoopHandle, KeyboardInteractivity,
+        Layer, LayerShika, OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry,
         PopupAt, PopupBuilder, PopupHandle, PopupPositioningMode, PopupRequest, PopupSize,
-        PopupWindow, Result, ShellContext, ShellControl,
+        PopupWindow, Result, ShellControl,
     };
 
     pub use crate::calloop::{Generic, Interest, Mode, PostAction, RegistrationToken, Timer};

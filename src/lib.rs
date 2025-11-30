@@ -23,9 +23,9 @@
 //! use layer_shika::prelude::*;
 //!
 //! LayerShika::from_file("ui/main.slint", Some("AppWindow"))?
-//!     .with_height(42)
-//!     .with_anchor(AnchorEdges::top_bar())
-//!     .with_exclusive_zone(42)
+//!     .height(42)
+//!     .anchor(AnchorEdges::top_bar())
+//!     .exclusive_zone(42)
 //!     .run()?;
 //! # Ok::<(), layer_shika::Error>(())
 //! ```
@@ -42,9 +42,9 @@
 pub mod prelude;
 
 pub use layer_shika_composition::{
-    AnchorEdges, AnchorStrategy, App, Error, EventLoopHandle, KeyboardInteractivity, Layer,
-    LayerShika, OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry, PopupAt,
-    PopupHandle, PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result, ShellContext,
+    AnchorEdges, AnchorStrategy, App, Error, EventContext, EventLoopHandle, KeyboardInteractivity,
+    Layer, LayerShika, OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry,
+    PopupAt, PopupHandle, PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result,
     ShellControl,
 };
 
