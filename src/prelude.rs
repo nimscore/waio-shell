@@ -16,7 +16,7 @@ pub use crate::{
 // Domain value objects
 pub use crate::{
     AnchorEdges, KeyboardInteractivity, Layer, OutputGeometry, OutputHandle, OutputInfo,
-    OutputPolicy, OutputRegistry, PopupAt, PopupHandle, PopupPositioningMode, PopupRequest,
+    OutputPolicy, OutputRegistry, PopupHandle, PopupPlacement, PopupPositioningMode, PopupRequest,
     PopupSize,
 };
 

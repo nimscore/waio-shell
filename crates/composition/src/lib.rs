@@ -22,7 +22,7 @@ pub use layer_shika_domain::value_objects::output_info::{OutputGeometry, OutputI
 pub use layer_shika_domain::value_objects::output_policy::OutputPolicy;
 pub use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 pub use layer_shika_domain::value_objects::popup_request::{
-    PopupAt, PopupHandle, PopupRequest, PopupSize,
+    PopupHandle, PopupPlacement, PopupRequest, PopupSize,
 };
 pub use popup_builder::PopupBuilder;
 pub use system::{App, EventContext, EventLoopHandle, ShellControl};
@@ -51,7 +51,7 @@ pub mod prelude {
     pub use crate::{
         AnchorEdges, AnchorStrategy, App, EventContext, EventLoopHandle, KeyboardInteractivity,
         Layer, LayerShika, OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry,
-        PopupAt, PopupBuilder, PopupHandle, PopupPositioningMode, PopupRequest, PopupSize,
+        PopupBuilder, PopupHandle, PopupPlacement, PopupPositioningMode, PopupRequest, PopupSize,
         PopupWindow, Result, ShellControl,
     };
 

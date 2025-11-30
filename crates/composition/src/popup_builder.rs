@@ -3,12 +3,12 @@ use crate::system::App;
 use layer_shika_adapters::platform::slint_interpreter::Value;
 use layer_shika_domain::prelude::AnchorStrategy;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
-use layer_shika_domain::value_objects::popup_request::{PopupAt, PopupRequest, PopupSize};
+use layer_shika_domain::value_objects::popup_request::{PopupPlacement, PopupRequest, PopupSize};
 
 pub struct PopupBuilder<'a> {
     app: &'a App,
     component: String,
-    reference: PopupAt,
+    reference: PopupPlacement,
     anchor: PopupPositioningMode,
     size: PopupSize,
     grab: bool,
@@ -21,7 +21,7 @@ impl<'a> PopupBuilder<'a> {
         Self {
             app,
             component,
-            reference: PopupAt::Cursor,
+            reference: PopupPlacement::AtCursor,
             anchor: PopupPositioningMode::TopLeft,
             size: PopupSize::Content,
             grab: false,
@@ -32,19 +32,19 @@ impl<'a> PopupBuilder<'a> {
 
     #[must_use]
     pub fn relative_to_cursor(mut self) -> Self {
-        self.reference = PopupAt::Cursor;
+        self.reference = PopupPlacement::AtCursor;
         self
     }
 
     #[must_use]
     pub fn relative_to_point(mut self, x: f32, y: f32) -> Self {
-        self.reference = PopupAt::Absolute { x, y };
+        self.reference = PopupPlacement::AtPosition { x, y };
         self
     }
 
     #[must_use]
     pub fn relative_to_rect(mut self, x: f32, y: f32, w: f32, h: f32) -> Self {
-        self.reference = PopupAt::AnchorRect { x, y, w, h };
+        self.reference = PopupPlacement::AtRect { x, y, w, h };
         self
     }
 
@@ -284,7 +284,7 @@ impl<'a> PopupBuilder<'a> {
                 );
 
                 let mut builder = PopupRequest::builder(component_clone.clone())
-                    .at(PopupAt::absolute(reference_x, reference_y))
+                    .placement(PopupPlacement::at_position(reference_x, reference_y))
                     .size(PopupSize::Content)
                     .grab(grab)
                     .mode(mode);
@@ -318,7 +318,7 @@ impl<'a> PopupBuilder<'a> {
 
     fn build_request(&self) -> PopupRequest {
         let mut builder = PopupRequest::builder(self.component.clone())
-            .at(self.reference)
+            .placement(self.reference)
             .size(self.size)
             .mode(self.anchor)
             .grab(self.grab);

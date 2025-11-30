@@ -21,7 +21,7 @@ use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use layer_shika_domain::value_objects::popup_request::{
-    PopupAt, PopupHandle, PopupRequest, PopupSize,
+    PopupHandle, PopupPlacement, PopupRequest, PopupSize,
 };
 use std::cell::Cell;
 use std::cell::RefCell;
@@ -58,14 +58,14 @@ impl ShellControl {
 
     pub fn show_popup_at_cursor(&self, component: impl Into<String>) -> Result<()> {
         let request = PopupRequest::builder(component.into())
-            .at(PopupAt::Cursor)
+            .placement(PopupPlacement::AtCursor)
             .build();
         self.show_popup(&request)
     }
 
     pub fn show_popup_centered(&self, component: impl Into<String>) -> Result<()> {
         let request = PopupRequest::builder(component.into())
-            .at(PopupAt::Cursor)
+            .placement(PopupPlacement::AtCursor)
             .mode(PopupPositioningMode::Center)
             .build();
         self.show_popup(&request)
@@ -78,7 +78,7 @@ impl ShellControl {
         y: f32,
     ) -> Result<()> {
         let request = PopupRequest::builder(component.into())
-            .at(PopupAt::Absolute { x, y })
+            .placement(PopupPlacement::AtPosition { x, y })
             .build();
         self.show_popup(&request)
     }
@@ -342,8 +342,8 @@ impl EventContext<'_> {
             req.component,
             initial_dimensions.0,
             initial_dimensions.1,
-            req.at.position().0,
-            req.at.position().1,
+            req.placement.position().0,
+            req.placement.position().1,
             req.mode
         );
 

@@ -244,8 +244,8 @@ impl PopupManager {
 
         let params = CreatePopupParams {
             last_pointer_serial,
-            reference_x: request.at.position().0,
-            reference_y: request.at.position().1,
+            reference_x: request.placement.position().0,
+            reference_y: request.placement.position().1,
             width,
             height,
             positioning_mode: request.mode,

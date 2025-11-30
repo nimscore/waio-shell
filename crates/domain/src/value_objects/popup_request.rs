@@ -18,7 +18,7 @@ impl PopupHandle {
 #[derive(Debug, Clone)]
 pub struct PopupRequest {
     pub component: String,
-    pub at: PopupAt,
+    pub placement: PopupPlacement,
     pub size: PopupSize,
     pub mode: PopupPositioningMode,
     pub grab: bool,
@@ -30,13 +30,13 @@ impl PopupRequest {
     #[must_use]
     pub fn new(
         component: String,
-        at: PopupAt,
+        placement: PopupPlacement,
         size: PopupSize,
         mode: PopupPositioningMode,
     ) -> Self {
         Self {
             component,
-            at,
+            placement,
             size,
             mode,
             grab: false,
@@ -52,33 +52,33 @@ impl PopupRequest {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum PopupAt {
-    Absolute { x: f32, y: f32 },
-    Cursor,
-    AnchorRect { x: f32, y: f32, w: f32, h: f32 },
+pub enum PopupPlacement {
+    AtPosition { x: f32, y: f32 },
+    AtCursor,
+    AtRect { x: f32, y: f32, w: f32, h: f32 },
 }
 
-impl PopupAt {
+impl PopupPlacement {
     #[must_use]
-    pub const fn absolute(x: f32, y: f32) -> Self {
-        Self::Absolute { x, y }
+    pub const fn at_position(x: f32, y: f32) -> Self {
+        Self::AtPosition { x, y }
     }
 
     #[must_use]
-    pub const fn cursor() -> Self {
-        Self::Cursor
+    pub const fn at_cursor() -> Self {
+        Self::AtCursor
     }
 
     #[must_use]
-    pub const fn anchor_rect(x: f32, y: f32, w: f32, h: f32) -> Self {
-        Self::AnchorRect { x, y, w, h }
+    pub const fn at_rect(x: f32, y: f32, w: f32, h: f32) -> Self {
+        Self::AtRect { x, y, w, h }
     }
 
     #[must_use]
     pub const fn position(&self) -> (f32, f32) {
         match *self {
-            Self::Absolute { x, y } | Self::AnchorRect { x, y, .. } => (x, y),
-            Self::Cursor => (0.0, 0.0),
+            Self::AtPosition { x, y } | Self::AtRect { x, y, .. } => (x, y),
+            Self::AtCursor => (0.0, 0.0),
         }
     }
 }
@@ -111,7 +111,7 @@ impl PopupSize {
 
 pub struct PopupRequestBuilder {
     component: String,
-    at: PopupAt,
+    placement: PopupPlacement,
     size: PopupSize,
     mode: PopupPositioningMode,
     grab: bool,
@@ -124,7 +124,7 @@ impl PopupRequestBuilder {
     pub fn new(component: String) -> Self {
         Self {
             component,
-            at: PopupAt::Cursor,
+            placement: PopupPlacement::AtCursor,
             size: PopupSize::Content,
             mode: PopupPositioningMode::default(),
             grab: false,
@@ -134,8 +134,8 @@ impl PopupRequestBuilder {
     }
 
     #[must_use]
-    pub const fn at(mut self, at: PopupAt) -> Self {
-        self.at = at;
+    pub const fn placement(mut self, placement: PopupPlacement) -> Self {
+        self.placement = placement;
         self
     }
 
@@ -173,7 +173,7 @@ impl PopupRequestBuilder {
     pub fn build(self) -> PopupRequest {
         PopupRequest {
             component: self.component,
-            at: self.at,
+            placement: self.placement,
             size: self.size,
             mode: self.mode,
             grab: self.grab,
