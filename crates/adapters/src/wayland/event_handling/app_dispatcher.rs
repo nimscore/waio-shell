@@ -336,6 +336,17 @@ impl Dispatch<XdgPopup, ()> for AppState {
             }
             xdg_popup::Event::Repositioned { token } => {
                 info!("XdgPopup repositioned with token {token}");
+
+                let popup_id = xdg_popup.id();
+                for window in state.all_outputs_mut() {
+                    if let Some(popup_manager) = window.popup_manager() {
+                        if let Some(handle) = popup_manager.find_by_xdg_popup(&popup_id) {
+                            info!("Committing popup surface after reposition");
+                            popup_manager.commit_popup_surface(handle.key());
+                            break;
+                        }
+                    }
+                }
             }
             _ => {}
         }

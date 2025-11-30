@@ -21,6 +21,8 @@ pub struct PopupWindow {
     popup_handle: Cell<Option<PopupHandle>>,
     on_close: OnceCell<OnCloseCallback>,
     configured: Cell<bool>,
+    repositioning: Cell<bool>,
+    needs_relayout: Cell<bool>,
     component_instance: RefCell<Option<ComponentInstance>>,
 }
 
@@ -38,6 +40,8 @@ impl PopupWindow {
                 popup_handle: Cell::new(None),
                 on_close: OnceCell::new(),
                 configured: Cell::new(false),
+                repositioning: Cell::new(false),
+                needs_relayout: Cell::new(false),
                 component_instance: RefCell::new(None),
             }
         })
@@ -113,12 +117,26 @@ impl PopupWindow {
         self.set_size(WindowSize::Logical(slint::LogicalSize::new(width, height)));
         RenderableWindow::request_redraw(self);
     }
+
+    pub fn begin_repositioning(&self) {
+        self.repositioning.set(true);
+    }
+
+    pub fn end_repositioning(&self) {
+        self.repositioning.set(false);
+        self.needs_relayout.set(true);
+    }
 }
 
 impl RenderableWindow for PopupWindow {
     fn render_frame_if_dirty(&self) -> Result<()> {
         if !self.configured.get() {
             info!("Popup not yet configured, skipping render");
+            return Ok(());
+        }
+
+        if self.repositioning.get() {
+            info!("Popup repositioning in progress, skipping render");
             return Ok(());
         }
 
@@ -137,6 +155,12 @@ impl RenderableWindow for PopupWindow {
                     message: format!("Error rendering popup frame: {e}"),
                 })?;
             info!("Popup frame rendered successfully");
+
+            if self.needs_relayout.get() {
+                info!("Popup needs relayout, requesting additional render");
+                self.needs_relayout.set(false);
+                RenderableWindow::request_redraw(self);
+            }
         }
         Ok(())
     }

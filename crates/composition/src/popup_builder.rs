@@ -197,6 +197,7 @@ impl<'a> PopupBuilder<'a> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn bind_anchored(self, trigger_callback: &str, strategy: AnchorStrategy) -> Result<()> {
         let component_name = self.component.clone();
         let grab = self.grab;
@@ -245,28 +246,48 @@ impl<'a> PopupBuilder<'a> {
                     anchor_h
                 );
 
-                let mut builder = PopupRequest::builder(component_clone.clone())
-                    .at(PopupAt::AnchorRect {
-                        x: anchor_x,
-                        y: anchor_y,
-                        w: anchor_w,
-                        h: anchor_h,
-                    })
-                    .size(PopupSize::Content)
-                    .grab(grab);
-
-                let mode = match strategy {
-                    AnchorStrategy::CenterBottom => PopupPositioningMode::TopCenter,
-                    AnchorStrategy::CenterTop => PopupPositioningMode::BottomCenter,
-                    AnchorStrategy::RightBottom => PopupPositioningMode::TopRight,
-                    AnchorStrategy::LeftTop => PopupPositioningMode::BottomLeft,
-                    AnchorStrategy::RightTop => PopupPositioningMode::BottomRight,
-                    AnchorStrategy::LeftBottom | AnchorStrategy::Cursor => {
-                        PopupPositioningMode::TopLeft
+                let (reference_x, reference_y, mode) = match strategy {
+                    AnchorStrategy::CenterBottom => {
+                        let center_x = anchor_x + anchor_w / 2.0;
+                        let bottom_y = anchor_y + anchor_h;
+                        (center_x, bottom_y, PopupPositioningMode::TopCenter)
                     }
+                    AnchorStrategy::CenterTop => {
+                        let center_x = anchor_x + anchor_w / 2.0;
+                        (center_x, anchor_y, PopupPositioningMode::BottomCenter)
+                    }
+                    AnchorStrategy::RightBottom => {
+                        let right_x = anchor_x + anchor_w;
+                        let bottom_y = anchor_y + anchor_h;
+                        (right_x, bottom_y, PopupPositioningMode::TopRight)
+                    }
+                    AnchorStrategy::LeftTop => {
+                        (anchor_x, anchor_y, PopupPositioningMode::BottomLeft)
+                    }
+                    AnchorStrategy::RightTop => {
+                        let right_x = anchor_x + anchor_w;
+                        (right_x, anchor_y, PopupPositioningMode::BottomRight)
+                    }
+                    AnchorStrategy::LeftBottom => {
+                        let bottom_y = anchor_y + anchor_h;
+                        (anchor_x, bottom_y, PopupPositioningMode::TopLeft)
+                    }
+                    AnchorStrategy::Cursor => (anchor_x, anchor_y, PopupPositioningMode::TopLeft),
                 };
 
-                builder = builder.mode(mode);
+                log::debug!(
+                    "Resolved anchored popup reference for '{}' -> ({}, {}), mode: {:?}",
+                    component_clone,
+                    reference_x,
+                    reference_y,
+                    mode
+                );
+
+                let mut builder = PopupRequest::builder(component_clone.clone())
+                    .at(PopupAt::absolute(reference_x, reference_y))
+                    .size(PopupSize::Content)
+                    .grab(grab)
+                    .mode(mode);
 
                 if let Some(ref close_cb) = close_cb {
                     builder = builder.close_on(close_cb.clone());

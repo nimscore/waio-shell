@@ -1,7 +1,10 @@
+use layer_shika_domain::dimensions::{LogicalSize as DomainLogicalSize, ScaleFactor};
+use layer_shika_domain::surface_dimensions::SurfaceDimensions;
 use layer_shika_domain::value_objects::popup_config::PopupConfig;
 use log::info;
 use slint::PhysicalSize;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
+use std::cell::Cell;
 use std::rc::Rc;
 use wayland_client::{
     protocol::{wl_compositor::WlCompositor, wl_seat::WlSeat, wl_surface::WlSurface},
@@ -41,6 +44,10 @@ pub struct PopupSurface {
     pub xdg_popup: Rc<XdgPopup>,
     pub fractional_scale: Option<Rc<WpFractionalScaleV1>>,
     pub viewport: Option<Rc<WpViewport>>,
+    popup_config: PopupConfig,
+    xdg_wm_base: Rc<XdgWmBase>,
+    queue_handle: QueueHandle<AppState>,
+    scale_factor: Cell<f32>,
 }
 
 impl PopupSurface {
@@ -95,6 +102,10 @@ impl PopupSurface {
             xdg_popup,
             fractional_scale,
             viewport,
+            popup_config: params.popup_config,
+            xdg_wm_base: Rc::new(params.xdg_wm_base.clone()),
+            queue_handle: params.queue_handle.clone(),
+            scale_factor: Cell::new(params.scale_factor),
         }
     }
 
@@ -147,8 +158,50 @@ impl PopupSurface {
                 logical_height
             );
             vp.set_destination(logical_width, logical_height);
-            self.surface.commit();
+
+            self.reposition_popup(logical_width, logical_height);
         }
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_wrap)]
+    #[allow(clippy::cast_sign_loss)]
+    #[allow(clippy::cast_precision_loss)]
+    fn reposition_popup(&self, logical_width: i32, logical_height: i32) {
+        let scale_factor = self.scale_factor.get();
+
+        let updated_config = PopupConfig::new(
+            self.popup_config.reference_x(),
+            self.popup_config.reference_y(),
+            SurfaceDimensions::from_logical(
+                DomainLogicalSize::from_raw(logical_width as f32, logical_height as f32),
+                ScaleFactor::from_raw(scale_factor),
+            ),
+            self.popup_config.positioning_mode(),
+            self.popup_config.output_bounds(),
+        );
+
+        let calculated_x = updated_config.calculated_top_left_x() as i32;
+        let calculated_y = updated_config.calculated_top_left_y() as i32;
+
+        info!(
+            "Repositioning popup: reference=({}, {}), new_size=({}x{}), new_top_left=({}, {})",
+            self.popup_config.reference_x(),
+            self.popup_config.reference_y(),
+            logical_width,
+            logical_height,
+            calculated_x,
+            calculated_y
+        );
+
+        let positioner = self.xdg_wm_base.create_positioner(&self.queue_handle, ());
+        positioner.set_anchor_rect(calculated_x, calculated_y, 1, 1);
+        positioner.set_size(logical_width, logical_height);
+        positioner.set_anchor(Anchor::TopLeft);
+        positioner.set_gravity(Gravity::BottomRight);
+        positioner.set_constraint_adjustment(ConstraintAdjustment::None);
+
+        self.xdg_popup.reposition(&positioner, 0);
     }
 
     pub fn destroy(&self) {

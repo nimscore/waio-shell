@@ -445,9 +445,19 @@ impl PopupManager {
     pub fn update_popup_viewport(&self, key: usize, logical_width: i32, logical_height: i32) {
         let id = PopupId(key);
         if let Some(popup) = self.state.borrow().popups.get(&id) {
+            popup.window.begin_repositioning();
             popup
                 .surface
                 .update_viewport_size(logical_width, logical_height);
+        }
+    }
+
+    pub fn commit_popup_surface(&self, key: usize) {
+        let id = PopupId(key);
+        if let Some(popup) = self.state.borrow().popups.get(&id) {
+            popup.surface.surface.commit();
+            popup.window.end_repositioning();
+            popup.window.request_redraw();
         }
     }
 

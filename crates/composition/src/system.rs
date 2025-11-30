@@ -356,6 +356,10 @@ impl ShellContext<'_> {
         popup_key_cell.set(popup_handle.key());
 
         if let Some(popup_window) = popup_manager.get_popup_window(popup_handle.key()) {
+            if matches!(req.size, PopupSize::Content) {
+                log::debug!("Marking content-sized popup as repositioning from creation");
+                popup_window.begin_repositioning();
+            }
             popup_window.set_component_instance(instance);
         } else {
             return Err(Error::Domain(DomainError::Configuration {
