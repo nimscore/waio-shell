@@ -36,15 +36,15 @@ impl LayerShika<NeedsComponent> {
         }
     }
 
-    pub fn from_file(
+    pub fn from_file(path: impl AsRef<Path>) -> Result<LayerShika<HasComponent>> {
+        Self::from_file_with_component(path, "Main")
+    }
+
+    pub fn from_file_with_component(
         path: impl AsRef<Path>,
-        component_name: Option<&str>,
+        component_name: impl AsRef<str>,
     ) -> Result<LayerShika<HasComponent>> {
-        Self::from_file_with_compiler(
-            path,
-            &mut Compiler::default(),
-            component_name.unwrap_or("Main"),
-        )
+        Self::from_file_with_compiler(path, &mut Compiler::default(), component_name.as_ref())
     }
 
     pub fn from_file_with_compiler(
@@ -85,15 +85,15 @@ impl LayerShika<NeedsComponent> {
         })
     }
 
-    pub fn from_source(
+    pub fn from_source(source: impl AsRef<str>) -> Result<LayerShika<HasComponent>> {
+        Self::from_source_with_component(source, "Main")
+    }
+
+    pub fn from_source_with_component(
         source: impl AsRef<str>,
-        component_name: Option<&str>,
+        component_name: impl AsRef<str>,
     ) -> Result<LayerShika<HasComponent>> {
-        Self::from_source_with_compiler(
-            source,
-            &mut Compiler::default(),
-            component_name.unwrap_or("Main"),
-        )
+        Self::from_source_with_compiler(source, &mut Compiler::default(), component_name.as_ref())
     }
 
     pub fn from_source_with_compiler(
