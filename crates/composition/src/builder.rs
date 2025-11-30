@@ -149,13 +149,8 @@ impl LayerShika<HasComponent> {
     }
 
     #[must_use]
-    pub const fn with_margin(mut self, top: i32, right: i32, bottom: i32, left: i32) -> Self {
-        self.config.margin = Margins {
-            top,
-            right,
-            bottom,
-            left,
-        };
+    pub fn with_margin(mut self, margin: impl Into<Margins>) -> Self {
+        self.config.margin = margin.into();
         self
     }
 
@@ -172,14 +167,15 @@ impl LayerShika<HasComponent> {
     }
 
     #[must_use]
-    pub fn with_namespace(mut self, namespace: String) -> Self {
-        self.config.namespace = namespace;
+    pub fn with_namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.config.namespace = namespace.into();
         self
     }
 
-    pub fn with_scale_factor(mut self, scale_factor: f32) -> Result<Self> {
-        self.config.scale_factor = ScaleFactor::new(scale_factor)?;
-        Ok(self)
+    #[must_use]
+    pub fn with_scale_factor(mut self, sf: impl TryInto<ScaleFactor, Error = DomainError>) -> Self {
+        self.config.scale_factor = sf.try_into().unwrap_or_default();
+        self
     }
 
     #[must_use]

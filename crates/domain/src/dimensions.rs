@@ -174,6 +174,14 @@ impl Default for ScaleFactor {
     }
 }
 
+impl TryFrom<f32> for ScaleFactor {
+    type Error = DomainError;
+
+    fn try_from(factor: f32) -> Result<Self, Self::Error> {
+        Self::new(factor)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LogicalPosition {
     x: f32,
