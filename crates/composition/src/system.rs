@@ -308,12 +308,18 @@ impl EventContext<'_> {
             })
         })?;
 
-        log::debug!("Got compilation result, looking for component '{}'", req.component);
+        log::debug!(
+            "Got compilation result, looking for component '{}'",
+            req.component
+        );
 
         let definition = compilation_result
             .component(&req.component)
             .ok_or_else(|| {
-                log::error!("Component '{}' not found in compilation result", req.component);
+                log::error!(
+                    "Component '{}' not found in compilation result",
+                    req.component
+                );
                 Error::Domain(DomainError::Configuration {
                     message: format!(
                         "{} component not found in compilation result",
@@ -637,12 +643,12 @@ impl EventContext<'_> {
     }
 }
 
-pub struct App {
+pub struct SingleWindowShell {
     inner: Rc<RefCell<WindowingSystemFacade>>,
     popup_command_sender: channel::Sender<PopupCommand>,
 }
 
-impl App {
+impl SingleWindowShell {
     pub(crate) fn new(
         component_definition: ComponentDefinition,
         compilation_result: Option<Rc<CompilationResult>>,
@@ -659,14 +665,14 @@ impl App {
 
         let (sender, receiver) = channel::channel();
 
-        let system = Self {
+        let shell = Self {
             inner: Rc::clone(&inner_rc),
             popup_command_sender: sender,
         };
 
-        system.setup_popup_command_handler(receiver)?;
+        shell.setup_popup_command_handler(receiver)?;
 
-        Ok(system)
+        Ok(shell)
     }
 
     fn setup_popup_command_handler(&self, receiver: channel::Channel<PopupCommand>) -> Result<()> {

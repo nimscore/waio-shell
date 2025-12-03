@@ -1,5 +1,5 @@
 use crate::Result;
-use crate::system::App;
+use crate::system::SingleWindowShell;
 use layer_shika_adapters::platform::slint_interpreter::{CompilationResult, Compiler};
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::prelude::{
@@ -202,7 +202,7 @@ impl LayerShika<HasComponent> {
         self
     }
 
-    pub fn build(self) -> Result<App> {
+    pub fn build(self) -> Result<SingleWindowShell> {
         let component_definition = self
             .state
             .compilation_result
@@ -214,7 +214,7 @@ impl LayerShika<HasComponent> {
                 ),
             })?;
 
-        App::new(
+        SingleWindowShell::new(
             component_definition,
             Some(self.state.compilation_result),
             self.config,

@@ -63,10 +63,10 @@
 pub mod prelude;
 
 pub use layer_shika_composition::{
-    AnchorEdges, AnchorStrategy, App, Error, EventContext, EventLoopHandle, KeyboardInteractivity,
+    AnchorEdges, AnchorStrategy, Error, EventContext, EventLoopHandle, KeyboardInteractivity,
     Layer, LayerShika, OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry,
     PopupHandle, PopupPlacement, PopupPositioningMode, PopupRequest, PopupSize, PopupWindow,
-    Result, ShellControl,
+    Result, ShellControl, SingleWindowShell,
 };
 
 pub use layer_shika_composition::{

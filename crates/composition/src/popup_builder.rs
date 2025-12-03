@@ -1,12 +1,12 @@
 use crate::Result;
-use crate::system::App;
+use crate::system::SingleWindowShell;
 use layer_shika_adapters::platform::slint_interpreter::Value;
 use layer_shika_domain::prelude::AnchorStrategy;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use layer_shika_domain::value_objects::popup_request::{PopupPlacement, PopupRequest, PopupSize};
 
 pub struct PopupBuilder<'a> {
-    app: &'a App,
+    shell: &'a SingleWindowShell,
     component: String,
     reference: PopupPlacement,
     anchor: PopupPositioningMode,
@@ -17,9 +17,9 @@ pub struct PopupBuilder<'a> {
 }
 
 impl<'a> PopupBuilder<'a> {
-    pub(crate) fn new(app: &'a App, component: String) -> Self {
+    pub(crate) fn new(shell: &'a SingleWindowShell, component: String) -> Self {
         Self {
-            app,
+            shell,
             component,
             reference: PopupPlacement::AtCursor,
             anchor: PopupPositioningMode::TopLeft,
@@ -146,9 +146,9 @@ impl<'a> PopupBuilder<'a> {
 
     pub fn bind(self, trigger_callback: &str) -> Result<()> {
         let request = self.build_request();
-        let control = self.app.control();
+        let control = self.shell.control();
 
-        self.app.with_all_component_instances(|instance| {
+        self.shell.with_all_component_instances(|instance| {
             let request_clone = request.clone();
             let control_clone = control.clone();
 
@@ -171,10 +171,10 @@ impl<'a> PopupBuilder<'a> {
 
     pub fn toggle(self, trigger_callback: &str) -> Result<()> {
         let request = self.build_request();
-        let control = self.app.control();
+        let control = self.shell.control();
         let component_name = request.component.clone();
 
-        self.app.with_all_component_instances(|instance| {
+        self.shell.with_all_component_instances(|instance| {
             let request_clone = request.clone();
             let control_clone = control.clone();
             let component_clone = component_name.clone();
@@ -203,9 +203,9 @@ impl<'a> PopupBuilder<'a> {
         let grab = self.grab;
         let close_callback = self.close_callback.clone();
         let resize_callback = self.resize_callback.clone();
-        let control = self.app.control();
+        let control = self.shell.control();
 
-        self.app.with_all_component_instances(|instance| {
+        self.shell.with_all_component_instances(|instance| {
             let component_clone = component_name.clone();
             let control_clone = control.clone();
             let close_cb = close_callback.clone();

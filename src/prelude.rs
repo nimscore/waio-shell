@@ -9,7 +9,8 @@
 #![allow(clippy::pub_use)]
 
 pub use crate::{
-    App, Error, EventContext, EventLoopHandle, LayerShika, PopupWindow, Result, ShellControl,
+    Error, EventContext, EventLoopHandle, LayerShika, PopupWindow, Result, ShellControl,
+    SingleWindowShell,
 };
 
 pub use crate::{
