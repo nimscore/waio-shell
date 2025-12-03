@@ -1,13 +1,16 @@
 use crate::shell_composition::ShellWindowDefinition;
 use crate::shell_runtime::ShellRuntime;
 use crate::system::{EventContext, PopupCommand, ShellControl};
+use crate::value_conversion::IntoValue;
 use crate::{Error, Result};
 use layer_shika_adapters::errors::EventLoopError;
 use layer_shika_adapters::platform::calloop::{
     EventSource, Generic, Interest, Mode, PostAction, RegistrationToken, TimeoutAction, Timer,
     channel,
 };
-use layer_shika_adapters::platform::slint_interpreter::{CompilationResult, ComponentInstance};
+use layer_shika_adapters::platform::slint_interpreter::{
+    CompilationResult, ComponentInstance, Value,
+};
 use layer_shika_adapters::platform::wayland::Anchor;
 use layer_shika_adapters::{
     AppState, ShellWindowConfig, WaylandWindowConfig, WindowState, WindowingSystemFacade,
@@ -333,6 +336,145 @@ impl Shell {
     #[must_use]
     pub fn compilation_result(&self) -> &Rc<CompilationResult> {
         &self.compilation_result
+    }
+
+    pub fn on<F, R>(&self, shell_window_name: &str, callback_name: &str, handler: F) -> Result<()>
+    where
+        F: Fn(ShellControl) -> R + 'static,
+        R: IntoValue,
+    {
+        if !self.windows.contains_key(shell_window_name) {
+            return Err(Error::Domain(DomainError::Configuration {
+                message: format!("Shell window '{}' not found", shell_window_name),
+            }));
+        }
+
+        let control = self.control();
+        let handler = Rc::new(handler);
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+
+        for window in system.app_state().windows_by_shell_name(shell_window_name) {
+            let handler_rc = Rc::clone(&handler);
+            let control_clone = control.clone();
+            if let Err(e) = window
+                .component_instance()
+                .set_callback(callback_name, move |_args| {
+                    handler_rc(control_clone.clone()).into_value()
+                })
+            {
+                log::error!(
+                    "Failed to register callback '{}' on window '{}': {}",
+                    callback_name,
+                    shell_window_name,
+                    e
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn on_with_args<F, R>(
+        &self,
+        shell_window_name: &str,
+        callback_name: &str,
+        handler: F,
+    ) -> Result<()>
+    where
+        F: Fn(&[Value], ShellControl) -> R + 'static,
+        R: IntoValue,
+    {
+        if !self.windows.contains_key(shell_window_name) {
+            return Err(Error::Domain(DomainError::Configuration {
+                message: format!("Shell window '{}' not found", shell_window_name),
+            }));
+        }
+
+        let control = self.control();
+        let handler = Rc::new(handler);
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+
+        for window in system.app_state().windows_by_shell_name(shell_window_name) {
+            let handler_rc = Rc::clone(&handler);
+            let control_clone = control.clone();
+            if let Err(e) = window
+                .component_instance()
+                .set_callback(callback_name, move |args| {
+                    handler_rc(args, control_clone.clone()).into_value()
+                })
+            {
+                log::error!(
+                    "Failed to register callback '{}' on window '{}': {}",
+                    callback_name,
+                    shell_window_name,
+                    e
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn on_global<F, R>(&self, callback_name: &str, handler: F) -> Result<()>
+    where
+        F: Fn(ShellControl) -> R + 'static,
+        R: IntoValue,
+    {
+        let control = self.control();
+        let handler = Rc::new(handler);
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+
+        for window in system.app_state().all_outputs() {
+            let handler_rc = Rc::clone(&handler);
+            let control_clone = control.clone();
+            if let Err(e) = window
+                .component_instance()
+                .set_callback(callback_name, move |_args| {
+                    handler_rc(control_clone.clone()).into_value()
+                })
+            {
+                log::error!(
+                    "Failed to register global callback '{}': {}",
+                    callback_name,
+                    e
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn on_global_with_args<F, R>(&self, callback_name: &str, handler: F) -> Result<()>
+    where
+        F: Fn(&[Value], ShellControl) -> R + 'static,
+        R: IntoValue,
+    {
+        let control = self.control();
+        let handler = Rc::new(handler);
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+
+        for window in system.app_state().all_outputs() {
+            let handler_rc = Rc::clone(&handler);
+            let control_clone = control.clone();
+            if let Err(e) = window
+                .component_instance()
+                .set_callback(callback_name, move |args| {
+                    handler_rc(args, control_clone.clone()).into_value()
+                })
+            {
+                log::error!(
+                    "Failed to register global callback '{}': {}",
+                    callback_name,
+                    e
+                );
+            }
+        }
+
+        Ok(())
     }
 }
 
