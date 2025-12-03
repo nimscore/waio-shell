@@ -795,6 +795,60 @@ impl SingleWindowShell {
         Ok(())
     }
 
+    pub fn on_for_output<F, R>(
+        &self,
+        output: OutputHandle,
+        callback_name: &str,
+        handler: F,
+    ) -> Result<()>
+    where
+        F: Fn(ShellControl) -> R + 'static,
+        R: IntoValue,
+    {
+        let control = self.control();
+        self.with_output(output, |instance| {
+            let control_clone = control.clone();
+            if let Err(e) = instance.set_callback(callback_name, move |_args| {
+                handler(control_clone.clone()).into_value()
+            }) {
+                log::error!(
+                    "Failed to register callback '{}' on output {:?}: {}",
+                    callback_name,
+                    output,
+                    e
+                );
+            }
+        })?;
+        Ok(())
+    }
+
+    pub fn on_for_output_with_args<F, R>(
+        &self,
+        output: OutputHandle,
+        callback_name: &str,
+        handler: F,
+    ) -> Result<()>
+    where
+        F: Fn(&[Value], ShellControl) -> R + 'static,
+        R: IntoValue,
+    {
+        let control = self.control();
+        self.with_output(output, |instance| {
+            let control_clone = control.clone();
+            if let Err(e) = instance.set_callback(callback_name, move |args| {
+                handler(args, control_clone.clone()).into_value()
+            }) {
+                log::error!(
+                    "Failed to register callback '{}' on output {:?}: {}",
+                    callback_name,
+                    output,
+                    e
+                );
+            }
+        })?;
+        Ok(())
+    }
+
     #[must_use]
     pub fn popup(&self, component_name: impl Into<String>) -> PopupBuilder<'_> {
         PopupBuilder::new(self, component_name.into())

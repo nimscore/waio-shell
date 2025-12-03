@@ -6,7 +6,7 @@ mod shell;
 mod shell_composition;
 mod shell_runtime;
 mod system;
-mod value_conversion;
+pub mod value_conversion;
 
 use layer_shika_adapters::errors::LayerShikaError;
 use layer_shika_domain::errors::DomainError;
@@ -30,6 +30,7 @@ pub use layer_shika_domain::value_objects::popup_request::{
 pub use popup_builder::PopupBuilder;
 pub use shell_runtime::{DEFAULT_WINDOW_NAME, ShellRuntime};
 pub use system::{EventContext, EventLoopHandle, ShellControl, SingleWindowShell};
+pub use value_conversion::IntoValue;
 
 pub use shell::{
     LayerSurfaceHandle, Shell, ShellEventContext, ShellEventLoopHandle, ShellWindowConfigHandler,
@@ -59,7 +60,7 @@ pub enum Error {
 
 pub mod prelude {
     pub use crate::{
-        AnchorEdges, AnchorStrategy, DEFAULT_WINDOW_NAME, EventContext, EventLoopHandle,
+        AnchorEdges, AnchorStrategy, DEFAULT_WINDOW_NAME, EventContext, EventLoopHandle, IntoValue,
         KeyboardInteractivity, Layer, LayerShika, OutputGeometry, OutputHandle, OutputInfo,
         OutputPolicy, OutputRegistry, PopupBuilder, PopupHandle, PopupPlacement,
         PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result, ShellControl,
