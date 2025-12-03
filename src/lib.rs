@@ -44,7 +44,7 @@
 //! // Create shell with typed WindowConfig
 //! let shell = ShellComposition::new()
 //!     .with_compilation_result(compilation_result)
-//!     .register_shell_window("TopBar", WindowConfig::default())
+//!     .with_window("TopBar", WindowConfig::default())
 //!     .build()?;
 //!
 //! shell.run()?;

@@ -32,11 +32,7 @@ impl ShellComposition {
         self
     }
 
-    pub fn register_shell_window(
-        mut self,
-        component_name: impl Into<String>,
-        config: WindowConfig,
-    ) -> Self {
+    pub fn with_window(mut self, component_name: impl Into<String>, config: WindowConfig) -> Self {
         self.shell_windows.push(ShellWindowDefinition {
             component_name: component_name.into(),
             config,
@@ -44,13 +40,13 @@ impl ShellComposition {
         self
     }
 
-    pub fn register_shell_windows(mut self, definitions: Vec<ShellWindowDefinition>) -> Self {
+    pub fn with_windows(mut self, definitions: Vec<ShellWindowDefinition>) -> Self {
         self.shell_windows.extend(definitions);
         self
     }
 
-    pub fn auto_discover(mut self, component_names: Vec<impl Into<String>>) -> Self {
-        self.auto_discover_components = component_names.into_iter().map(Into::into).collect();
+    pub fn with_default_config_for(mut self, components: Vec<impl Into<String>>) -> Self {
+        self.auto_discover_components = components.into_iter().map(Into::into).collect();
         self
     }
 
@@ -68,7 +64,7 @@ impl ShellComposition {
 
         if self.shell_windows.is_empty() {
             return Err(Error::Domain(DomainError::Configuration {
-                message: "No shell windows registered. Use register_shell_window(), register_shell_windows(), or auto_discover()".to_string(),
+                message: "No shell windows registered. Use add_window(), add_windows(), or with_default_config_for()".to_string(),
             }));
         }
 
