@@ -37,6 +37,7 @@ pub struct WindowStateBuilder {
     pub connection: Option<Rc<Connection>>,
     pub scale_factor: f32,
     pub height: u32,
+    pub width: u32,
     pub exclusive_zone: i32,
 }
 
@@ -97,6 +98,12 @@ impl WindowStateBuilder {
     #[must_use]
     pub const fn with_exclusive_zone(mut self, exclusive_zone: i32) -> Self {
         self.exclusive_zone = exclusive_zone;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_width(mut self, width: u32) -> Self {
+        self.width = width;
         self
     }
 
@@ -163,6 +170,7 @@ impl Default for WindowStateBuilder {
             connection: None,
             scale_factor: 1.0,
             height: 30,
+            width: 0,
             exclusive_zone: -1,
         }
     }

@@ -90,7 +90,8 @@ impl SurfaceCtx {
 
         layer_surface.set_exclusive_zone(config.exclusive_zone);
         layer_surface.set_keyboard_interactivity(config.keyboard_interactivity);
-        layer_surface.set_size(1, config.height);
+
+        layer_surface.set_size(config.width, config.height);
         surface.commit();
     }
 }

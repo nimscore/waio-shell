@@ -46,6 +46,10 @@ pub struct ShellControl {
 }
 
 impl ShellControl {
+    pub fn new(sender: channel::Sender<PopupCommand>) -> Self {
+        Self { sender }
+    }
+
     pub fn show_popup(&self, request: &PopupRequest) -> Result<()> {
         self.sender
             .send(PopupCommand::Show(request.clone()))
@@ -198,6 +202,12 @@ pub struct EventContext<'a> {
     app_state: &'a mut AppState,
 }
 
+impl<'a> EventContext<'a> {
+    pub fn from_app_state(app_state: &'a mut AppState) -> Self {
+        Self { app_state }
+    }
+}
+
 fn extract_dimensions_from_callback(args: &[Value]) -> PopupDimensions {
     let defaults = PopupDimensions::default();
     PopupDimensions::new(
@@ -289,15 +299,21 @@ impl EventContext<'_> {
         req: &PopupRequest,
         resize_control: Option<ShellControl>,
     ) -> Result<PopupHandle> {
+        log::info!("show_popup called for component '{}'", req.component);
+
         let compilation_result = self.compilation_result().ok_or_else(|| {
+            log::error!("No compilation result available");
             Error::Domain(DomainError::Configuration {
                 message: "No compilation result available for popup creation".to_string(),
             })
         })?;
 
+        log::debug!("Got compilation result, looking for component '{}'", req.component);
+
         let definition = compilation_result
             .component(&req.component)
             .ok_or_else(|| {
+                log::error!("Component '{}' not found in compilation result", req.component);
                 Error::Domain(DomainError::Configuration {
                     message: format!(
                         "{} component not found in compilation result",
@@ -306,10 +322,13 @@ impl EventContext<'_> {
                 })
             })?;
 
+        log::debug!("Found component definition for '{}'", req.component);
+
         self.close_current_popup()?;
 
         let is_using_active = self.app_state.active_output().is_some();
         let active_window = self.active_or_primary_output().ok_or_else(|| {
+            log::error!("No active or primary output available");
             Error::Domain(DomainError::Configuration {
                 message: "No active or primary output available".to_string(),
             })
@@ -356,10 +375,6 @@ impl EventContext<'_> {
         popup_key_cell.set(popup_handle.key());
 
         if let Some(popup_window) = popup_manager.get_popup_window(popup_handle.key()) {
-            if matches!(req.size, PopupSize::Content) {
-                log::debug!("Marking content-sized popup as repositioning from creation");
-                popup_window.begin_repositioning();
-            }
             popup_window.set_component_instance(instance);
         } else {
             return Err(Error::Domain(DomainError::Configuration {
@@ -425,6 +440,7 @@ impl EventContext<'_> {
                 let logical_height = height as i32;
 
                 popup_manager.update_popup_viewport(handle.key(), logical_width, logical_height);
+                popup_manager.commit_popup_surface(handle.key());
                 log::debug!(
                     "Updated popup viewport to logical size: {}x{} (from resize to {}x{})",
                     logical_width,

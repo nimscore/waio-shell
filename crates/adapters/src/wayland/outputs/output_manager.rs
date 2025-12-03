@@ -144,7 +144,7 @@ impl OutputManager {
         let (window, main_surface_id) =
             self.create_window_for_output(&pending_output.proxy, output_id, queue_handle)?;
 
-        app_state.add_output(output_id.clone(), main_surface_id, window);
+        app_state.add_output(output_id, main_surface_id, window);
 
         Ok(())
     }
@@ -182,6 +182,7 @@ impl OutputManager {
             .with_layer_surface(Rc::clone(&surface_ctx.layer_surface))
             .with_scale_factor(self.config.scale_factor)
             .with_height(self.config.height)
+            .with_width(self.config.width)
             .with_exclusive_zone(self.config.exclusive_zone)
             .with_connection(Rc::clone(self.context.connection()))
             .with_pointer(Rc::clone(&self.context.pointer))
@@ -215,10 +216,14 @@ impl OutputManager {
         if let Some(handle) = self.output_mapping.remove(output_id) {
             info!("Removing output {handle:?} (id: {output_id:?})");
 
-            if let Some(_window) = app_state.remove_output(handle) {
-                info!("Cleaned up window for output {handle:?}");
-            } else {
+            let removed_windows = app_state.remove_output(handle);
+            if removed_windows.is_empty() {
                 warn!("No window found for output handle {handle:?}");
+            } else {
+                info!(
+                    "Cleaned up {} window(s) for output {handle:?}",
+                    removed_windows.len()
+                );
             }
         } else {
             self.pending_outputs.borrow_mut().remove(output_id);

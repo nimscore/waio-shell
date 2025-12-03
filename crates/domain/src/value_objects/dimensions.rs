@@ -1,34 +1,44 @@
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct WindowHeight(u32);
+pub struct WindowDimension {
+    width: u32,
+    height: u32,
+}
 
-impl WindowHeight {
-    pub fn new(height: u32) -> Self {
-        if height == 0 {
-            Self::default()
-        } else {
-            Self(height)
+impl WindowDimension {
+    pub fn new(width: u32, height: u32) -> Self {
+        Self {
+            width: if width == 0 {
+                Self::default().width
+            } else {
+                width
+            },
+            height: if height == 0 {
+                Self::default().height
+            } else {
+                height
+            },
         }
     }
 
-    pub const fn from_raw(height: u32) -> Self {
-        Self(height)
+    pub const fn from_raw(width: u32, height: u32) -> Self {
+        Self { width, height }
     }
 
-    pub const fn value(&self) -> u32 {
-        self.0
+    pub const fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub const fn height(&self) -> u32 {
+        self.height
     }
 }
 
-impl Default for WindowHeight {
+impl Default for WindowDimension {
     fn default() -> Self {
-        Self(30)
-    }
-}
-
-impl From<u32> for WindowHeight {
-    fn from(height: u32) -> Self {
-        Self::new(height)
+        Self {
+            width: 20,
+            height: 20,
+        }
     }
 }
 

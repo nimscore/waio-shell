@@ -13,15 +13,31 @@ use wayland_client::backend::ObjectId;
 
 pub type PerOutputWindow = WindowState;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ShellWindowKey {
+    pub output_handle: OutputHandle,
+    pub shell_window_name: String,
+}
+
+impl ShellWindowKey {
+    pub fn new(output_handle: OutputHandle, shell_window_name: impl Into<String>) -> Self {
+        Self {
+            output_handle,
+            shell_window_name: shell_window_name.into(),
+        }
+    }
+}
+
 pub struct AppState {
     output_registry: OutputRegistry,
     output_mapping: OutputMapping,
-    windows: HashMap<OutputHandle, PerOutputWindow>,
-    surface_to_output: HashMap<ObjectId, OutputHandle>,
+    windows: HashMap<ShellWindowKey, PerOutputWindow>,
+    surface_to_key: HashMap<ObjectId, ShellWindowKey>,
     _pointer: ManagedWlPointer,
     shared_pointer_serial: Rc<SharedPointerSerial>,
     output_manager: Option<Rc<RefCell<OutputManager>>>,
     registry_name_to_output_id: HashMap<u32, ObjectId>,
+    active_window_key: Option<ShellWindowKey>,
 }
 
 impl AppState {
@@ -30,11 +46,12 @@ impl AppState {
             output_registry: OutputRegistry::new(),
             output_mapping: OutputMapping::new(),
             windows: HashMap::new(),
-            surface_to_output: HashMap::new(),
+            surface_to_key: HashMap::new(),
             _pointer: pointer,
             shared_pointer_serial: shared_serial,
             output_manager: None,
             registry_name_to_output_id: HashMap::new(),
+            active_window_key: None,
         }
     }
 
@@ -58,49 +75,88 @@ impl AppState {
         self.registry_name_to_output_id.remove(&name)
     }
 
-    pub fn add_output(
+    pub fn add_shell_window(
         &mut self,
-        output_id: ObjectId,
+        output_id: &ObjectId,
+        shell_window_name: &str,
         main_surface_id: ObjectId,
         window: PerOutputWindow,
     ) {
-        let handle = self.output_mapping.insert(output_id);
-        self.surface_to_output.insert(main_surface_id, handle);
+        let handle = self.output_mapping.get(output_id).unwrap_or_else(|| {
+            let h = self.output_mapping.insert(output_id.clone());
+            let is_primary = self.output_registry.is_empty();
+            let mut info = OutputInfo::new(h);
+            info.set_primary(is_primary);
+            self.output_registry.add(info);
+            h
+        });
 
-        let is_primary = self.output_registry.is_empty();
-
-        let mut info = OutputInfo::new(handle);
-        info.set_primary(is_primary);
-
-        self.output_registry.add(info);
-        self.windows.insert(handle, window);
+        let key = ShellWindowKey::new(handle, shell_window_name);
+        self.surface_to_key.insert(main_surface_id, key.clone());
+        self.windows.insert(key, window);
     }
 
-    pub fn remove_output(&mut self, handle: OutputHandle) -> Option<PerOutputWindow> {
+    pub fn add_output(
+        &mut self,
+        output_id: &ObjectId,
+        main_surface_id: ObjectId,
+        window: PerOutputWindow,
+    ) {
+        self.add_shell_window(output_id, "default", main_surface_id, window);
+    }
+
+    pub fn remove_output(&mut self, handle: OutputHandle) -> Vec<PerOutputWindow> {
         self.output_registry.remove(handle);
 
-        let window = self.windows.remove(&handle);
+        let keys_to_remove: Vec<_> = self
+            .windows
+            .keys()
+            .filter(|k| k.output_handle == handle)
+            .cloned()
+            .collect();
 
-        self.surface_to_output.retain(|_, h| *h != handle);
+        let mut removed = Vec::new();
+        for key in keys_to_remove {
+            if let Some(window) = self.windows.remove(&key) {
+                removed.push(window);
+            }
+        }
 
-        window
+        self.surface_to_key.retain(|_, k| k.output_handle != handle);
+
+        removed
     }
 
-    pub fn get_output_by_handle(&self, handle: OutputHandle) -> Option<&PerOutputWindow> {
-        self.windows.get(&handle)
+    pub fn get_window_by_key(&self, key: &ShellWindowKey) -> Option<&PerOutputWindow> {
+        self.windows.get(key)
     }
 
-    pub fn get_output_by_handle_mut(
+    pub fn get_window_by_key_mut(&mut self, key: &ShellWindowKey) -> Option<&mut PerOutputWindow> {
+        self.windows.get_mut(key)
+    }
+
+    pub fn get_window_by_name(
+        &self,
+        output_handle: OutputHandle,
+        shell_window_name: &str,
+    ) -> Option<&PerOutputWindow> {
+        let key = ShellWindowKey::new(output_handle, shell_window_name);
+        self.windows.get(&key)
+    }
+
+    pub fn get_window_by_name_mut(
         &mut self,
-        handle: OutputHandle,
+        output_handle: OutputHandle,
+        shell_window_name: &str,
     ) -> Option<&mut PerOutputWindow> {
-        self.windows.get_mut(&handle)
+        let key = ShellWindowKey::new(output_handle, shell_window_name);
+        self.windows.get_mut(&key)
     }
 
     pub fn get_output_by_output_id(&self, output_id: &ObjectId) -> Option<&PerOutputWindow> {
         self.output_mapping
             .get(output_id)
-            .and_then(|handle| self.windows.get(&handle))
+            .and_then(|handle| self.get_first_window_for_output(handle))
     }
 
     pub fn get_output_by_output_id_mut(
@@ -109,22 +165,39 @@ impl AppState {
     ) -> Option<&mut PerOutputWindow> {
         self.output_mapping
             .get(output_id)
-            .and_then(|handle| self.windows.get_mut(&handle))
+            .and_then(|handle| self.get_first_window_for_output_mut(handle))
+    }
+
+    fn get_first_window_for_output(&self, handle: OutputHandle) -> Option<&PerOutputWindow> {
+        self.windows
+            .iter()
+            .find(|(k, _)| k.output_handle == handle)
+            .map(|(_, v)| v)
+    }
+
+    fn get_first_window_for_output_mut(
+        &mut self,
+        handle: OutputHandle,
+    ) -> Option<&mut PerOutputWindow> {
+        self.windows
+            .iter_mut()
+            .find(|(k, _)| k.output_handle == handle)
+            .map(|(_, v)| v)
     }
 
     pub fn get_output_by_surface(&self, surface_id: &ObjectId) -> Option<&PerOutputWindow> {
-        self.surface_to_output
+        self.surface_to_key
             .get(surface_id)
-            .and_then(|handle| self.windows.get(handle))
+            .and_then(|key| self.windows.get(key))
     }
 
     pub fn get_output_by_surface_mut(
         &mut self,
         surface_id: &ObjectId,
     ) -> Option<&mut PerOutputWindow> {
-        self.surface_to_output
+        self.surface_to_key
             .get(surface_id)
-            .and_then(|handle| self.windows.get_mut(handle))
+            .and_then(|key| self.windows.get_mut(key))
     }
 
     pub fn get_output_by_layer_surface_mut(
@@ -136,8 +209,14 @@ impl AppState {
             .find(|window| window.layer_surface().as_ref().id() == *layer_surface_id)
     }
 
+    pub fn get_key_by_surface(&self, surface_id: &ObjectId) -> Option<&ShellWindowKey> {
+        self.surface_to_key.get(surface_id)
+    }
+
     pub fn get_handle_by_surface(&self, surface_id: &ObjectId) -> Option<OutputHandle> {
-        self.surface_to_output.get(surface_id).copied()
+        self.surface_to_key
+            .get(surface_id)
+            .map(|key| key.output_handle)
     }
 
     pub fn get_handle_by_output_id(&self, output_id: &ObjectId) -> Option<OutputHandle> {
@@ -152,10 +231,28 @@ impl AppState {
         self.output_registry.active_handle()
     }
 
+    pub fn set_active_window_key(&mut self, key: Option<ShellWindowKey>) {
+        if let Some(ref k) = key {
+            self.output_registry.set_active(Some(k.output_handle));
+        } else {
+            self.output_registry.set_active(None);
+        }
+        self.active_window_key = key;
+    }
+
+    pub fn active_window_key(&self) -> Option<&ShellWindowKey> {
+        self.active_window_key.as_ref()
+    }
+
+    pub fn active_window_mut(&mut self) -> Option<&mut PerOutputWindow> {
+        let key = self.active_window_key.clone()?;
+        self.windows.get_mut(&key)
+    }
+
     pub fn primary_output(&self) -> Option<&PerOutputWindow> {
         self.output_registry
             .primary_handle()
-            .and_then(|handle| self.windows.get(&handle))
+            .and_then(|handle| self.get_first_window_for_output(handle))
     }
 
     pub fn primary_output_handle(&self) -> Option<OutputHandle> {
@@ -165,7 +262,7 @@ impl AppState {
     pub fn active_output(&self) -> Option<&PerOutputWindow> {
         self.output_registry
             .active_handle()
-            .and_then(|handle| self.windows.get(&handle))
+            .and_then(|handle| self.get_first_window_for_output(handle))
     }
 
     pub fn all_outputs(&self) -> impl Iterator<Item = &PerOutputWindow> {
@@ -176,10 +273,18 @@ impl AppState {
         self.windows.values_mut()
     }
 
-    pub fn outputs_with_handles(&self) -> impl Iterator<Item = (OutputHandle, &PerOutputWindow)> {
+    pub fn windows_for_output(
+        &self,
+        handle: OutputHandle,
+    ) -> impl Iterator<Item = (&str, &PerOutputWindow)> {
         self.windows
             .iter()
-            .map(|(&handle, window)| (handle, window))
+            .filter(move |(k, _)| k.output_handle == handle)
+            .map(|(k, v)| (k.shell_window_name.as_str(), v))
+    }
+
+    pub fn windows_with_keys(&self) -> impl Iterator<Item = (&ShellWindowKey, &PerOutputWindow)> {
+        self.windows.iter()
     }
 
     pub const fn shared_pointer_serial(&self) -> &Rc<SharedPointerSerial> {
@@ -209,14 +314,26 @@ impl AppState {
         })
     }
 
-    pub fn get_handle_by_popup(&self, popup_surface_id: &ObjectId) -> Option<OutputHandle> {
-        self.windows.iter().find_map(|(&handle, window)| {
+    pub fn get_key_by_popup(&self, popup_surface_id: &ObjectId) -> Option<&ShellWindowKey> {
+        self.windows.iter().find_map(|(key, window)| {
             window
                 .popup_manager()
                 .as_ref()
                 .and_then(|pm| pm.find_by_surface(popup_surface_id))
-                .map(|_| handle)
+                .map(|_| key)
         })
+    }
+
+    pub fn get_handle_by_popup(&self, popup_surface_id: &ObjectId) -> Option<OutputHandle> {
+        self.get_key_by_popup(popup_surface_id)
+            .map(|key| key.output_handle)
+    }
+
+    pub fn get_output_by_handle_mut(
+        &mut self,
+        handle: OutputHandle,
+    ) -> Option<&mut PerOutputWindow> {
+        self.get_first_window_for_output_mut(handle)
     }
 
     pub fn get_output_info(&self, handle: OutputHandle) -> Option<&OutputInfo> {
@@ -231,13 +348,61 @@ impl AppState {
         self.output_registry.all_info()
     }
 
-    pub fn outputs_with_info(&self) -> impl Iterator<Item = (&OutputInfo, &PerOutputWindow)> {
-        self.output_registry
-            .all()
-            .filter_map(|(handle, info)| self.windows.get(&handle).map(|window| (info, window)))
-    }
-
     pub const fn output_registry(&self) -> &OutputRegistry {
         &self.output_registry
+    }
+
+    pub fn shell_window_names(&self) -> Vec<&str> {
+        let mut names: Vec<_> = self
+            .windows
+            .keys()
+            .map(|k| k.shell_window_name.as_str())
+            .collect();
+        names.sort_unstable();
+        names.dedup();
+        names
+    }
+
+    pub fn windows_by_shell_name(
+        &self,
+        shell_window_name: &str,
+    ) -> impl Iterator<Item = &PerOutputWindow> {
+        self.windows
+            .iter()
+            .filter(move |(k, _)| k.shell_window_name == shell_window_name)
+            .map(|(_, v)| v)
+    }
+
+    pub fn get_output_by_handle(&self, handle: OutputHandle) -> Option<&PerOutputWindow> {
+        self.get_first_window_for_output(handle)
+    }
+
+    pub fn outputs_with_handles(&self) -> impl Iterator<Item = (OutputHandle, &PerOutputWindow)> {
+        self.windows
+            .iter()
+            .map(|(key, window)| (key.output_handle, window))
+    }
+
+    pub fn outputs_with_info(&self) -> impl Iterator<Item = (&OutputInfo, &PerOutputWindow)> {
+        self.output_registry.all_info().filter_map(|info| {
+            let handle = info.handle();
+            self.get_first_window_for_output(handle)
+                .map(|window| (info, window))
+        })
+    }
+
+    pub fn all_windows_for_output_mut(
+        &mut self,
+        output_id: &ObjectId,
+    ) -> Vec<&mut PerOutputWindow> {
+        let Some(handle) = self.output_mapping.get(output_id) else {
+            return Vec::new();
+        };
+
+        self.windows
+            .iter_mut()
+            .filter(|(k, _)| k.output_handle == handle)
+            .map(|(_, v)| v)
+            .collect()
     }
 }

@@ -49,4 +49,8 @@ impl<W: RenderableWindow> RenderingState<W> {
     pub fn fractional_scale(&self) -> Option<&ManagedWpFractionalScaleV1> {
         self.renderer.fractional_scale()
     }
+
+    pub fn commit_surface(&self) {
+        self.renderer.commit_surface();
+    }
 }

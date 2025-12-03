@@ -33,6 +33,16 @@ impl AnchorEdges {
     }
 
     #[must_use]
+    pub const fn left_bar() -> Self {
+        Self(Self::LEFT | Self::TOP | Self::BOTTOM)
+    }
+
+    #[must_use]
+    pub const fn right_bar() -> Self {
+        Self(Self::RIGHT | Self::TOP | Self::BOTTOM)
+    }
+
+    #[must_use]
     pub const fn with_top(mut self) -> Self {
         self.0 |= Self::TOP;
         self

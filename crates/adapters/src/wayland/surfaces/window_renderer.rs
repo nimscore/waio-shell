@@ -24,7 +24,6 @@ pub struct WindowRendererParams<W: RenderableWindow> {
     pub viewport: Option<ManagedWpViewport>,
     pub fractional_scale: Option<ManagedWpFractionalScaleV1>,
     pub height: u32,
-    pub exclusive_zone: i32,
     pub size: PhysicalSize,
 }
 
@@ -35,7 +34,6 @@ pub struct WindowRenderer<W: RenderableWindow> {
     viewport: Option<ManagedWpViewport>,
     fractional_scale: Option<ManagedWpFractionalScaleV1>,
     height: u32,
-    exclusive_zone: i32,
     size: PhysicalSize,
     logical_size: PhysicalSize,
 }
@@ -50,7 +48,6 @@ impl<W: RenderableWindow> WindowRenderer<W> {
             viewport: params.viewport,
             fractional_scale: params.fractional_scale,
             height: params.height,
-            exclusive_zone: params.exclusive_zone,
             size: params.size,
             logical_size: PhysicalSize::default(),
         }
@@ -137,9 +134,6 @@ impl<W: RenderableWindow> WindowRenderer<W> {
             }
         }
 
-        self.layer_surface
-            .set_size(dimensions.logical_width(), dimensions.logical_height());
-        self.layer_surface.set_exclusive_zone(self.exclusive_zone);
         self.surface.commit();
     }
 
@@ -190,5 +184,9 @@ impl<W: RenderableWindow> WindowRenderer<W> {
 
     pub const fn fractional_scale(&self) -> Option<&ManagedWpFractionalScaleV1> {
         self.fractional_scale.as_ref()
+    }
+
+    pub fn commit_surface(&self) {
+        self.surface.commit();
     }
 }

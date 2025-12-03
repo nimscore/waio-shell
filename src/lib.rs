@@ -30,6 +30,27 @@
 //! # Ok::<(), layer_shika::Error>(())
 //! ```
 //!
+//! # Multi-Window Shell
+//!
+//! For multi-window shell applications:
+//!
+//! ```rust,no_run
+//! use layer_shika::prelude::*;
+//! use std::rc::Rc;
+//!
+//! // Load Slint file with multiple shell window components
+//! let compilation_result = Rc::new(/* ... */);
+//!
+//! // Create shell with typed WindowConfig
+//! let shell = ShellComposition::new()
+//!     .with_compilation_result(compilation_result)
+//!     .register_shell_window("TopBar", WindowConfig::default())
+//!     .build()?;
+//!
+//! shell.run()?;
+//! # Ok::<(), layer_shika::Error>(())
+//! ```
+//!
 //! # Re-exports
 //!
 //! This crate re-exports commonly needed types from its dependencies:
@@ -46,6 +67,11 @@ pub use layer_shika_composition::{
     Layer, LayerShika, OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry,
     PopupHandle, PopupPlacement, PopupPositioningMode, PopupRequest, PopupSize, PopupWindow,
     Result, ShellControl,
+};
+
+pub use layer_shika_composition::{
+    LayerSurfaceHandle, Shell, ShellComposition, ShellEventContext, ShellEventLoopHandle,
+    ShellWindowConfigHandler, ShellWindowDefinition, ShellWindowHandle,
 };
 
 pub use layer_shika_composition::{slint, slint_interpreter};

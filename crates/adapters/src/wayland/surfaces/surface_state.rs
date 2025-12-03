@@ -106,7 +106,6 @@ impl WindowState {
             viewport,
             fractional_scale,
             height: builder.height,
-            exclusive_zone: builder.exclusive_zone,
             size,
         });
 
@@ -143,8 +142,12 @@ impl WindowState {
         Rc::clone(self.rendering.window())
     }
 
-    pub(crate) fn layer_surface(&self) -> Rc<ZwlrLayerSurfaceV1> {
+    pub fn layer_surface(&self) -> Rc<ZwlrLayerSurfaceV1> {
         self.rendering.layer_surface()
+    }
+
+    pub fn commit_surface(&self) {
+        self.rendering.commit_surface();
     }
 
     pub fn height(&self) -> u32 {

@@ -18,11 +18,13 @@ pub(crate) struct LayerSurfaceConfig {
     pub exclusive_zone: i32,
     pub keyboard_interactivity: WaylandKeyboardInteractivity,
     pub height: u32,
+    pub width: u32,
 }
 
 #[derive(Clone)]
 pub struct WaylandWindowConfig {
     pub height: u32,
+    pub width: u32,
     pub layer: zwlr_layer_shell_v1::Layer,
     pub margin: Margins,
     pub anchor: Anchor,
@@ -43,7 +45,8 @@ impl WaylandWindowConfig {
         domain_config: DomainWindowConfig,
     ) -> Self {
         Self {
-            height: domain_config.height.value(),
+            height: domain_config.dimensions.height(),
+            width: domain_config.dimensions.width(),
             layer: convert_layer(domain_config.layer),
             margin: domain_config.margin,
             anchor: convert_anchor(domain_config.anchor),
@@ -95,5 +98,39 @@ const fn convert_keyboard_interactivity(
         DomainKeyboardInteractivity::None => WaylandKeyboardInteractivity::None,
         DomainKeyboardInteractivity::Exclusive => WaylandKeyboardInteractivity::Exclusive,
         DomainKeyboardInteractivity::OnDemand => WaylandKeyboardInteractivity::OnDemand,
+    }
+}
+
+#[derive(Clone)]
+pub struct ShellWindowConfig {
+    pub name: String,
+    pub config: WaylandWindowConfig,
+}
+
+#[derive(Clone)]
+pub struct MultiWindowConfig {
+    pub windows: Vec<ShellWindowConfig>,
+    pub compilation_result: Rc<CompilationResult>,
+}
+
+impl MultiWindowConfig {
+    pub fn new(compilation_result: Rc<CompilationResult>) -> Self {
+        Self {
+            windows: Vec::new(),
+            compilation_result,
+        }
+    }
+
+    #[must_use]
+    pub fn add_window(mut self, name: impl Into<String>, config: WaylandWindowConfig) -> Self {
+        self.windows.push(ShellWindowConfig {
+            name: name.into(),
+            config,
+        });
+        self
+    }
+
+    pub fn primary_config(&self) -> Option<&WaylandWindowConfig> {
+        self.windows.first().map(|w| &w.config)
     }
 }

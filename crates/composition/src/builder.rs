@@ -4,7 +4,7 @@ use layer_shika_adapters::platform::slint_interpreter::{CompilationResult, Compi
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::prelude::{
     AnchorEdges, KeyboardInteractivity, Layer, Margins, OutputPolicy, ScaleFactor, WindowConfig,
-    WindowHeight,
+    WindowDimension,
 };
 use spin_on::spin_on;
 use std::path::{Path, PathBuf};
@@ -137,8 +137,20 @@ impl LayerShika<NeedsComponent> {
 
 impl LayerShika<HasComponent> {
     #[must_use]
+    pub fn dimensions(mut self, width: u32, height: u32) -> Self {
+        self.config.dimensions = WindowDimension::new(width, height);
+        self
+    }
+
+    #[must_use]
     pub fn height(mut self, height: u32) -> Self {
-        self.config.height = WindowHeight::new(height);
+        self.config.dimensions = WindowDimension::new(self.config.dimensions.width(), height);
+        self
+    }
+
+    #[must_use]
+    pub fn width(mut self, width: u32) -> Self {
+        self.config.dimensions = WindowDimension::new(width, self.config.dimensions.height());
         self
     }
 

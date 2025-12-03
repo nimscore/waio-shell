@@ -2,6 +2,8 @@
 
 mod builder;
 mod popup_builder;
+mod shell;
+mod shell_composition;
 mod system;
 mod value_conversion;
 
@@ -26,6 +28,12 @@ pub use layer_shika_domain::value_objects::popup_request::{
 };
 pub use popup_builder::PopupBuilder;
 pub use system::{App, EventContext, EventLoopHandle, ShellControl};
+
+pub use shell::{
+    LayerSurfaceHandle, Shell, ShellEventContext, ShellEventLoopHandle, ShellWindowConfigHandler,
+    ShellWindowHandle,
+};
+pub use shell_composition::{ShellComposition, ShellWindowDefinition};
 
 pub mod calloop {
     pub use layer_shika_adapters::platform::calloop::{
@@ -55,7 +63,16 @@ pub mod prelude {
         PopupWindow, Result, ShellControl,
     };
 
+    pub use crate::{
+        LayerSurfaceHandle, Shell, ShellComposition, ShellEventContext, ShellEventLoopHandle,
+        ShellWindowConfigHandler, ShellWindowDefinition, ShellWindowHandle,
+    };
+
     pub use crate::calloop::{Generic, Interest, Mode, PostAction, RegistrationToken, Timer};
 
     pub use crate::{slint, slint_interpreter};
+
+    pub use layer_shika_domain::prelude::{Margins, ScaleFactor, WindowConfig, WindowDimension};
+
+    pub use layer_shika_adapters::platform::wayland::Anchor;
 }

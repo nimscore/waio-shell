@@ -98,7 +98,7 @@ impl Dispatch<WlOutput, ()> for AppState {
                     width, height, is_current, is_preferred
                 );
                 if is_current {
-                    if let Some(window) = state.get_output_by_output_id_mut(&output_id) {
+                    for window in state.all_windows_for_output_mut(&output_id) {
                         window.handle_output_mode(width, height);
                     }
                 }
@@ -202,21 +202,16 @@ impl Dispatch<WlPointer, ()> for AppState {
 
                 let surface_id = surface.id();
 
-                if let Some(window) = state.get_output_by_surface_mut(&surface_id) {
-                    window.handle_pointer_enter(serial, &surface, surface_x, surface_y);
-
-                    if let Some(handle) = state.get_handle_by_surface(&surface_id) {
-                        state.set_active_output_handle(Some(handle));
-                    }
-                } else {
-                    let handle = state.get_handle_by_popup(&surface_id);
-                    if let Some(window) = state.find_output_by_popup_mut(&surface_id) {
+                if let Some(key) = state.get_key_by_surface(&surface_id).cloned() {
+                    if let Some(window) = state.get_window_by_key_mut(&key) {
                         window.handle_pointer_enter(serial, &surface, surface_x, surface_y);
-
-                        if let Some(handle) = handle {
-                            state.set_active_output_handle(Some(handle));
-                        }
                     }
+                    state.set_active_window_key(Some(key));
+                } else if let Some(key) = state.get_key_by_popup(&surface_id).cloned() {
+                    if let Some(window) = state.get_window_by_key_mut(&key) {
+                        window.handle_pointer_enter(serial, &surface, surface_x, surface_y);
+                    }
+                    state.set_active_window_key(Some(key));
                 }
             }
 
@@ -225,20 +220,16 @@ impl Dispatch<WlPointer, ()> for AppState {
                 surface_y,
                 ..
             } => {
-                if let Some(output_handle) = state.active_output_handle() {
-                    if let Some(window) = state.get_output_by_handle_mut(output_handle) {
-                        window.handle_pointer_motion(surface_x, surface_y);
-                    }
+                if let Some(window) = state.active_window_mut() {
+                    window.handle_pointer_motion(surface_x, surface_y);
                 }
             }
 
             wl_pointer::Event::Leave { .. } => {
-                if let Some(output_handle) = state.active_output_handle() {
-                    if let Some(window) = state.get_output_by_handle_mut(output_handle) {
-                        window.handle_pointer_leave();
-                    }
+                if let Some(window) = state.active_window_mut() {
+                    window.handle_pointer_leave();
                 }
-                state.set_active_output_handle(None);
+                state.set_active_window_key(None);
             }
 
             wl_pointer::Event::Button {
@@ -246,10 +237,8 @@ impl Dispatch<WlPointer, ()> for AppState {
                 state: button_state,
                 ..
             } => {
-                if let Some(output_handle) = state.active_output_handle() {
-                    if let Some(window) = state.get_output_by_handle_mut(output_handle) {
-                        window.handle_pointer_button(serial, button_state);
-                    }
+                if let Some(window) = state.active_window_mut() {
+                    window.handle_pointer_button(serial, button_state);
                 }
             }
             _ => {}

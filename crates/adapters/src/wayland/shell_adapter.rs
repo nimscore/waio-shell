@@ -1,5 +1,5 @@
 use crate::wayland::{
-    config::{LayerSurfaceConfig, WaylandWindowConfig},
+    config::{LayerSurfaceConfig, ShellWindowConfig, WaylandWindowConfig},
     globals::context::GlobalContext,
     managed_proxies::ManagedWlPointer,
     outputs::{OutputManager, OutputManagerContext},
@@ -50,6 +50,7 @@ struct OutputSetup {
     main_surface_id: ObjectId,
     window: Rc<FemtoVGWindow>,
     builder: WindowStateBuilder,
+    shell_window_name: String,
 }
 
 struct OutputManagerParams<'a> {
@@ -87,6 +88,31 @@ impl WaylandWindowingSystem {
         })
     }
 
+    pub fn new_multi(configs: &[ShellWindowConfig]) -> Result<Self> {
+        if configs.is_empty() {
+            return Err(LayerShikaError::InvalidInput {
+                message: "At least one window config is required".into(),
+            });
+        }
+
+        info!(
+            "Initializing WindowingSystem with {} window configs",
+            configs.len()
+        );
+        let (connection, mut event_queue) = Self::init_wayland_connection()?;
+        let event_loop =
+            EventLoop::try_new().map_err(|e| EventLoopError::Creation { source: e })?;
+
+        let state = Self::init_state_multi(configs, &connection, &mut event_queue)?;
+
+        Ok(Self {
+            state,
+            connection,
+            event_queue,
+            event_loop,
+        })
+    }
+
     fn init_wayland_connection() -> Result<(Rc<Connection>, EventQueue<AppState>)> {
         let connection = Rc::new(Connection::connect_to_env()?);
         let event_queue = connection.new_event_queue();
@@ -100,6 +126,7 @@ impl WaylandWindowingSystem {
             exclusive_zone: config.exclusive_zone,
             keyboard_interactivity: config.keyboard_interactivity,
             height: config.height,
+            width: config.width,
         }
     }
 
@@ -152,6 +179,7 @@ impl WaylandWindowingSystem {
                 .with_layer_surface(Rc::clone(&surface_ctx.layer_surface))
                 .with_scale_factor(config.scale_factor)
                 .with_height(config.height)
+                .with_width(config.width)
                 .with_exclusive_zone(config.exclusive_zone)
                 .with_connection(Rc::new(connection.clone()))
                 .with_pointer(Rc::clone(pointer))
@@ -170,6 +198,7 @@ impl WaylandWindowingSystem {
                 main_surface_id,
                 window,
                 builder,
+                shell_window_name: "default".to_string(),
             });
         }
 
@@ -222,7 +251,12 @@ impl WaylandWindowingSystem {
             popup_managers.push(Rc::clone(&popup_manager));
             layer_surfaces.push(per_output_window.layer_surface());
 
-            app_state.add_output(setup.output_id, setup.main_surface_id, per_output_window);
+            app_state.add_shell_window(
+                &setup.output_id,
+                &setup.shell_window_name,
+                setup.main_surface_id,
+                per_output_window,
+            );
         }
 
         Ok((popup_managers, layer_surfaces))
@@ -293,6 +327,163 @@ impl WaylandWindowingSystem {
         app_state.set_output_manager(Rc::new(RefCell::new(output_manager)));
 
         Ok(app_state)
+    }
+
+    fn init_state_multi(
+        configs: &[ShellWindowConfig],
+        connection: &Connection,
+        event_queue: &mut EventQueue<AppState>,
+    ) -> Result<AppState> {
+        let global_ctx = GlobalContext::initialize(connection, &event_queue.handle())?;
+
+        let pointer = Rc::new(global_ctx.seat.get_pointer(&event_queue.handle(), ()));
+        let shared_serial = Rc::new(SharedPointerSerial::new());
+
+        let mut app_state = AppState::new(
+            ManagedWlPointer::new(Rc::clone(&pointer), Rc::new(connection.clone())),
+            Rc::clone(&shared_serial),
+        );
+
+        let render_factory =
+            RenderContextFactory::new(Rc::clone(&global_ctx.render_context_manager));
+
+        let popup_context = PopupContext::new(
+            global_ctx.compositor.clone(),
+            global_ctx.xdg_wm_base.clone(),
+            global_ctx.seat.clone(),
+            global_ctx.fractional_scale_manager.clone(),
+            global_ctx.viewporter.clone(),
+            Rc::new(connection.clone()),
+            Rc::clone(&render_factory),
+        );
+
+        let setups = Self::create_output_setups_multi(
+            configs,
+            &global_ctx,
+            connection,
+            event_queue,
+            &pointer,
+        )?;
+
+        let platform = Self::setup_platform(&setups)?;
+
+        let (popup_managers, layer_surfaces) =
+            Self::create_window_states(setups, &popup_context, &shared_serial, &mut app_state)?;
+
+        Self::setup_shared_popup_creator(
+            popup_managers,
+            layer_surfaces,
+            &platform,
+            &event_queue.handle(),
+            &shared_serial,
+        );
+
+        let primary_config = configs.first().map(|c| &c.config);
+        if let Some(config) = primary_config {
+            let layer_surface_config = Self::create_layer_surface_config(config);
+            let output_manager = Self::create_output_manager(&OutputManagerParams {
+                config,
+                global_ctx: &global_ctx,
+                connection,
+                layer_surface_config,
+                render_factory: &render_factory,
+                popup_context: &popup_context,
+                pointer: &pointer,
+                shared_serial: &shared_serial,
+            });
+
+            app_state.set_output_manager(Rc::new(RefCell::new(output_manager)));
+        }
+
+        Ok(app_state)
+    }
+
+    fn create_output_setups_multi(
+        configs: &[ShellWindowConfig],
+        global_ctx: &GlobalContext,
+        connection: &Connection,
+        event_queue: &mut EventQueue<AppState>,
+        pointer: &Rc<WlPointer>,
+    ) -> Result<Vec<OutputSetup>> {
+        let mut setups = Vec::new();
+
+        for (output_index, output) in global_ctx.outputs.iter().enumerate() {
+            let is_primary = output_index == 0;
+            let output_id = output.id();
+
+            for shell_config in configs {
+                let config = &shell_config.config;
+
+                let mut temp_info = OutputInfo::new(OutputHandle::new());
+                temp_info.set_primary(is_primary);
+
+                if !config.output_policy.should_render(&temp_info) {
+                    info!(
+                        "Skipping shell window '{}' on output {} due to output policy",
+                        shell_config.name, output_index
+                    );
+                    continue;
+                }
+
+                let layer_surface_config = Self::create_layer_surface_config(config);
+
+                let setup_params = SurfaceSetupParams {
+                    compositor: &global_ctx.compositor,
+                    output,
+                    layer_shell: &global_ctx.layer_shell,
+                    fractional_scale_manager: global_ctx.fractional_scale_manager.as_ref(),
+                    viewporter: global_ctx.viewporter.as_ref(),
+                    queue_handle: &event_queue.handle(),
+                    layer: config.layer,
+                    namespace: config.namespace.clone(),
+                };
+
+                let surface_ctx = SurfaceCtx::setup(&setup_params, &layer_surface_config);
+                let main_surface_id = surface_ctx.surface.id();
+
+                let render_factory =
+                    RenderContextFactory::new(Rc::clone(&global_ctx.render_context_manager));
+
+                let window =
+                    Self::initialize_renderer(&surface_ctx.surface, config, &render_factory)?;
+
+                let mut builder = WindowStateBuilder::new()
+                    .with_component_definition(config.component_definition.clone())
+                    .with_compilation_result(config.compilation_result.clone())
+                    .with_surface(Rc::clone(&surface_ctx.surface))
+                    .with_layer_surface(Rc::clone(&surface_ctx.layer_surface))
+                    .with_scale_factor(config.scale_factor)
+                    .with_height(config.height)
+                    .with_width(config.width)
+                    .with_exclusive_zone(config.exclusive_zone)
+                    .with_connection(Rc::new(connection.clone()))
+                    .with_pointer(Rc::clone(pointer))
+                    .with_window(Rc::clone(&window));
+
+                if let Some(fs) = &surface_ctx.fractional_scale {
+                    builder = builder.with_fractional_scale(Rc::clone(fs));
+                }
+
+                if let Some(vp) = &surface_ctx.viewport {
+                    builder = builder.with_viewport(Rc::clone(vp));
+                }
+
+                info!(
+                    "Created setup for shell window '{}' on output {}",
+                    shell_config.name, output_index
+                );
+
+                setups.push(OutputSetup {
+                    output_id: output_id.clone(),
+                    main_surface_id,
+                    window,
+                    builder,
+                    shell_window_name: shell_config.name.clone(),
+                });
+            }
+        }
+
+        Ok(setups)
     }
 
     fn create_output_manager(params: &OutputManagerParams<'_>) -> OutputManager {
