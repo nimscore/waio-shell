@@ -1,0 +1,20 @@
+use layer_shika_adapters::platform::slint_interpreter::ComponentInstance;
+
+pub const DEFAULT_WINDOW_NAME: &str = "main";
+
+pub trait ShellRuntime {
+    type LoopHandle;
+    type Context<'a>;
+
+    fn event_loop_handle(&self) -> Self::LoopHandle;
+
+    fn with_component<F>(&self, name: &str, f: F)
+    where
+        F: FnMut(&ComponentInstance);
+
+    fn with_all_components<F>(&self, f: F)
+    where
+        F: FnMut(&str, &ComponentInstance);
+
+    fn run(&mut self) -> crate::Result<()>;
+}

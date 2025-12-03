@@ -1,4 +1,5 @@
 use crate::shell_composition::ShellWindowDefinition;
+use crate::shell_runtime::ShellRuntime;
 use crate::system::{EventContext, PopupCommand, ShellControl};
 use crate::{Error, Result};
 use layer_shika_adapters::errors::EventLoopError;
@@ -332,6 +333,54 @@ impl Shell {
     #[must_use]
     pub fn compilation_result(&self) -> &Rc<CompilationResult> {
         &self.compilation_result
+    }
+}
+
+impl ShellRuntime for Shell {
+    type LoopHandle = ShellEventLoopHandle;
+    type Context<'a> = ShellEventContext<'a>;
+
+    fn event_loop_handle(&self) -> Self::LoopHandle {
+        ShellEventLoopHandle {
+            system: Rc::downgrade(&self.inner),
+        }
+    }
+
+    fn with_component<F>(&self, name: &str, mut f: F)
+    where
+        F: FnMut(&ComponentInstance),
+    {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+
+        if self.windows.contains_key(name) {
+            for window in system.app_state().windows_by_shell_name(name) {
+                f(window.component_instance());
+            }
+        }
+    }
+
+    fn with_all_components<F>(&self, mut f: F)
+    where
+        F: FnMut(&str, &ComponentInstance),
+    {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+
+        for name in self.windows.keys() {
+            if let Some(window) = system.app_state().primary_output() {
+                f(name, window.component_instance());
+            }
+        }
+    }
+
+    fn run(&mut self) -> Result<()> {
+        log::info!(
+            "Starting shell event loop with {} windows",
+            self.windows.len()
+        );
+        self.inner.borrow_mut().run()?;
+        Ok(())
     }
 }
 

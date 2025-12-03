@@ -10,7 +10,7 @@
 
 pub use crate::{
     Error, EventContext, EventLoopHandle, LayerShika, PopupWindow, Result, ShellControl,
-    SingleWindowShell,
+    ShellRuntime, SingleWindowShell, DEFAULT_WINDOW_NAME,
 };
 
 pub use crate::{

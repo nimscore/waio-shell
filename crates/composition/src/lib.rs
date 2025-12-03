@@ -4,6 +4,7 @@ mod builder;
 mod popup_builder;
 mod shell;
 mod shell_composition;
+mod shell_runtime;
 mod system;
 mod value_conversion;
 
@@ -27,6 +28,7 @@ pub use layer_shika_domain::value_objects::popup_request::{
     PopupHandle, PopupPlacement, PopupRequest, PopupSize,
 };
 pub use popup_builder::PopupBuilder;
+pub use shell_runtime::{DEFAULT_WINDOW_NAME, ShellRuntime};
 pub use system::{EventContext, EventLoopHandle, ShellControl, SingleWindowShell};
 
 pub use shell::{
@@ -57,10 +59,11 @@ pub enum Error {
 
 pub mod prelude {
     pub use crate::{
-        AnchorEdges, AnchorStrategy, EventContext, EventLoopHandle, KeyboardInteractivity, Layer,
-        LayerShika, OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry,
-        PopupBuilder, PopupHandle, PopupPlacement, PopupPositioningMode, PopupRequest, PopupSize,
-        PopupWindow, Result, ShellControl, SingleWindowShell,
+        AnchorEdges, AnchorStrategy, DEFAULT_WINDOW_NAME, EventContext, EventLoopHandle,
+        KeyboardInteractivity, Layer, LayerShika, OutputGeometry, OutputHandle, OutputInfo,
+        OutputPolicy, OutputRegistry, PopupBuilder, PopupHandle, PopupPlacement,
+        PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result, ShellControl,
+        ShellRuntime, SingleWindowShell,
     };
 
     pub use crate::{

@@ -1,4 +1,5 @@
 use crate::popup_builder::PopupBuilder;
+use crate::shell_runtime::{DEFAULT_WINDOW_NAME, ShellRuntime};
 use crate::value_conversion::IntoValue;
 use crate::{Error, Result};
 use layer_shika_adapters::errors::EventLoopError;
@@ -646,6 +647,7 @@ impl EventContext<'_> {
 pub struct SingleWindowShell {
     inner: Rc<RefCell<WindowingSystemFacade>>,
     popup_command_sender: channel::Sender<PopupCommand>,
+    window_name: String,
 }
 
 impl SingleWindowShell {
@@ -668,11 +670,23 @@ impl SingleWindowShell {
         let shell = Self {
             inner: Rc::clone(&inner_rc),
             popup_command_sender: sender,
+            window_name: DEFAULT_WINDOW_NAME.to_string(),
         };
 
         shell.setup_popup_command_handler(receiver)?;
 
         Ok(shell)
+    }
+
+    #[must_use]
+    pub fn with_window_name(mut self, name: impl Into<String>) -> Self {
+        self.window_name = name.into();
+        self
+    }
+
+    #[must_use]
+    pub fn window_name(&self) -> &str {
+        &self.window_name
     }
 
     fn setup_popup_command_handler(&self, receiver: channel::Channel<PopupCommand>) -> Result<()> {
@@ -855,5 +869,43 @@ impl SingleWindowShell {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
         system.app_state().output_registry().clone()
+    }
+}
+
+impl ShellRuntime for SingleWindowShell {
+    type LoopHandle = EventLoopHandle;
+    type Context<'a> = EventContext<'a>;
+
+    fn event_loop_handle(&self) -> Self::LoopHandle {
+        EventLoopHandle {
+            system: Rc::downgrade(&self.inner),
+        }
+    }
+
+    fn with_component<F>(&self, _name: &str, mut f: F)
+    where
+        F: FnMut(&ComponentInstance),
+    {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+        for window in system.app_state().all_outputs() {
+            f(window.component_instance());
+        }
+    }
+
+    fn with_all_components<F>(&self, mut f: F)
+    where
+        F: FnMut(&str, &ComponentInstance),
+    {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+        for window in system.app_state().all_outputs() {
+            f(&self.window_name, window.component_instance());
+        }
+    }
+
+    fn run(&mut self) -> Result<()> {
+        self.inner.borrow_mut().run()?;
+        Ok(())
     }
 }

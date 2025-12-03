@@ -66,7 +66,7 @@ pub use layer_shika_composition::{
     AnchorEdges, AnchorStrategy, Error, EventContext, EventLoopHandle, KeyboardInteractivity,
     Layer, LayerShika, OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry,
     PopupHandle, PopupPlacement, PopupPositioningMode, PopupRequest, PopupSize, PopupWindow,
-    Result, ShellControl, SingleWindowShell,
+    Result, ShellControl, ShellRuntime, SingleWindowShell, DEFAULT_WINDOW_NAME,
 };
 
 pub use layer_shika_composition::{
