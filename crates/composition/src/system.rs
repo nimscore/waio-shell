@@ -1,12 +1,10 @@
+use crate::event_loop::{EventLoopHandleBase, FromAppState};
 use crate::popup_builder::PopupBuilder;
 use crate::shell_runtime::{DEFAULT_WINDOW_NAME, ShellRuntime};
 use crate::value_conversion::IntoValue;
 use crate::{Error, Result};
 use layer_shika_adapters::errors::EventLoopError;
-use layer_shika_adapters::platform::calloop::{
-    EventSource, Generic, Interest, Mode, PostAction, RegistrationToken, TimeoutAction, Timer,
-    channel,
-};
+use layer_shika_adapters::platform::calloop::channel;
 use layer_shika_adapters::platform::slint::ComponentHandle;
 use layer_shika_adapters::platform::slint_interpreter::{
     CompilationResult, ComponentDefinition, ComponentInstance, Value,
@@ -26,10 +24,7 @@ use layer_shika_domain::value_objects::popup_request::{
 };
 use std::cell::Cell;
 use std::cell::RefCell;
-use std::os::unix::io::AsFd;
-use std::rc::{Rc, Weak};
-use std::result::Result as StdResult;
-use std::time::{Duration, Instant};
+use std::rc::Rc;
 
 pub enum PopupCommand {
     Show(PopupRequest),
@@ -111,100 +106,14 @@ impl ShellControl {
     }
 }
 
-pub struct EventLoopHandle {
-    system: Weak<RefCell<WindowingSystemFacade>>,
-}
-
-impl EventLoopHandle {
-    pub fn insert_source<S, F, R>(
-        &self,
-        source: S,
-        mut callback: F,
-    ) -> StdResult<RegistrationToken, Error>
-    where
-        S: EventSource<Ret = R> + 'static,
-        F: FnMut(S::Event, &mut S::Metadata, EventContext<'_>) -> R + 'static,
-    {
-        let system = self.system.upgrade().ok_or(Error::SystemDropped)?;
-        let loop_handle = system.borrow().inner_ref().event_loop_handle();
-
-        loop_handle
-            .insert_source(source, move |event, metadata, app_state| {
-                let shell_context = EventContext { app_state };
-                callback(event, metadata, shell_context)
-            })
-            .map_err(|e| {
-                Error::Adapter(
-                    EventLoopError::InsertSource {
-                        message: format!("{e:?}"),
-                    }
-                    .into(),
-                )
-            })
-    }
-
-    pub fn add_timer<F>(&self, duration: Duration, mut callback: F) -> Result<RegistrationToken>
-    where
-        F: FnMut(Instant, EventContext<'_>) -> TimeoutAction + 'static,
-    {
-        let timer = Timer::from_duration(duration);
-        self.insert_source(timer, move |deadline, (), shell_context| {
-            callback(deadline, shell_context)
-        })
-    }
-
-    pub fn add_timer_at<F>(&self, deadline: Instant, mut callback: F) -> Result<RegistrationToken>
-    where
-        F: FnMut(Instant, EventContext<'_>) -> TimeoutAction + 'static,
-    {
-        let timer = Timer::from_deadline(deadline);
-        self.insert_source(timer, move |deadline, (), shell_context| {
-            callback(deadline, shell_context)
-        })
-    }
-
-    pub fn add_channel<T, F>(
-        &self,
-        mut callback: F,
-    ) -> Result<(RegistrationToken, channel::Sender<T>)>
-    where
-        T: 'static,
-        F: FnMut(T, EventContext<'_>) + 'static,
-    {
-        let (sender, receiver) = channel::channel();
-        let token = self.insert_source(receiver, move |event, (), shell_context| {
-            if let channel::Event::Msg(msg) = event {
-                callback(msg, shell_context);
-            }
-        })?;
-        Ok((token, sender))
-    }
-
-    pub fn add_fd<F, T>(
-        &self,
-        fd: T,
-        interest: Interest,
-        mode: Mode,
-        mut callback: F,
-    ) -> Result<RegistrationToken>
-    where
-        T: AsFd + 'static,
-        F: FnMut(EventContext<'_>) + 'static,
-    {
-        let generic = Generic::new(fd, interest, mode);
-        self.insert_source(generic, move |_readiness, _fd, shell_context| {
-            callback(shell_context);
-            Ok(PostAction::Continue)
-        })
-    }
-}
+pub type EventLoopHandle = EventLoopHandleBase<EventContext<'static>>;
 
 pub struct EventContext<'a> {
     app_state: &'a mut AppState,
 }
 
-impl<'a> EventContext<'a> {
-    pub fn from_app_state(app_state: &'a mut AppState) -> Self {
+impl<'a> FromAppState<'a> for EventContext<'a> {
+    fn from_app_state(app_state: &'a mut AppState) -> Self {
         Self { app_state }
     }
 }
@@ -744,9 +653,7 @@ impl SingleWindowShell {
 
     #[must_use]
     pub fn event_loop_handle(&self) -> EventLoopHandle {
-        EventLoopHandle {
-            system: Rc::downgrade(&self.inner),
-        }
+        EventLoopHandle::new(Rc::downgrade(&self.inner))
     }
 
     pub fn on<F, R>(&self, callback_name: &str, handler: F) -> Result<()>
@@ -931,9 +838,7 @@ impl ShellRuntime for SingleWindowShell {
     type Context<'a> = EventContext<'a>;
 
     fn event_loop_handle(&self) -> Self::LoopHandle {
-        EventLoopHandle {
-            system: Rc::downgrade(&self.inner),
-        }
+        EventLoopHandle::new(Rc::downgrade(&self.inner))
     }
 
     fn with_component<F>(&self, _name: &str, mut f: F)

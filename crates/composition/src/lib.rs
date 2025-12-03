@@ -1,6 +1,7 @@
 #![allow(clippy::pub_use)]
 
 mod builder;
+mod event_loop;
 mod popup_builder;
 mod shell;
 mod shell_composition;

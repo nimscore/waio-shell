@@ -1,13 +1,11 @@
+use crate::event_loop::{EventLoopHandleBase, FromAppState};
 use crate::shell_composition::ShellWindowDefinition;
 use crate::shell_runtime::ShellRuntime;
 use crate::system::{EventContext, PopupCommand, ShellControl};
 use crate::value_conversion::IntoValue;
 use crate::{Error, Result};
 use layer_shika_adapters::errors::EventLoopError;
-use layer_shika_adapters::platform::calloop::{
-    EventSource, Generic, Interest, Mode, PostAction, RegistrationToken, TimeoutAction, Timer,
-    channel,
-};
+use layer_shika_adapters::platform::calloop::channel;
 use layer_shika_adapters::platform::slint_interpreter::{
     CompilationResult, ComponentInstance, Value,
 };
@@ -16,16 +14,16 @@ use layer_shika_adapters::{
     AppState, ShellWindowConfig, WaylandWindowConfig, WindowState, WindowingSystemFacade,
 };
 use layer_shika_domain::config::WindowConfig;
+use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteractivity;
 use layer_shika_domain::value_objects::layer::Layer;
 use layer_shika_domain::value_objects::margins::Margins;
+use layer_shika_domain::value_objects::output_handle::OutputHandle;
+use layer_shika_domain::value_objects::output_info::OutputInfo;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::os::unix::io::AsFd;
-use std::rc::{Rc, Weak};
-use std::result::Result as StdResult;
-use std::time::{Duration, Instant};
+use std::rc::Rc;
 
 pub struct LayerSurfaceHandle<'a> {
     window_state: &'a WindowState,
@@ -324,9 +322,7 @@ impl Shell {
     }
 
     pub fn event_loop_handle(&self) -> ShellEventLoopHandle {
-        ShellEventLoopHandle {
-            system: Rc::downgrade(&self.inner),
-        }
+        ShellEventLoopHandle::new(Rc::downgrade(&self.inner))
     }
 
     pub fn run(&mut self) -> Result<()> {
@@ -516,9 +512,7 @@ impl ShellRuntime for Shell {
     type Context<'a> = ShellEventContext<'a>;
 
     fn event_loop_handle(&self) -> Self::LoopHandle {
-        ShellEventLoopHandle {
-            system: Rc::downgrade(&self.inner),
-        }
+        ShellEventLoopHandle::new(Rc::downgrade(&self.inner))
     }
 
     fn with_component<F>(&self, name: &str, mut f: F)
@@ -559,102 +553,36 @@ impl ShellRuntime for Shell {
     }
 }
 
-pub struct ShellEventLoopHandle {
-    system: Weak<RefCell<WindowingSystemFacade>>,
-}
-
-impl ShellEventLoopHandle {
-    pub fn insert_source<S, F, R>(
-        &self,
-        source: S,
-        mut callback: F,
-    ) -> StdResult<RegistrationToken, Error>
-    where
-        S: EventSource<Ret = R> + 'static,
-        F: FnMut(S::Event, &mut S::Metadata, ShellEventContext<'_>) -> R + 'static,
-    {
-        let system = self.system.upgrade().ok_or(Error::SystemDropped)?;
-        let loop_handle = system.borrow().inner_ref().event_loop_handle();
-
-        loop_handle
-            .insert_source(source, move |event, metadata, app_state| {
-                let ctx = ShellEventContext { app_state };
-                callback(event, metadata, ctx)
-            })
-            .map_err(|e| {
-                Error::Adapter(
-                    EventLoopError::InsertSource {
-                        message: format!("{e:?}"),
-                    }
-                    .into(),
-                )
-            })
-    }
-
-    pub fn add_timer<F>(&self, duration: Duration, mut callback: F) -> Result<RegistrationToken>
-    where
-        F: FnMut(Instant, ShellEventContext<'_>) -> TimeoutAction + 'static,
-    {
-        let timer = Timer::from_duration(duration);
-        self.insert_source(timer, move |deadline, (), ctx| callback(deadline, ctx))
-    }
-
-    pub fn add_channel<T, F>(
-        &self,
-        mut callback: F,
-    ) -> Result<(RegistrationToken, channel::Sender<T>)>
-    where
-        T: 'static,
-        F: FnMut(T, ShellEventContext<'_>) + 'static,
-    {
-        let (sender, receiver) = channel::channel();
-        let token = self.insert_source(receiver, move |event, (), ctx| {
-            if let channel::Event::Msg(msg) = event {
-                callback(msg, ctx);
-            }
-        })?;
-        Ok((token, sender))
-    }
-
-    pub fn add_fd<F, T>(
-        &self,
-        fd: T,
-        interest: Interest,
-        mode: Mode,
-        mut callback: F,
-    ) -> Result<RegistrationToken>
-    where
-        T: AsFd + 'static,
-        F: FnMut(ShellEventContext<'_>) + 'static,
-    {
-        let generic = Generic::new(fd, interest, mode);
-        self.insert_source(generic, move |_readiness, _fd, ctx| {
-            callback(ctx);
-            Ok(PostAction::Continue)
-        })
-    }
-}
+pub type ShellEventLoopHandle = EventLoopHandleBase<ShellEventContext<'static>>;
 
 pub struct ShellEventContext<'a> {
     app_state: &'a mut AppState,
 }
 
+impl<'a> FromAppState<'a> for ShellEventContext<'a> {
+    fn from_app_state(app_state: &'a mut AppState) -> Self {
+        Self { app_state }
+    }
+}
+
 impl ShellEventContext<'_> {
     pub fn get_shell_window_component(
         &self,
-        _shell_window_name: &str,
+        shell_window_name: &str,
     ) -> Option<&ComponentInstance> {
         self.app_state
-            .primary_output()
+            .windows_by_shell_name(shell_window_name)
+            .next()
             .map(WindowState::component_instance)
     }
 
     pub fn get_shell_window_component_mut(
         &mut self,
-        _shell_window_name: &str,
+        shell_window_name: &str,
     ) -> Option<&ComponentInstance> {
         self.app_state
-            .primary_output()
+            .windows_by_shell_name(shell_window_name)
+            .next()
             .map(WindowState::component_instance)
     }
 
@@ -669,5 +597,52 @@ impl ShellEventContext<'_> {
             window.render_frame_if_dirty()?;
         }
         Ok(())
+    }
+
+    #[must_use]
+    pub fn primary_output_handle(&self) -> Option<OutputHandle> {
+        self.app_state.primary_output_handle()
+    }
+
+    #[must_use]
+    pub fn active_output_handle(&self) -> Option<OutputHandle> {
+        self.app_state.active_output_handle()
+    }
+
+    pub fn output_registry(&self) -> &OutputRegistry {
+        self.app_state.output_registry()
+    }
+
+    pub fn outputs(&self) -> impl Iterator<Item = (OutputHandle, &ComponentInstance)> {
+        self.app_state
+            .outputs_with_handles()
+            .map(|(handle, window)| (handle, window.component_instance()))
+    }
+
+    pub fn get_output_component(&self, handle: OutputHandle) -> Option<&ComponentInstance> {
+        self.app_state
+            .get_output_by_handle(handle)
+            .map(WindowState::component_instance)
+    }
+
+    pub fn get_output_info(&self, handle: OutputHandle) -> Option<&OutputInfo> {
+        self.app_state.get_output_info(handle)
+    }
+
+    pub fn all_output_info(&self) -> impl Iterator<Item = &OutputInfo> {
+        self.app_state.all_output_info()
+    }
+
+    pub fn outputs_with_info(&self) -> impl Iterator<Item = (&OutputInfo, &ComponentInstance)> {
+        self.app_state
+            .outputs_with_info()
+            .map(|(info, window)| (info, window.component_instance()))
+    }
+
+    #[must_use]
+    pub fn compilation_result(&self) -> Option<Rc<CompilationResult>> {
+        self.app_state
+            .primary_output()
+            .and_then(WindowState::compilation_result)
     }
 }
