@@ -17,6 +17,17 @@
 //! the internal architecture to evolve without breaking semver guarantees on the
 //! public API.
 //!
+//! # Module Organization
+//!
+//! The API is organized into conceptual facets:
+//!
+//! - [`shell`] – Main runtime and shell composition types
+//! - [`window`] – Window configuration, layers, anchors, and popup types
+//! - [`output`] – Output (monitor) info, geometry, and policies
+//! - [`event`] – Event loop handles and contexts
+//! - [`slint_integration`] – Slint framework re-exports and wrappers
+//! - [`calloop`] – Event loop types for custom event sources
+//!
 //! # Quick Start
 //!
 //! ```rust,no_run
@@ -50,36 +61,36 @@
 //! shell.run()?;
 //! # Ok::<(), layer_shika::Error>(())
 //! ```
-//!
-//! # Re-exports
-//!
-//! This crate re-exports commonly needed types from its dependencies:
-//! - [`slint`]: The Slint UI framework (compiled API)
-//! - [`slint_interpreter`]: Runtime Slint component loading
-//! - [`calloop`]: Event loop types for custom event sources
 
 #![allow(clippy::pub_use)]
 
 pub mod prelude;
 
-pub use layer_shika_composition::{
-    AnchorEdges, AnchorStrategy, DEFAULT_WINDOW_NAME, Error, EventContext, EventLoopHandle,
-    KeyboardInteractivity, Layer, LayerShika, OutputGeometry, OutputHandle, OutputInfo,
-    OutputPolicy, OutputRegistry, PopupHandle, PopupPlacement, PopupPositioningMode, PopupRequest,
-    PopupSize, PopupWindow, Result, ShellControl, ShellRuntime, SingleWindowShell,
+pub mod event;
+pub mod output;
+pub mod shell;
+pub mod slint_integration;
+pub mod window;
+
+pub use layer_shika_composition::{Error, Result};
+
+pub use shell::{
+    DEFAULT_WINDOW_NAME, LayerShika, LayerSurfaceHandle, Shell, ShellComposition, ShellControl,
+    ShellEventContext, ShellRuntime, ShellWindowConfigHandler, ShellWindowDefinition,
+    ShellWindowHandle, SingleWindowShell,
 };
 
-pub use layer_shika_composition::{
-    LayerSurfaceHandle, Shell, ShellComposition, ShellEventContext, ShellEventLoopHandle,
-    ShellWindowConfigHandler, ShellWindowDefinition, ShellWindowHandle,
+pub use window::{
+    AnchorEdges, AnchorStrategy, KeyboardInteractivity, Layer, PopupHandle, PopupPlacement,
+    PopupPositioningMode, PopupRequest, PopupSize,
 };
 
-pub use layer_shika_composition::{slint, slint_interpreter};
+pub use output::{OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry};
 
-/// Re-exported calloop types for event loop integration
-///
-/// These types allow users to register custom event sources on the
-/// layer-shika event loop via [`EventLoopHandle`].
+pub use event::{EventContext, EventLoopHandle, ShellEventLoopHandle};
+
+pub use slint_integration::{PopupWindow, slint, slint_interpreter};
+
 pub mod calloop {
     pub use layer_shika_composition::calloop::*;
 }

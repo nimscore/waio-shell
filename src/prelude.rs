@@ -8,26 +8,27 @@
 
 #![allow(clippy::pub_use)]
 
-pub use crate::{
-    DEFAULT_WINDOW_NAME, Error, EventContext, EventLoopHandle, LayerShika, PopupWindow, Result,
-    ShellControl, ShellRuntime, SingleWindowShell,
+pub use crate::shell::{
+    DEFAULT_WINDOW_NAME, LayerShika, LayerSurfaceHandle, Shell, ShellComposition, ShellControl,
+    ShellEventContext, ShellEventLoopHandle, ShellRuntime, ShellWindowConfigHandler,
+    ShellWindowDefinition, ShellWindowHandle, SingleWindowShell,
 };
 
-pub use crate::{
-    LayerSurfaceHandle, Shell, ShellComposition, ShellEventContext, ShellEventLoopHandle,
-    ShellWindowConfigHandler, ShellWindowDefinition, ShellWindowHandle,
+pub use crate::window::{
+    AnchorEdges, AnchorStrategy, KeyboardInteractivity, Layer, PopupHandle, PopupPlacement,
+    PopupPositioningMode, PopupRequest, PopupSize,
 };
 
-pub use crate::{
-    AnchorEdges, KeyboardInteractivity, Layer, OutputGeometry, OutputHandle, OutputInfo,
-    OutputPolicy, OutputRegistry, PopupHandle, PopupPlacement, PopupPositioningMode, PopupRequest,
-    PopupSize,
-};
+pub use crate::output::{OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry};
+
+pub use crate::event::{EventContext, EventLoopHandle};
+
+pub use crate::slint_integration::{PopupWindow, slint, slint_interpreter};
+
+pub use crate::{Error, Result};
 
 pub use layer_shika_composition::prelude::{
     Anchor, LogicalSize, Margins, PhysicalSize, ScaleFactor, WindowConfig, WindowDimension,
 };
 
 pub use crate::calloop;
-
-pub use crate::{slint, slint_interpreter};
