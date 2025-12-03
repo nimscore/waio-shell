@@ -137,7 +137,7 @@ impl LayerShika<NeedsComponent> {
 
 impl LayerShika<HasComponent> {
     #[must_use]
-    pub fn dimensions(mut self, width: u32, height: u32) -> Self {
+    pub fn size(mut self, width: u32, height: u32) -> Self {
         self.config.dimensions = WindowDimension::new(width, height);
         self
     }

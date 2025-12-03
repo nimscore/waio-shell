@@ -1,10 +1,14 @@
 use crate::value_objects::output_info::OutputInfo;
 use std::fmt;
+use std::rc::Rc;
 
+type OutputFilter = Rc<dyn Fn(&OutputInfo) -> bool>;
+
+#[derive(Clone)]
 pub enum OutputPolicy {
     AllOutputs,
     PrimaryOnly,
-    Custom(Box<dyn Fn(&OutputInfo) -> bool>),
+    Custom(OutputFilter),
 }
 
 impl OutputPolicy {
@@ -28,7 +32,7 @@ impl OutputPolicy {
     where
         F: Fn(&OutputInfo) -> bool + 'static,
     {
-        Self::Custom(Box::new(filter))
+        Self::Custom(Rc::new(filter))
     }
 }
 
@@ -38,21 +42,12 @@ impl Default for OutputPolicy {
     }
 }
 
-impl Clone for OutputPolicy {
-    fn clone(&self) -> Self {
-        match self {
-            OutputPolicy::AllOutputs | OutputPolicy::Custom(_) => OutputPolicy::AllOutputs,
-            OutputPolicy::PrimaryOnly => OutputPolicy::PrimaryOnly,
-        }
-    }
-}
-
 impl fmt::Debug for OutputPolicy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             OutputPolicy::AllOutputs => write!(f, "OutputPolicy::AllOutputs"),
             OutputPolicy::PrimaryOnly => write!(f, "OutputPolicy::PrimaryOnly"),
-            OutputPolicy::Custom(_) => write!(f, "OutputPolicy::Custom(<function>)"),
+            OutputPolicy::Custom(_) => write!(f, "OutputPolicy::Custom(<filter>)"),
         }
     }
 }

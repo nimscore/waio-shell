@@ -75,7 +75,9 @@ pub mod prelude {
 
     pub use crate::{slint, slint_interpreter};
 
-    pub use layer_shika_domain::prelude::{Margins, ScaleFactor, WindowConfig, WindowDimension};
+    pub use layer_shika_domain::prelude::{
+        LogicalSize, Margins, PhysicalSize, ScaleFactor, WindowConfig, WindowDimension,
+    };
 
     pub use layer_shika_adapters::platform::wayland::Anchor;
 }

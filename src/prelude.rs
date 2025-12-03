@@ -9,8 +9,8 @@
 #![allow(clippy::pub_use)]
 
 pub use crate::{
-    Error, EventContext, EventLoopHandle, LayerShika, PopupWindow, Result, ShellControl,
-    ShellRuntime, SingleWindowShell, DEFAULT_WINDOW_NAME,
+    DEFAULT_WINDOW_NAME, Error, EventContext, EventLoopHandle, LayerShika, PopupWindow, Result,
+    ShellControl, ShellRuntime, SingleWindowShell,
 };
 
 pub use crate::{
@@ -25,7 +25,7 @@ pub use crate::{
 };
 
 pub use layer_shika_composition::prelude::{
-    Anchor, Margins, ScaleFactor, WindowConfig, WindowDimension,
+    Anchor, LogicalSize, Margins, PhysicalSize, ScaleFactor, WindowConfig, WindowDimension,
 };
 
 pub use crate::calloop;

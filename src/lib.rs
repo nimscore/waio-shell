@@ -22,7 +22,7 @@
 //! ```rust,no_run
 //! use layer_shika::prelude::*;
 //!
-//! LayerShika::from_file("ui/main.slint", Some("AppWindow"))?
+//! LayerShika::from_file("ui/main.slint")?
 //!     .height(42)
 //!     .anchor(AnchorEdges::top_bar())
 //!     .exclusive_zone(42)
@@ -63,10 +63,10 @@
 pub mod prelude;
 
 pub use layer_shika_composition::{
-    AnchorEdges, AnchorStrategy, Error, EventContext, EventLoopHandle, KeyboardInteractivity,
-    Layer, LayerShika, OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry,
-    PopupHandle, PopupPlacement, PopupPositioningMode, PopupRequest, PopupSize, PopupWindow,
-    Result, ShellControl, ShellRuntime, SingleWindowShell, DEFAULT_WINDOW_NAME,
+    AnchorEdges, AnchorStrategy, DEFAULT_WINDOW_NAME, Error, EventContext, EventLoopHandle,
+    KeyboardInteractivity, Layer, LayerShika, OutputGeometry, OutputHandle, OutputInfo,
+    OutputPolicy, OutputRegistry, PopupHandle, PopupPlacement, PopupPositioningMode, PopupRequest,
+    PopupSize, PopupWindow, Result, ShellControl, ShellRuntime, SingleWindowShell,
 };
 
 pub use layer_shika_composition::{
