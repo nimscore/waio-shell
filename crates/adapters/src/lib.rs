@@ -27,6 +27,11 @@ pub mod platform {
     }
 
     pub mod wayland {
-        pub use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::Anchor;
+        pub use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
+            zwlr_layer_shell_v1::Layer as WaylandLayer,
+            zwlr_layer_surface_v1::{
+                Anchor, KeyboardInteractivity as WaylandKeyboardInteractivity,
+            },
+        };
     }
 }

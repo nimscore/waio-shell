@@ -11,12 +11,15 @@ use layer_shika_adapters::platform::calloop::{
 use layer_shika_adapters::platform::slint_interpreter::{
     CompilationResult, ComponentInstance, Value,
 };
-use layer_shika_adapters::platform::wayland::Anchor;
+use layer_shika_adapters::platform::wayland::{Anchor, WaylandKeyboardInteractivity, WaylandLayer};
 use layer_shika_adapters::{
     AppState, ShellWindowConfig, WaylandWindowConfig, WindowState, WindowingSystemFacade,
 };
 use layer_shika_domain::config::WindowConfig;
 use layer_shika_domain::errors::DomainError;
+use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteractivity;
+use layer_shika_domain::value_objects::layer::Layer;
+use layer_shika_domain::value_objects::margins::Margins;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::os::unix::io::AsFd;
@@ -39,6 +42,36 @@ impl LayerSurfaceHandle<'_> {
 
     pub fn set_exclusive_zone(&self, zone: i32) {
         self.window_state.layer_surface().set_exclusive_zone(zone);
+    }
+
+    pub fn set_margins(&self, margins: Margins) {
+        self.window_state.layer_surface().set_margin(
+            margins.top,
+            margins.right,
+            margins.bottom,
+            margins.left,
+        );
+    }
+
+    pub fn set_keyboard_interactivity(&self, mode: KeyboardInteractivity) {
+        let wayland_mode = match mode {
+            KeyboardInteractivity::None => WaylandKeyboardInteractivity::None,
+            KeyboardInteractivity::Exclusive => WaylandKeyboardInteractivity::Exclusive,
+            KeyboardInteractivity::OnDemand => WaylandKeyboardInteractivity::OnDemand,
+        };
+        self.window_state
+            .layer_surface()
+            .set_keyboard_interactivity(wayland_mode);
+    }
+
+    pub fn set_layer(&self, layer: Layer) {
+        let wayland_layer = match layer {
+            Layer::Background => WaylandLayer::Background,
+            Layer::Bottom => WaylandLayer::Bottom,
+            Layer::Top => WaylandLayer::Top,
+            Layer::Overlay => WaylandLayer::Overlay,
+        };
+        self.window_state.layer_surface().set_layer(wayland_layer);
     }
 
     pub fn commit(&self) {
