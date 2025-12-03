@@ -9,9 +9,10 @@
 #![allow(clippy::pub_use)]
 
 pub use crate::shell::{
-    DEFAULT_WINDOW_NAME, LayerShika, LayerSurfaceHandle, Shell, ShellComposition, ShellControl,
+    DEFAULT_COMPONENT_NAME, DEFAULT_WINDOW_NAME, LayerShika, LayerShikaEventContext,
+    LayerShikaEventLoopHandle, LayerSurfaceHandle, Runtime, Shell, ShellBuilder, ShellControl,
     ShellEventContext, ShellEventLoopHandle, ShellRuntime, ShellWindowConfigHandler,
-    ShellWindowDefinition, ShellWindowHandle, SingleWindowShell,
+    ShellWindowHandle, SingleWindowShell, WindowConfigBuilder, WindowDefinition,
 };
 
 pub use crate::window::{

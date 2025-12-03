@@ -1,5 +1,5 @@
 use crate::event_loop::{EventLoopHandleBase, FromAppState};
-use crate::shell_composition::ShellWindowDefinition;
+use crate::layer_shika::WindowDefinition;
 use crate::shell_runtime::ShellRuntime;
 use crate::system::{EventContext, PopupCommand, ShellControl};
 use crate::value_conversion::IntoValue;
@@ -29,7 +29,11 @@ pub struct LayerSurfaceHandle<'a> {
     window_state: &'a WindowState,
 }
 
-impl LayerSurfaceHandle<'_> {
+impl<'a> LayerSurfaceHandle<'a> {
+    pub(crate) fn from_window_state(window_state: &'a WindowState) -> Self {
+        Self { window_state }
+    }
+
     pub fn set_anchor(&self, anchor: Anchor) {
         self.window_state.layer_surface().set_anchor(anchor);
     }
@@ -102,10 +106,11 @@ pub struct Shell {
     popup_command_sender: channel::Sender<PopupCommand>,
 }
 
+#[allow(dead_code)]
 impl Shell {
     pub(crate) fn new(
         compilation_result: Rc<CompilationResult>,
-        definitions: &[ShellWindowDefinition],
+        definitions: &[WindowDefinition],
     ) -> Result<Self> {
         log::info!("Creating shell with {} windows", definitions.len());
 
@@ -119,12 +124,12 @@ impl Shell {
             .iter()
             .map(|def| {
                 let component_definition = compilation_result
-                    .component(&def.component_name)
+                    .component(&def.component)
                     .ok_or_else(|| {
                         Error::Domain(DomainError::Configuration {
                             message: format!(
                                 "Component '{}' not found in compilation result",
-                                def.component_name
+                                def.component
                             ),
                         })
                     })?;
@@ -136,7 +141,7 @@ impl Shell {
                 );
 
                 Ok(ShellWindowConfig {
-                    name: def.component_name.clone(),
+                    name: def.component.clone(),
                     config: wayland_config,
                 })
             })
@@ -151,9 +156,9 @@ impl Shell {
         let mut windows = HashMap::new();
         for def in definitions {
             windows.insert(
-                def.component_name.clone(),
+                def.component.clone(),
                 ShellWindowHandle {
-                    name: def.component_name.clone(),
+                    name: def.component.clone(),
                 },
             );
         }

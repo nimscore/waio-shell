@@ -1,12 +1,12 @@
 use crate::Result;
-use crate::system::SingleWindowShell;
+use crate::layer_shika::Runtime;
 use layer_shika_adapters::platform::slint_interpreter::Value;
 use layer_shika_domain::prelude::AnchorStrategy;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use layer_shika_domain::value_objects::popup_request::{PopupPlacement, PopupRequest, PopupSize};
 
 pub struct PopupBuilder<'a> {
-    shell: &'a SingleWindowShell,
+    shell: &'a Runtime,
     component: String,
     reference: PopupPlacement,
     anchor: PopupPositioningMode,
@@ -17,7 +17,7 @@ pub struct PopupBuilder<'a> {
 }
 
 impl<'a> PopupBuilder<'a> {
-    pub(crate) fn new(shell: &'a SingleWindowShell, component: String) -> Self {
+    pub(crate) fn new(shell: &'a Runtime, component: String) -> Self {
         Self {
             shell,
             component,
@@ -148,7 +148,7 @@ impl<'a> PopupBuilder<'a> {
         let request = self.build_request();
         let control = self.shell.control();
 
-        self.shell.with_all_component_instances(|instance| {
+        self.shell.with_all_windows(|_name, instance| {
             let request_clone = request.clone();
             let control_clone = control.clone();
 
@@ -174,7 +174,7 @@ impl<'a> PopupBuilder<'a> {
         let control = self.shell.control();
         let component_name = request.component.clone();
 
-        self.shell.with_all_component_instances(|instance| {
+        self.shell.with_all_windows(|_name, instance| {
             let request_clone = request.clone();
             let control_clone = control.clone();
             let component_clone = component_name.clone();
@@ -205,7 +205,7 @@ impl<'a> PopupBuilder<'a> {
         let resize_callback = self.resize_callback.clone();
         let control = self.shell.control();
 
-        self.shell.with_all_component_instances(|instance| {
+        self.shell.with_all_windows(|_name, instance| {
             let component_clone = component_name.clone();
             let control_clone = control.clone();
             let close_cb = close_callback.clone();

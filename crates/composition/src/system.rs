@@ -1,5 +1,4 @@
 use crate::event_loop::{EventLoopHandleBase, FromAppState};
-use crate::popup_builder::PopupBuilder;
 use crate::shell_runtime::{DEFAULT_WINDOW_NAME, ShellRuntime};
 use crate::value_conversion::IntoValue;
 use crate::{Error, Result};
@@ -559,6 +558,7 @@ pub struct SingleWindowShell {
     window_name: String,
 }
 
+#[allow(dead_code)]
 impl SingleWindowShell {
     pub(crate) fn new(
         component_definition: ComponentDefinition,
@@ -754,11 +754,6 @@ impl SingleWindowShell {
             }
         })?;
         Ok(())
-    }
-
-    #[must_use]
-    pub fn popup(&self, component_name: impl Into<String>) -> PopupBuilder<'_> {
-        PopupBuilder::new(self, component_name.into())
     }
 
     pub fn run(&mut self) -> Result<()> {

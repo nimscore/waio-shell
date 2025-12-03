@@ -1,10 +1,9 @@
 #![allow(clippy::pub_use)]
 
-mod builder;
 mod event_loop;
+mod layer_shika;
 mod popup_builder;
 mod shell;
-mod shell_composition;
 mod shell_runtime;
 mod system;
 pub mod value_conversion;
@@ -13,7 +12,6 @@ use layer_shika_adapters::errors::LayerShikaError;
 use layer_shika_domain::errors::DomainError;
 use std::result::Result as StdResult;
 
-pub use builder::LayerShika;
 pub use layer_shika_adapters::PopupWindow;
 pub use layer_shika_adapters::platform::{slint, slint_interpreter};
 pub use layer_shika_domain::entities::output_registry::OutputRegistry;
@@ -37,7 +35,12 @@ pub use shell::{
     LayerSurfaceHandle, Shell, ShellEventContext, ShellEventLoopHandle, ShellWindowConfigHandler,
     ShellWindowHandle,
 };
-pub use shell_composition::{ShellComposition, ShellWindowDefinition};
+
+pub use layer_shika::{
+    DEFAULT_COMPONENT_NAME, EventContext as LayerShikaEventContext,
+    EventLoopHandle as LayerShikaEventLoopHandle, LayerShika, Runtime, ShellBuilder,
+    WindowConfigBuilder, WindowDefinition,
+};
 
 pub mod calloop {
     pub use layer_shika_adapters::platform::calloop::{
@@ -61,16 +64,17 @@ pub enum Error {
 
 pub mod prelude {
     pub use crate::{
-        AnchorEdges, AnchorStrategy, DEFAULT_WINDOW_NAME, EventContext, EventLoopHandle, IntoValue,
-        KeyboardInteractivity, Layer, LayerShika, OutputGeometry, OutputHandle, OutputInfo,
-        OutputPolicy, OutputRegistry, PopupBuilder, PopupHandle, PopupPlacement,
-        PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result, ShellControl,
-        ShellRuntime, SingleWindowShell,
+        AnchorEdges, AnchorStrategy, DEFAULT_COMPONENT_NAME, DEFAULT_WINDOW_NAME, EventContext,
+        EventLoopHandle, IntoValue, KeyboardInteractivity, Layer, LayerShika,
+        LayerShikaEventContext, LayerShikaEventLoopHandle, OutputGeometry, OutputHandle,
+        OutputInfo, OutputPolicy, OutputRegistry, PopupBuilder, PopupHandle, PopupPlacement,
+        PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result, Runtime, ShellBuilder,
+        ShellControl, ShellRuntime, SingleWindowShell, WindowConfigBuilder, WindowDefinition,
     };
 
     pub use crate::{
-        LayerSurfaceHandle, Shell, ShellComposition, ShellEventContext, ShellEventLoopHandle,
-        ShellWindowConfigHandler, ShellWindowDefinition, ShellWindowHandle,
+        LayerSurfaceHandle, Shell, ShellEventContext, ShellEventLoopHandle,
+        ShellWindowConfigHandler, ShellWindowHandle,
     };
 
     pub use crate::calloop::{Generic, Interest, Mode, PostAction, RegistrationToken, Timer};

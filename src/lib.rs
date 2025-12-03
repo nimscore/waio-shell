@@ -30,35 +30,58 @@
 //!
 //! # Quick Start
 //!
+//! Single-window use case:
+//!
 //! ```rust,no_run
 //! use layer_shika::prelude::*;
 //!
-//! LayerShika::from_file("ui/main.slint")?
-//!     .height(42)
-//!     .anchor(AnchorEdges::top_bar())
-//!     .exclusive_zone(42)
+//! LayerShika::from_file("ui/bar.slint")
+//!     .window("Main")
+//!         .height(42)
+//!         .anchor(AnchorEdges::top_bar())
+//!         .exclusive_zone(42)
+//!     .build()?
 //!     .run()?;
 //! # Ok::<(), layer_shika::Error>(())
 //! ```
 //!
 //! # Multi-Window Shell
 //!
-//! For multi-window shell applications:
+//! Same API naturally extends to multiple windows:
 //!
 //! ```rust,no_run
 //! use layer_shika::prelude::*;
-//! use std::rc::Rc;
 //!
-//! // Load Slint file with multiple shell window components
-//! let compilation_result = Rc::new(/* ... */);
+//! LayerShika::from_file("ui/shell.slint")
+//!     .window("TopBar")
+//!         .height(42)
+//!         .anchor(AnchorEdges::top_bar())
+//!     .window("Dock")
+//!         .height(64)
+//!         .anchor(AnchorEdges::bottom_bar())
+//!     .build()?
+//!     .run()?;
+//! # Ok::<(), layer_shika::Error>(())
+//! ```
 //!
-//! // Create shell with typed WindowConfig
-//! let shell = ShellComposition::new()
-//!     .with_compilation_result(compilation_result)
-//!     .with_window("TopBar", WindowConfig::default())
-//!     .build()?;
+//! # Pre-compiled Slint
 //!
-//! shell.run()?;
+//! For explicit compilation control:
+//!
+//! ```rust,no_run
+//! use layer_shika::prelude::*;
+//!
+//! let compilation = LayerShika::compile_file("ui/shell.slint")?;
+//!
+//! LayerShika::from_compilation(compilation)
+//!     .window("TopBar")
+//!         .output_policy(OutputPolicy::AllOutputs)
+//!         .height(42)
+//!     .window("Dock")
+//!         .output_policy(OutputPolicy::PrimaryOnly)
+//!         .height(64)
+//!     .build()?
+//!     .run()?;
 //! # Ok::<(), layer_shika::Error>(())
 //! ```
 
@@ -75,9 +98,10 @@ pub mod window;
 pub use layer_shika_composition::{Error, Result};
 
 pub use shell::{
-    DEFAULT_WINDOW_NAME, LayerShika, LayerSurfaceHandle, Shell, ShellComposition, ShellControl,
-    ShellEventContext, ShellRuntime, ShellWindowConfigHandler, ShellWindowDefinition,
-    ShellWindowHandle, SingleWindowShell,
+    DEFAULT_COMPONENT_NAME, DEFAULT_WINDOW_NAME, LayerShika, LayerShikaEventContext,
+    LayerShikaEventLoopHandle, LayerSurfaceHandle, Runtime, Shell, ShellBuilder, ShellControl,
+    ShellEventContext, ShellRuntime, ShellWindowConfigHandler, ShellWindowHandle,
+    SingleWindowShell, WindowConfigBuilder, WindowDefinition,
 };
 
 pub use window::{
