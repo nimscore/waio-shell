@@ -1,12 +1,12 @@
 use crate::Result;
-use crate::layer_shika::Runtime;
+use crate::shell::Shell;
 use layer_shika_adapters::platform::slint_interpreter::Value;
 use layer_shika_domain::prelude::AnchorStrategy;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use layer_shika_domain::value_objects::popup_request::{PopupPlacement, PopupRequest, PopupSize};
 
 pub struct PopupBuilder<'a> {
-    shell: &'a Runtime,
+    shell: &'a Shell,
     component: String,
     reference: PopupPlacement,
     anchor: PopupPositioningMode,
@@ -17,7 +17,7 @@ pub struct PopupBuilder<'a> {
 }
 
 impl<'a> PopupBuilder<'a> {
-    pub(crate) fn new(shell: &'a Runtime, component: String) -> Self {
+    pub(crate) fn new(shell: &'a Shell, component: String) -> Self {
         Self {
             shell,
             component,

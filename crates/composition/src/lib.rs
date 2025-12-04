@@ -1,7 +1,7 @@
 #![allow(clippy::pub_use)]
 
 mod event_loop;
-mod layer_shika;
+mod layer_surface;
 mod popup_builder;
 mod shell;
 mod shell_runtime;
@@ -31,14 +31,10 @@ pub use shell_runtime::{DEFAULT_WINDOW_NAME, ShellRuntime};
 pub use system::{EventContext, EventLoopHandle, ShellControl, SingleWindowShell};
 pub use value_conversion::IntoValue;
 
-pub use shell::{
-    LayerSurfaceHandle, Shell, ShellEventContext, ShellEventLoopHandle, ShellWindowConfigHandler,
-    ShellWindowHandle,
-};
+pub use layer_surface::{LayerSurfaceHandle, ShellWindowConfigHandler, ShellWindowHandle};
 
-pub use layer_shika::{
-    DEFAULT_COMPONENT_NAME, EventContext as LayerShikaEventContext,
-    EventLoopHandle as LayerShikaEventLoopHandle, LayerShika, Runtime, ShellBuilder,
+pub use shell::{
+    DEFAULT_COMPONENT_NAME, Shell, ShellBuilder, ShellEventContext, ShellEventLoopHandle,
     WindowConfigBuilder, WindowDefinition,
 };
 
@@ -65,16 +61,12 @@ pub enum Error {
 pub mod prelude {
     pub use crate::{
         AnchorEdges, AnchorStrategy, DEFAULT_COMPONENT_NAME, DEFAULT_WINDOW_NAME, EventContext,
-        EventLoopHandle, IntoValue, KeyboardInteractivity, Layer, LayerShika,
-        LayerShikaEventContext, LayerShikaEventLoopHandle, OutputGeometry, OutputHandle,
-        OutputInfo, OutputPolicy, OutputRegistry, PopupBuilder, PopupHandle, PopupPlacement,
-        PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result, Runtime, ShellBuilder,
-        ShellControl, ShellRuntime, SingleWindowShell, WindowConfigBuilder, WindowDefinition,
-    };
-
-    pub use crate::{
-        LayerSurfaceHandle, Shell, ShellEventContext, ShellEventLoopHandle,
-        ShellWindowConfigHandler, ShellWindowHandle,
+        EventLoopHandle, IntoValue, KeyboardInteractivity, Layer, LayerSurfaceHandle,
+        OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry, PopupBuilder,
+        PopupHandle, PopupPlacement, PopupPositioningMode, PopupRequest, PopupSize, PopupWindow,
+        Result, Shell, ShellBuilder, ShellControl, ShellEventContext, ShellEventLoopHandle,
+        ShellRuntime, ShellWindowConfigHandler, ShellWindowHandle, SingleWindowShell,
+        WindowConfigBuilder, WindowDefinition,
     };
 
     pub use crate::calloop::{Generic, Interest, Mode, PostAction, RegistrationToken, Timer};

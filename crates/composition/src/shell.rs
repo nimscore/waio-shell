@@ -1,125 +1,393 @@
 use crate::event_loop::{EventLoopHandleBase, FromAppState};
-use crate::layer_shika::WindowDefinition;
+use crate::layer_surface::LayerSurfaceHandle;
+use crate::popup_builder::PopupBuilder;
 use crate::shell_runtime::ShellRuntime;
-use crate::system::{EventContext, PopupCommand, ShellControl};
+use crate::system::{PopupCommand, ShellControl};
 use crate::value_conversion::IntoValue;
 use crate::{Error, Result};
 use layer_shika_adapters::errors::EventLoopError;
 use layer_shika_adapters::platform::calloop::channel;
 use layer_shika_adapters::platform::slint_interpreter::{
-    CompilationResult, ComponentInstance, Value,
+    CompilationResult, Compiler, ComponentInstance, Value,
 };
-use layer_shika_adapters::platform::wayland::{Anchor, WaylandKeyboardInteractivity, WaylandLayer};
 use layer_shika_adapters::{
     AppState, ShellWindowConfig, WaylandWindowConfig, WindowState, WindowingSystemFacade,
 };
 use layer_shika_domain::config::WindowConfig;
 use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::errors::DomainError;
-use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteractivity;
-use layer_shika_domain::value_objects::layer::Layer;
-use layer_shika_domain::value_objects::margins::Margins;
+use layer_shika_domain::prelude::{
+    AnchorEdges, KeyboardInteractivity, Layer, Margins, OutputPolicy, ScaleFactor, WindowDimension,
+};
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
+use spin_on::spin_on;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-pub struct LayerSurfaceHandle<'a> {
-    window_state: &'a WindowState,
-}
-
-impl<'a> LayerSurfaceHandle<'a> {
-    pub(crate) fn from_window_state(window_state: &'a WindowState) -> Self {
-        Self { window_state }
-    }
-
-    pub fn set_anchor(&self, anchor: Anchor) {
-        self.window_state.layer_surface().set_anchor(anchor);
-    }
-
-    pub fn set_size(&self, width: u32, height: u32) {
-        self.window_state.layer_surface().set_size(width, height);
-    }
-
-    pub fn set_exclusive_zone(&self, zone: i32) {
-        self.window_state.layer_surface().set_exclusive_zone(zone);
-    }
-
-    pub fn set_margins(&self, margins: Margins) {
-        self.window_state.layer_surface().set_margin(
-            margins.top,
-            margins.right,
-            margins.bottom,
-            margins.left,
-        );
-    }
-
-    pub fn set_keyboard_interactivity(&self, mode: KeyboardInteractivity) {
-        let wayland_mode = match mode {
-            KeyboardInteractivity::None => WaylandKeyboardInteractivity::None,
-            KeyboardInteractivity::Exclusive => WaylandKeyboardInteractivity::Exclusive,
-            KeyboardInteractivity::OnDemand => WaylandKeyboardInteractivity::OnDemand,
-        };
-        self.window_state
-            .layer_surface()
-            .set_keyboard_interactivity(wayland_mode);
-    }
-
-    pub fn set_layer(&self, layer: Layer) {
-        let wayland_layer = match layer {
-            Layer::Background => WaylandLayer::Background,
-            Layer::Bottom => WaylandLayer::Bottom,
-            Layer::Top => WaylandLayer::Top,
-            Layer::Overlay => WaylandLayer::Overlay,
-        };
-        self.window_state.layer_surface().set_layer(wayland_layer);
-    }
-
-    pub fn commit(&self) {
-        self.window_state.commit_surface();
-    }
-}
-
-pub trait ShellWindowConfigHandler {
-    fn configure_window(&self, instance: &ComponentInstance, surface: LayerSurfaceHandle<'_>);
-}
-
-impl<F> ShellWindowConfigHandler for F
-where
-    F: Fn(&ComponentInstance, LayerSurfaceHandle<'_>),
-{
-    fn configure_window(&self, instance: &ComponentInstance, surface: LayerSurfaceHandle<'_>) {
-        self(instance, surface);
-    }
-}
+pub const DEFAULT_COMPONENT_NAME: &str = "Main";
 
 #[derive(Debug, Clone)]
-pub struct ShellWindowHandle {
-    pub name: String,
+pub struct WindowDefinition {
+    pub component: String,
+    pub config: WindowConfig,
+}
+
+enum CompilationSource {
+    File { path: PathBuf, compiler: Compiler },
+    Source { code: String, compiler: Compiler },
+    Compiled(Rc<CompilationResult>),
+}
+
+pub struct ShellBuilder {
+    compilation: CompilationSource,
+    windows: Vec<WindowDefinition>,
+}
+
+impl ShellBuilder {
+    pub fn window(self, component: impl Into<String>) -> WindowConfigBuilder {
+        WindowConfigBuilder {
+            shell_builder: self,
+            component: component.into(),
+            config: WindowConfig::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn discover_windows(
+        mut self,
+        components: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        for component in components {
+            self.windows.push(WindowDefinition {
+                component: component.into(),
+                config: WindowConfig::default(),
+            });
+        }
+        self
+    }
+
+    pub fn build(self) -> Result<Shell> {
+        let windows = if self.windows.is_empty() {
+            vec![WindowDefinition {
+                component: DEFAULT_COMPONENT_NAME.to_string(),
+                config: WindowConfig::default(),
+            }]
+        } else {
+            self.windows
+        };
+
+        let compilation_result = match self.compilation {
+            CompilationSource::File { path, compiler } => {
+                let result = spin_on(compiler.build_from_path(&path));
+                let diagnostics: Vec<_> = result.diagnostics().collect();
+                if !diagnostics.is_empty() {
+                    let messages: Vec<String> =
+                        diagnostics.iter().map(ToString::to_string).collect();
+                    return Err(DomainError::Configuration {
+                        message: format!(
+                            "Failed to compile Slint file '{}':\n{}",
+                            path.display(),
+                            messages.join("\n")
+                        ),
+                    }
+                    .into());
+                }
+                Rc::new(result)
+            }
+            CompilationSource::Source { code, compiler } => {
+                let result = spin_on(compiler.build_from_source(code, PathBuf::default()));
+                let diagnostics: Vec<_> = result.diagnostics().collect();
+                if !diagnostics.is_empty() {
+                    let messages: Vec<String> =
+                        diagnostics.iter().map(ToString::to_string).collect();
+                    return Err(DomainError::Configuration {
+                        message: format!(
+                            "Failed to compile Slint source:\n{}",
+                            messages.join("\n")
+                        ),
+                    }
+                    .into());
+                }
+                Rc::new(result)
+            }
+            CompilationSource::Compiled(result) => result,
+        };
+
+        Shell::new(compilation_result, windows)
+    }
+}
+
+pub struct WindowConfigBuilder {
+    shell_builder: ShellBuilder,
+    component: String,
+    config: WindowConfig,
+}
+
+impl WindowConfigBuilder {
+    #[must_use]
+    pub fn size(mut self, width: u32, height: u32) -> Self {
+        self.config.dimensions = WindowDimension::new(width, height);
+        self
+    }
+
+    #[must_use]
+    pub fn height(mut self, height: u32) -> Self {
+        self.config.dimensions = WindowDimension::new(self.config.dimensions.width(), height);
+        self
+    }
+
+    #[must_use]
+    pub fn width(mut self, width: u32) -> Self {
+        self.config.dimensions = WindowDimension::new(width, self.config.dimensions.height());
+        self
+    }
+
+    #[must_use]
+    pub const fn layer(mut self, layer: Layer) -> Self {
+        self.config.layer = layer;
+        self
+    }
+
+    #[must_use]
+    pub fn margin(mut self, margin: impl Into<Margins>) -> Self {
+        self.config.margin = margin.into();
+        self
+    }
+
+    #[must_use]
+    pub const fn anchor(mut self, anchor: AnchorEdges) -> Self {
+        self.config.anchor = anchor;
+        self
+    }
+
+    #[must_use]
+    pub const fn exclusive_zone(mut self, zone: i32) -> Self {
+        self.config.exclusive_zone = zone;
+        self
+    }
+
+    #[must_use]
+    pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.config.namespace = namespace.into();
+        self
+    }
+
+    #[must_use]
+    pub fn scale_factor(mut self, sf: impl TryInto<ScaleFactor, Error = DomainError>) -> Self {
+        self.config.scale_factor = sf.try_into().unwrap_or_default();
+        self
+    }
+
+    #[must_use]
+    pub const fn keyboard_interactivity(mut self, mode: KeyboardInteractivity) -> Self {
+        self.config.keyboard_interactivity = mode;
+        self
+    }
+
+    #[must_use]
+    pub fn output_policy(mut self, policy: OutputPolicy) -> Self {
+        self.config.output_policy = policy;
+        self
+    }
+
+    #[must_use]
+    pub fn window(self, component: impl Into<String>) -> WindowConfigBuilder {
+        let shell_builder = self.complete();
+        shell_builder.window(component)
+    }
+
+    pub fn build(self) -> Result<Shell> {
+        self.complete().build()
+    }
+
+    pub fn run(self) -> Result<()> {
+        let mut shell = self.build()?;
+        shell.run()
+    }
+
+    fn complete(mut self) -> ShellBuilder {
+        self.shell_builder.windows.push(WindowDefinition {
+            component: self.component,
+            config: self.config,
+        });
+        self.shell_builder
+    }
 }
 
 pub struct Shell {
     inner: Rc<RefCell<WindowingSystemFacade>>,
-    windows: HashMap<String, ShellWindowHandle>,
+    windows: HashMap<String, WindowDefinition>,
     compilation_result: Rc<CompilationResult>,
     popup_command_sender: channel::Sender<PopupCommand>,
 }
 
-#[allow(dead_code)]
 impl Shell {
+    pub fn from_file(path: impl AsRef<Path>) -> ShellBuilder {
+        ShellBuilder {
+            compilation: CompilationSource::File {
+                path: path.as_ref().to_path_buf(),
+                compiler: Compiler::default(),
+            },
+            windows: Vec::new(),
+        }
+    }
+
+    pub fn from_file_with_compiler(path: impl AsRef<Path>, compiler: Compiler) -> ShellBuilder {
+        ShellBuilder {
+            compilation: CompilationSource::File {
+                path: path.as_ref().to_path_buf(),
+                compiler,
+            },
+            windows: Vec::new(),
+        }
+    }
+
+    pub fn from_source(code: impl Into<String>) -> ShellBuilder {
+        ShellBuilder {
+            compilation: CompilationSource::Source {
+                code: code.into(),
+                compiler: Compiler::default(),
+            },
+            windows: Vec::new(),
+        }
+    }
+
+    pub fn from_source_with_compiler(code: impl Into<String>, compiler: Compiler) -> ShellBuilder {
+        ShellBuilder {
+            compilation: CompilationSource::Source {
+                code: code.into(),
+                compiler,
+            },
+            windows: Vec::new(),
+        }
+    }
+
+    pub fn from_compilation(result: Rc<CompilationResult>) -> ShellBuilder {
+        ShellBuilder {
+            compilation: CompilationSource::Compiled(result),
+            windows: Vec::new(),
+        }
+    }
+
+    pub fn builder() -> ShellBuilder {
+        ShellBuilder {
+            compilation: CompilationSource::Source {
+                code: String::new(),
+                compiler: Compiler::default(),
+            },
+            windows: Vec::new(),
+        }
+    }
+
+    pub fn compile_file(path: impl AsRef<Path>) -> Result<Rc<CompilationResult>> {
+        let compiler = Compiler::default();
+        let result = spin_on(compiler.build_from_path(path.as_ref()));
+        let diagnostics: Vec<_> = result.diagnostics().collect();
+        if !diagnostics.is_empty() {
+            let messages: Vec<String> = diagnostics.iter().map(ToString::to_string).collect();
+            return Err(DomainError::Configuration {
+                message: format!(
+                    "Failed to compile Slint file '{}':\n{}",
+                    path.as_ref().display(),
+                    messages.join("\n")
+                ),
+            }
+            .into());
+        }
+        Ok(Rc::new(result))
+    }
+
+    pub fn compile_source(code: impl Into<String>) -> Result<Rc<CompilationResult>> {
+        let compiler = Compiler::default();
+        let result = spin_on(compiler.build_from_source(code.into(), PathBuf::default()));
+        let diagnostics: Vec<_> = result.diagnostics().collect();
+        if !diagnostics.is_empty() {
+            let messages: Vec<String> = diagnostics.iter().map(ToString::to_string).collect();
+            return Err(DomainError::Configuration {
+                message: format!("Failed to compile Slint source:\n{}", messages.join("\n")),
+            }
+            .into());
+        }
+        Ok(Rc::new(result))
+    }
+
     pub(crate) fn new(
         compilation_result: Rc<CompilationResult>,
-        definitions: &[WindowDefinition],
+        definitions: Vec<WindowDefinition>,
     ) -> Result<Self> {
-        log::info!("Creating shell with {} windows", definitions.len());
+        log::info!("Creating Shell with {} windows", definitions.len());
 
         if definitions.is_empty() {
             return Err(Error::Domain(DomainError::Configuration {
-                message: "At least one shell window definition is required".to_string(),
+                message: "At least one window definition is required".to_string(),
             }));
         }
 
+        let is_single_window = definitions.len() == 1;
+
+        if is_single_window {
+            let definition = definitions.into_iter().next().ok_or_else(|| {
+                Error::Domain(DomainError::Configuration {
+                    message: "Expected at least one window definition".to_string(),
+                })
+            })?;
+            Self::new_single_window(compilation_result, definition)
+        } else {
+            Self::new_multi_window(compilation_result, definitions)
+        }
+    }
+
+    fn new_single_window(
+        compilation_result: Rc<CompilationResult>,
+        definition: WindowDefinition,
+    ) -> Result<Self> {
+        let component_definition = compilation_result
+            .component(&definition.component)
+            .ok_or_else(|| {
+                Error::Domain(DomainError::Configuration {
+                    message: format!(
+                        "Component '{}' not found in compilation result",
+                        definition.component
+                    ),
+                })
+            })?;
+
+        let wayland_config = WaylandWindowConfig::from_domain_config(
+            component_definition,
+            Some(Rc::clone(&compilation_result)),
+            definition.config.clone(),
+        );
+
+        let inner = layer_shika_adapters::WaylandWindowingSystem::new(&wayland_config)?;
+        let facade = WindowingSystemFacade::new(inner);
+        let inner_rc = Rc::new(RefCell::new(facade));
+
+        let (sender, receiver) = channel::channel();
+
+        let mut windows = HashMap::new();
+        windows.insert(definition.component.clone(), definition);
+
+        let shell = Self {
+            inner: Rc::clone(&inner_rc),
+            windows,
+            compilation_result,
+            popup_command_sender: sender,
+        };
+
+        shell.setup_popup_command_handler(receiver)?;
+
+        log::info!("Shell created (single-window mode)");
+
+        Ok(shell)
+    }
+
+    fn new_multi_window(
+        compilation_result: Rc<CompilationResult>,
+        definitions: Vec<WindowDefinition>,
+    ) -> Result<Self> {
         let shell_configs: Vec<ShellWindowConfig> = definitions
             .iter()
             .map(|def| {
@@ -154,13 +422,8 @@ impl Shell {
         let (sender, receiver) = channel::channel();
 
         let mut windows = HashMap::new();
-        for def in definitions {
-            windows.insert(
-                def.component.clone(),
-                ShellWindowHandle {
-                    name: def.component.clone(),
-                },
-            );
+        for definition in definitions {
+            windows.insert(definition.component.clone(), definition);
         }
 
         let shell = Self {
@@ -173,100 +436,11 @@ impl Shell {
         shell.setup_popup_command_handler(receiver)?;
 
         log::info!(
-            "Shell created with windows: {:?}",
-            shell.shell_window_names()
+            "Shell created (multi-window mode) with windows: {:?}",
+            shell.window_names()
         );
 
         Ok(shell)
-    }
-
-    pub(crate) fn new_auto_discover(
-        compilation_result: Rc<CompilationResult>,
-        component_names: &[String],
-    ) -> Result<Self> {
-        log::info!(
-            "Creating shell with auto-discovery for {} components",
-            component_names.len()
-        );
-
-        if component_names.is_empty() {
-            return Err(Error::Domain(DomainError::Configuration {
-                message: "At least one component name is required for auto-discovery".to_string(),
-            }));
-        }
-
-        let default_config = WindowConfig::default();
-
-        let shell_configs: Vec<ShellWindowConfig> = component_names
-            .iter()
-            .map(|name| {
-                let component_definition = compilation_result.component(name).ok_or_else(|| {
-                    Error::Domain(DomainError::Configuration {
-                        message: format!("Component '{}' not found in compilation result", name),
-                    })
-                })?;
-
-                let wayland_config = WaylandWindowConfig::from_domain_config(
-                    component_definition,
-                    Some(Rc::clone(&compilation_result)),
-                    default_config.clone(),
-                );
-
-                Ok(ShellWindowConfig {
-                    name: name.clone(),
-                    config: wayland_config,
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        let inner = layer_shika_adapters::WaylandWindowingSystem::new_multi(&shell_configs)?;
-        let facade = WindowingSystemFacade::new(inner);
-        let inner_rc = Rc::new(RefCell::new(facade));
-
-        let (sender, receiver) = channel::channel();
-
-        let mut windows = HashMap::new();
-        for name in component_names {
-            windows.insert(name.clone(), ShellWindowHandle { name: name.clone() });
-        }
-
-        let shell = Self {
-            inner: Rc::clone(&inner_rc),
-            windows,
-            compilation_result,
-            popup_command_sender: sender,
-        };
-
-        shell.setup_popup_command_handler(receiver)?;
-
-        log::info!(
-            "Shell created with auto-discovered windows: {:?}",
-            shell.shell_window_names()
-        );
-
-        Ok(shell)
-    }
-
-    pub fn apply_window_config<H: ShellWindowConfigHandler>(&self, handler: &H) {
-        log::info!("Applying window configuration via handler");
-
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
-
-        for window in system.app_state().all_outputs() {
-            let instance = window.component_instance();
-            let surface_handle = LayerSurfaceHandle {
-                window_state: window,
-            };
-            handler.configure_window(instance, surface_handle);
-        }
-    }
-
-    pub fn apply_window_config_fn<F>(&self, f: F)
-    where
-        F: Fn(&ComponentInstance, LayerSurfaceHandle<'_>),
-    {
-        self.apply_window_config(&f);
     }
 
     fn setup_popup_command_handler(&self, receiver: channel::Channel<PopupCommand>) -> Result<()> {
@@ -276,7 +450,7 @@ impl Shell {
         loop_handle
             .insert_source(receiver, move |event, (), app_state| {
                 if let channel::Event::Msg(command) = event {
-                    let mut ctx = EventContext::from_app_state(app_state);
+                    let mut ctx = crate::system::EventContext::from_app_state(app_state);
 
                     match command {
                         PopupCommand::Show(request) => {
@@ -318,12 +492,12 @@ impl Shell {
         ShellControl::new(self.popup_command_sender.clone())
     }
 
-    pub fn shell_window(&self, name: &str) -> Option<&ShellWindowHandle> {
-        self.windows.get(name)
+    pub fn window_names(&self) -> Vec<&str> {
+        self.windows.keys().map(String::as_str).collect()
     }
 
-    pub fn shell_window_names(&self) -> Vec<&str> {
-        self.windows.keys().map(String::as_str).collect()
+    pub fn has_window(&self, name: &str) -> bool {
+        self.windows.contains_key(name)
     }
 
     pub fn event_loop_handle(&self) -> ShellEventLoopHandle {
@@ -332,28 +506,39 @@ impl Shell {
 
     pub fn run(&mut self) -> Result<()> {
         log::info!(
-            "Starting shell event loop with {} windows",
+            "Starting Shell event loop with {} windows",
             self.windows.len()
         );
         self.inner.borrow_mut().run()?;
         Ok(())
     }
 
-    pub fn with_component<F>(&self, shell_window_name: &str, mut f: F)
+    pub fn with_window<F, R>(&self, name: &str, f: F) -> Result<R>
     where
-        F: FnMut(&ComponentInstance),
+        F: FnOnce(&ComponentInstance) -> R,
     {
+        if !self.windows.contains_key(name) {
+            return Err(Error::Domain(DomainError::Configuration {
+                message: format!("Window '{}' not found", name),
+            }));
+        }
+
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        if self.windows.contains_key(shell_window_name) {
-            for window in system.app_state().windows_by_shell_name(shell_window_name) {
-                f(window.component_instance());
-            }
-        }
+        system
+            .app_state()
+            .windows_by_shell_name(name)
+            .next()
+            .map(|window| f(window.component_instance()))
+            .ok_or_else(|| {
+                Error::Domain(DomainError::Configuration {
+                    message: format!("No instance found for window '{}'", name),
+                })
+            })
     }
 
-    pub fn with_all_components<F>(&self, mut f: F)
+    pub fn with_all_windows<F>(&self, mut f: F)
     where
         F: FnMut(&str, &ComponentInstance),
     {
@@ -361,9 +546,37 @@ impl Shell {
         let system = facade.inner_ref();
 
         for name in self.windows.keys() {
-            if let Some(window) = system.app_state().primary_output() {
+            for window in system.app_state().windows_by_shell_name(name) {
                 f(name, window.component_instance());
             }
+        }
+    }
+
+    pub fn with_output<F, R>(&self, handle: OutputHandle, f: F) -> Result<R>
+    where
+        F: FnOnce(&ComponentInstance) -> R,
+    {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+        let window = system
+            .app_state()
+            .get_output_by_handle(handle)
+            .ok_or_else(|| {
+                Error::Domain(DomainError::Configuration {
+                    message: format!("Output with handle {:?} not found", handle),
+                })
+            })?;
+        Ok(f(window.component_instance()))
+    }
+
+    pub fn with_all_outputs<F>(&self, mut f: F)
+    where
+        F: FnMut(OutputHandle, &ComponentInstance),
+    {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+        for (handle, window) in system.app_state().outputs_with_handles() {
+            f(handle, window.component_instance());
         }
     }
 
@@ -372,14 +585,19 @@ impl Shell {
         &self.compilation_result
     }
 
-    pub fn on<F, R>(&self, shell_window_name: &str, callback_name: &str, handler: F) -> Result<()>
+    #[must_use]
+    pub fn popup(&self, component_name: impl Into<String>) -> PopupBuilder<'_> {
+        PopupBuilder::new(self, component_name.into())
+    }
+
+    pub fn on<F, R>(&self, window_name: &str, callback_name: &str, handler: F) -> Result<()>
     where
         F: Fn(ShellControl) -> R + 'static,
         R: IntoValue,
     {
-        if !self.windows.contains_key(shell_window_name) {
+        if !self.windows.contains_key(window_name) {
             return Err(Error::Domain(DomainError::Configuration {
-                message: format!("Shell window '{}' not found", shell_window_name),
+                message: format!("Window '{}' not found", window_name),
             }));
         }
 
@@ -388,7 +606,7 @@ impl Shell {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        for window in system.app_state().windows_by_shell_name(shell_window_name) {
+        for window in system.app_state().windows_by_shell_name(window_name) {
             let handler_rc = Rc::clone(&handler);
             let control_clone = control.clone();
             if let Err(e) = window
@@ -400,7 +618,7 @@ impl Shell {
                 log::error!(
                     "Failed to register callback '{}' on window '{}': {}",
                     callback_name,
-                    shell_window_name,
+                    window_name,
                     e
                 );
             }
@@ -411,7 +629,7 @@ impl Shell {
 
     pub fn on_with_args<F, R>(
         &self,
-        shell_window_name: &str,
+        window_name: &str,
         callback_name: &str,
         handler: F,
     ) -> Result<()>
@@ -419,9 +637,9 @@ impl Shell {
         F: Fn(&[Value], ShellControl) -> R + 'static,
         R: IntoValue,
     {
-        if !self.windows.contains_key(shell_window_name) {
+        if !self.windows.contains_key(window_name) {
             return Err(Error::Domain(DomainError::Configuration {
-                message: format!("Shell window '{}' not found", shell_window_name),
+                message: format!("Window '{}' not found", window_name),
             }));
         }
 
@@ -430,7 +648,7 @@ impl Shell {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        for window in system.app_state().windows_by_shell_name(shell_window_name) {
+        for window in system.app_state().windows_by_shell_name(window_name) {
             let handler_rc = Rc::clone(&handler);
             let control_clone = control.clone();
             if let Err(e) = window
@@ -442,7 +660,7 @@ impl Shell {
                 log::error!(
                     "Failed to register callback '{}' on window '{}': {}",
                     callback_name,
-                    shell_window_name,
+                    window_name,
                     e
                 );
             }
@@ -510,6 +728,52 @@ impl Shell {
 
         Ok(())
     }
+
+    pub fn apply_window_config<F>(&self, window_name: &str, f: F)
+    where
+        F: Fn(&ComponentInstance, LayerSurfaceHandle<'_>),
+    {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+
+        if self.windows.contains_key(window_name) {
+            for window in system.app_state().windows_by_shell_name(window_name) {
+                let surface_handle = LayerSurfaceHandle::from_window_state(window);
+                f(window.component_instance(), surface_handle);
+            }
+        }
+    }
+
+    pub fn apply_global_config<F>(&self, f: F)
+    where
+        F: Fn(&ComponentInstance, LayerSurfaceHandle<'_>),
+    {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+
+        for window in system.app_state().all_outputs() {
+            let surface_handle = LayerSurfaceHandle::from_window_state(window);
+            f(window.component_instance(), surface_handle);
+        }
+    }
+
+    pub fn output_registry(&self) -> OutputRegistry {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+        system.app_state().output_registry().clone()
+    }
+
+    pub fn get_output_info(&self, handle: OutputHandle) -> Option<OutputInfo> {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+        system.app_state().get_output_info(handle).cloned()
+    }
+
+    pub fn all_output_info(&self) -> Vec<OutputInfo> {
+        let facade = self.inner.borrow();
+        let system = facade.inner_ref();
+        system.app_state().all_output_info().cloned().collect()
+    }
 }
 
 impl ShellRuntime for Shell {
@@ -542,17 +806,13 @@ impl ShellRuntime for Shell {
         let system = facade.inner_ref();
 
         for name in self.windows.keys() {
-            if let Some(window) = system.app_state().primary_output() {
+            for window in system.app_state().windows_by_shell_name(name) {
                 f(name, window.component_instance());
             }
         }
     }
 
     fn run(&mut self) -> Result<()> {
-        log::info!(
-            "Starting shell event loop with {} windows",
-            self.windows.len()
-        );
         self.inner.borrow_mut().run()?;
         Ok(())
     }
@@ -571,27 +831,14 @@ impl<'a> FromAppState<'a> for ShellEventContext<'a> {
 }
 
 impl ShellEventContext<'_> {
-    pub fn get_shell_window_component(
-        &self,
-        shell_window_name: &str,
-    ) -> Option<&ComponentInstance> {
+    pub fn get_window_component(&self, name: &str) -> Option<&ComponentInstance> {
         self.app_state
-            .windows_by_shell_name(shell_window_name)
+            .windows_by_shell_name(name)
             .next()
             .map(WindowState::component_instance)
     }
 
-    pub fn get_shell_window_component_mut(
-        &mut self,
-        shell_window_name: &str,
-    ) -> Option<&ComponentInstance> {
-        self.app_state
-            .windows_by_shell_name(shell_window_name)
-            .next()
-            .map(WindowState::component_instance)
-    }
-
-    pub fn all_shell_window_components(&self) -> impl Iterator<Item = &ComponentInstance> {
+    pub fn all_window_components(&self) -> impl Iterator<Item = &ComponentInstance> {
         self.app_state
             .all_outputs()
             .map(WindowState::component_instance)

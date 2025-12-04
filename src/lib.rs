@@ -35,7 +35,7 @@
 //! ```rust,no_run
 //! use layer_shika::prelude::*;
 //!
-//! LayerShika::from_file("ui/bar.slint")
+//! Shell::from_file("ui/bar.slint")
 //!     .window("Main")
 //!         .height(42)
 //!         .anchor(AnchorEdges::top_bar())
@@ -52,7 +52,7 @@
 //! ```rust,no_run
 //! use layer_shika::prelude::*;
 //!
-//! LayerShika::from_file("ui/shell.slint")
+//! Shell::from_file("ui/shell.slint")
 //!     .window("TopBar")
 //!         .height(42)
 //!         .anchor(AnchorEdges::top_bar())
@@ -71,9 +71,9 @@
 //! ```rust,no_run
 //! use layer_shika::prelude::*;
 //!
-//! let compilation = LayerShika::compile_file("ui/shell.slint")?;
+//! let compilation = Shell::compile_file("ui/shell.slint")?;
 //!
-//! LayerShika::from_compilation(compilation)
+//! Shell::from_compilation(compilation)
 //!     .window("TopBar")
 //!         .output_policy(OutputPolicy::AllOutputs)
 //!         .height(42)
@@ -98,10 +98,9 @@ pub mod window;
 pub use layer_shika_composition::{Error, Result};
 
 pub use shell::{
-    DEFAULT_COMPONENT_NAME, DEFAULT_WINDOW_NAME, LayerShika, LayerShikaEventContext,
-    LayerShikaEventLoopHandle, LayerSurfaceHandle, Runtime, Shell, ShellBuilder, ShellControl,
-    ShellEventContext, ShellRuntime, ShellWindowConfigHandler, ShellWindowHandle,
-    SingleWindowShell, WindowConfigBuilder, WindowDefinition,
+    DEFAULT_COMPONENT_NAME, DEFAULT_WINDOW_NAME, LayerSurfaceHandle, Shell, ShellBuilder,
+    ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime, ShellWindowConfigHandler,
+    ShellWindowHandle, SingleWindowShell, WindowConfigBuilder, WindowDefinition,
 };
 
 pub use window::{
@@ -111,7 +110,7 @@ pub use window::{
 
 pub use output::{OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry};
 
-pub use event::{EventContext, EventLoopHandle, ShellEventLoopHandle};
+pub use event::{EventContext, EventLoopHandle};
 
 pub use slint_integration::{PopupWindow, slint, slint_interpreter};
 
