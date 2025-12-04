@@ -16,3 +16,4 @@ pub use crate::value_objects::margins::Margins;
 pub use crate::value_objects::output_handle::OutputHandle;
 pub use crate::value_objects::output_info::{OutputGeometry, OutputInfo};
 pub use crate::value_objects::output_policy::OutputPolicy;
+pub use crate::value_objects::ui_source::UiSource;

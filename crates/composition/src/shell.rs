@@ -1,6 +1,7 @@
 use crate::event_loop::{EventLoopHandleBase, FromAppState};
 use crate::layer_surface::LayerSurfaceHandle;
 use crate::popup_builder::PopupBuilder;
+use crate::shell_config::{CompiledUiSource, ShellConfig};
 use crate::shell_runtime::ShellRuntime;
 use crate::system::{PopupCommand, ShellControl};
 use crate::value_conversion::IntoValue;
@@ -312,6 +313,32 @@ impl Shell {
             .into());
         }
         Ok(Rc::new(result))
+    }
+
+    pub fn from_config(config: ShellConfig) -> Result<Self> {
+        let compilation_result = match config.ui_source {
+            CompiledUiSource::File(path) => Self::compile_file(&path)?,
+            CompiledUiSource::Source(code) => Self::compile_source(code)?,
+            CompiledUiSource::Compiled(result) => result,
+        };
+
+        let surfaces: Vec<SurfaceDefinition> = if config.surfaces.is_empty() {
+            vec![SurfaceDefinition {
+                component: DEFAULT_COMPONENT_NAME.to_string(),
+                config: SurfaceConfig::default(),
+            }]
+        } else {
+            config
+                .surfaces
+                .into_iter()
+                .map(|s| SurfaceDefinition {
+                    component: s.component,
+                    config: s.config,
+                })
+                .collect()
+        };
+
+        Self::new(compilation_result, surfaces)
     }
 
     pub(crate) fn new(

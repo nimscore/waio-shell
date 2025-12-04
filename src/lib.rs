@@ -28,9 +28,9 @@
 //! - [`slint_integration`] – Slint framework re-exports and wrappers
 //! - [`calloop`] – Event loop types for custom event sources
 //!
-//! # Quick Start
+//! # Quick Start (Fluent Builder)
 //!
-//! Single-surface use case:
+//! Single-surface use case with the fluent builder API:
 //!
 //! ```rust,no_run
 //! use layer_shika::prelude::*;
@@ -42,6 +42,29 @@
 //!         .exclusive_zone(42)
 //!     .build()?
 //!     .run()?;
+//! # Ok::<(), layer_shika::Error>(())
+//! ```
+//!
+//! # Declarative Configuration
+//!
+//! For reusable, programmatically generated, or externally sourced configurations:
+//!
+//! ```rust,no_run
+//! use layer_shika::prelude::*;
+//!
+//! let config = ShellConfig {
+//!     ui_source: UiSource::file("ui/bar.slint"),
+//!     surfaces: vec![
+//!         SurfaceComponentConfig::with_config("Bar", SurfaceConfig {
+//!             dimensions: SurfaceDimension::new(0, 42),
+//!             anchor: AnchorEdges::top_bar(),
+//!             exclusive_zone: 42,
+//!             ..Default::default()
+//!         }),
+//!     ],
+//! };
+//!
+//! Shell::from_config(config)?.run()?;
 //! # Ok::<(), layer_shika::Error>(())
 //! ```
 //!
@@ -98,9 +121,10 @@ pub mod window;
 pub use layer_shika_composition::{Error, Result};
 
 pub use shell::{
-    DEFAULT_COMPONENT_NAME, DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Shell, ShellBuilder,
-    ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime, ShellSurfaceConfigHandler,
-    ShellSurfaceHandle, SingleWindowShell, SurfaceConfigBuilder, SurfaceDefinition,
+    CompiledUiSource, DEFAULT_COMPONENT_NAME, DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Shell,
+    ShellBuilder, ShellConfig, ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime,
+    ShellSurfaceConfigHandler, ShellSurfaceHandle, SingleWindowShell, SurfaceComponentConfig,
+    SurfaceConfigBuilder, SurfaceDefinition,
 };
 
 pub use window::{

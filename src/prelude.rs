@@ -9,9 +9,10 @@
 #![allow(clippy::pub_use)]
 
 pub use crate::shell::{
-    DEFAULT_COMPONENT_NAME, DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Shell, ShellBuilder,
-    ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime, ShellSurfaceConfigHandler,
-    ShellSurfaceHandle, SingleWindowShell, SurfaceConfigBuilder, SurfaceDefinition,
+    CompiledUiSource, DEFAULT_COMPONENT_NAME, DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Shell,
+    ShellBuilder, ShellConfig, ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime,
+    ShellSurfaceConfigHandler, ShellSurfaceHandle, SingleWindowShell, SurfaceComponentConfig,
+    SurfaceConfigBuilder, SurfaceDefinition,
 };
 
 pub use crate::window::{
@@ -29,6 +30,7 @@ pub use crate::{Error, Result};
 
 pub use layer_shika_composition::prelude::{
     Anchor, LogicalSize, Margins, PhysicalSize, ScaleFactor, SurfaceConfig, SurfaceDimension,
+    UiSource,
 };
 
 pub use crate::calloop;
