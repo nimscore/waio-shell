@@ -1,10 +1,10 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct WindowDimension {
+pub struct SurfaceDimension {
     width: u32,
     height: u32,
 }
 
-impl WindowDimension {
+impl SurfaceDimension {
     pub fn new(width: u32, height: u32) -> Self {
         Self {
             width: if width == 0 {
@@ -33,7 +33,7 @@ impl WindowDimension {
     }
 }
 
-impl Default for WindowDimension {
+impl Default for SurfaceDimension {
     fn default() -> Self {
         Self {
             width: 20,

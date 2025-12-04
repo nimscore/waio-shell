@@ -1,5 +1,5 @@
 use crate::event_loop::{EventLoopHandleBase, FromAppState};
-use crate::shell_runtime::{DEFAULT_WINDOW_NAME, ShellRuntime};
+use crate::shell_runtime::{DEFAULT_SURFACE_NAME, ShellRuntime};
 use crate::value_conversion::IntoValue;
 use crate::{Error, Result};
 use layer_shika_adapters::errors::EventLoopError;
@@ -9,9 +9,9 @@ use layer_shika_adapters::platform::slint_interpreter::{
     CompilationResult, ComponentDefinition, ComponentInstance, Value,
 };
 use layer_shika_adapters::{
-    AppState, PopupManager, WaylandWindowConfig, WindowState, WindowingSystemFacade,
+    AppState, PopupManager, WaylandSurfaceConfig, WindowState, WindowingSystemFacade,
 };
-use layer_shika_domain::config::WindowConfig;
+use layer_shika_domain::config::SurfaceConfig;
 use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::value_objects::dimensions::PopupDimensions;
@@ -563,9 +563,9 @@ impl SingleWindowShell {
     pub(crate) fn new(
         component_definition: ComponentDefinition,
         compilation_result: Option<Rc<CompilationResult>>,
-        config: WindowConfig,
+        config: SurfaceConfig,
     ) -> Result<Self> {
-        let wayland_config = WaylandWindowConfig::from_domain_config(
+        let wayland_config = WaylandSurfaceConfig::from_domain_config(
             component_definition,
             compilation_result,
             config,
@@ -579,7 +579,7 @@ impl SingleWindowShell {
         let shell = Self {
             inner: Rc::clone(&inner_rc),
             popup_command_sender: sender,
-            window_name: DEFAULT_WINDOW_NAME.to_string(),
+            window_name: DEFAULT_SURFACE_NAME.to_string(),
         };
 
         shell.setup_popup_command_handler(receiver)?;

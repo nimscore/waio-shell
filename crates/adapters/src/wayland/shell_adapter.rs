@@ -1,5 +1,5 @@
 use crate::wayland::{
-    config::{LayerSurfaceConfig, ShellWindowConfig, WaylandWindowConfig},
+    config::{LayerSurfaceConfig, ShellSurfaceConfig, WaylandSurfaceConfig},
     globals::context::GlobalContext,
     managed_proxies::ManagedWlPointer,
     outputs::{OutputManager, OutputManagerContext},
@@ -50,11 +50,11 @@ struct OutputSetup {
     main_surface_id: ObjectId,
     window: Rc<FemtoVGWindow>,
     builder: WindowStateBuilder,
-    shell_window_name: String,
+    shell_surface_name: String,
 }
 
 struct OutputManagerParams<'a> {
-    config: &'a WaylandWindowConfig,
+    config: &'a WaylandSurfaceConfig,
     global_ctx: &'a GlobalContext,
     connection: &'a Connection,
     layer_surface_config: LayerSurfaceConfig,
@@ -72,7 +72,7 @@ pub struct WaylandWindowingSystem {
 }
 
 impl WaylandWindowingSystem {
-    pub fn new(config: &WaylandWindowConfig) -> Result<Self> {
+    pub fn new(config: &WaylandSurfaceConfig) -> Result<Self> {
         info!("Initializing WindowingSystem");
         let (connection, mut event_queue) = Self::init_wayland_connection()?;
         let event_loop =
@@ -88,15 +88,15 @@ impl WaylandWindowingSystem {
         })
     }
 
-    pub fn new_multi(configs: &[ShellWindowConfig]) -> Result<Self> {
+    pub fn new_multi(configs: &[ShellSurfaceConfig]) -> Result<Self> {
         if configs.is_empty() {
             return Err(LayerShikaError::InvalidInput {
-                message: "At least one window config is required".into(),
+                message: "At least one surface config is required".into(),
             });
         }
 
         info!(
-            "Initializing WindowingSystem with {} window configs",
+            "Initializing WindowingSystem with {} surface configs",
             configs.len()
         );
         let (connection, mut event_queue) = Self::init_wayland_connection()?;
@@ -119,7 +119,7 @@ impl WaylandWindowingSystem {
         Ok((connection, event_queue))
     }
 
-    fn create_layer_surface_config(config: &WaylandWindowConfig) -> LayerSurfaceConfig {
+    fn create_layer_surface_config(config: &WaylandSurfaceConfig) -> LayerSurfaceConfig {
         LayerSurfaceConfig {
             anchor: config.anchor,
             margin: config.margin,
@@ -131,7 +131,7 @@ impl WaylandWindowingSystem {
     }
 
     fn create_output_setups(
-        config: &WaylandWindowConfig,
+        config: &WaylandSurfaceConfig,
         global_ctx: &GlobalContext,
         connection: &Connection,
         event_queue: &mut EventQueue<AppState>,
@@ -198,7 +198,7 @@ impl WaylandWindowingSystem {
                 main_surface_id,
                 window,
                 builder,
-                shell_window_name: "default".to_string(),
+                shell_surface_name: "default".to_string(),
             });
         }
 
@@ -251,9 +251,9 @@ impl WaylandWindowingSystem {
             popup_managers.push(Rc::clone(&popup_manager));
             layer_surfaces.push(per_output_window.layer_surface());
 
-            app_state.add_shell_window(
+            app_state.add_shell_surface(
                 &setup.output_id,
-                &setup.shell_window_name,
+                &setup.shell_surface_name,
                 setup.main_surface_id,
                 per_output_window,
             );
@@ -263,7 +263,7 @@ impl WaylandWindowingSystem {
     }
 
     fn init_state(
-        config: &WaylandWindowConfig,
+        config: &WaylandSurfaceConfig,
         connection: &Connection,
         event_queue: &mut EventQueue<AppState>,
     ) -> Result<AppState> {
@@ -330,7 +330,7 @@ impl WaylandWindowingSystem {
     }
 
     fn init_state_multi(
-        configs: &[ShellWindowConfig],
+        configs: &[ShellSurfaceConfig],
         connection: &Connection,
         event_queue: &mut EventQueue<AppState>,
     ) -> Result<AppState> {
@@ -399,7 +399,7 @@ impl WaylandWindowingSystem {
     }
 
     fn create_output_setups_multi(
-        configs: &[ShellWindowConfig],
+        configs: &[ShellSurfaceConfig],
         global_ctx: &GlobalContext,
         connection: &Connection,
         event_queue: &mut EventQueue<AppState>,
@@ -419,7 +419,7 @@ impl WaylandWindowingSystem {
 
                 if !config.output_policy.should_render(&temp_info) {
                     info!(
-                        "Skipping shell window '{}' on output {} due to output policy",
+                        "Skipping shell surface '{}' on output {} due to output policy",
                         shell_config.name, output_index
                     );
                     continue;
@@ -469,7 +469,7 @@ impl WaylandWindowingSystem {
                 }
 
                 info!(
-                    "Created setup for shell window '{}' on output {}",
+                    "Created setup for shell surface '{}' on output {}",
                     shell_config.name, output_index
                 );
 
@@ -478,7 +478,7 @@ impl WaylandWindowingSystem {
                     main_surface_id,
                     window,
                     builder,
-                    shell_window_name: shell_config.name.clone(),
+                    shell_surface_name: shell_config.name.clone(),
                 });
             }
         }
@@ -561,7 +561,7 @@ impl WaylandWindowingSystem {
 
     pub(crate) fn initialize_renderer(
         surface: &Rc<WlSurface>,
-        config: &WaylandWindowConfig,
+        config: &WaylandSurfaceConfig,
         render_factory: &Rc<RenderContextFactory>,
     ) -> Result<Rc<FemtoVGWindow>> {
         let init_size = PhysicalSize::new(1, 1);

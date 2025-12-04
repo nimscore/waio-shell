@@ -9,9 +9,9 @@
 #![allow(clippy::pub_use)]
 
 pub use crate::shell::{
-    DEFAULT_COMPONENT_NAME, DEFAULT_WINDOW_NAME, LayerSurfaceHandle, Shell, ShellBuilder,
-    ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime, ShellWindowConfigHandler,
-    ShellWindowHandle, SingleWindowShell, WindowConfigBuilder, WindowDefinition,
+    DEFAULT_COMPONENT_NAME, DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Shell, ShellBuilder,
+    ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime, ShellSurfaceConfigHandler,
+    ShellSurfaceHandle, SingleWindowShell, SurfaceConfigBuilder, SurfaceDefinition,
 };
 
 pub use crate::window::{
@@ -28,7 +28,7 @@ pub use crate::slint_integration::{PopupWindow, slint, slint_interpreter};
 pub use crate::{Error, Result};
 
 pub use layer_shika_composition::prelude::{
-    Anchor, LogicalSize, Margins, PhysicalSize, ScaleFactor, WindowConfig, WindowDimension,
+    Anchor, LogicalSize, Margins, PhysicalSize, ScaleFactor, SurfaceConfig, SurfaceDimension,
 };
 
 pub use crate::calloop;

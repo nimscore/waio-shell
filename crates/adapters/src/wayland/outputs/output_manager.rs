@@ -2,7 +2,7 @@ use crate::{
     errors::{LayerShikaError, Result},
     rendering::egl::context_factory::RenderContextFactory,
     wayland::{
-        config::{LayerSurfaceConfig, WaylandWindowConfig},
+        config::{LayerSurfaceConfig, WaylandSurfaceConfig},
         shell_adapter::WaylandWindowingSystem,
         surfaces::{
             app_state::AppState,
@@ -60,7 +60,7 @@ struct PendingOutput {
 
 pub struct OutputManager {
     context: OutputManagerContext,
-    config: WaylandWindowConfig,
+    config: WaylandSurfaceConfig,
     pub(crate) layer_surface_config: LayerSurfaceConfig,
     output_mapping: OutputMapping,
     pending_outputs: RefCell<HashMap<ObjectId, PendingOutput>>,
@@ -69,7 +69,7 @@ pub struct OutputManager {
 impl OutputManager {
     pub(crate) fn new(
         context: OutputManagerContext,
-        config: WaylandWindowConfig,
+        config: WaylandSurfaceConfig,
         layer_surface_config: LayerSurfaceConfig,
     ) -> Self {
         Self {

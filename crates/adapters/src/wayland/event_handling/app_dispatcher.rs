@@ -206,12 +206,12 @@ impl Dispatch<WlPointer, ()> for AppState {
                     if let Some(window) = state.get_window_by_key_mut(&key) {
                         window.handle_pointer_enter(serial, &surface, surface_x, surface_y);
                     }
-                    state.set_active_window_key(Some(key));
+                    state.set_active_surface_key(Some(key));
                 } else if let Some(key) = state.get_key_by_popup(&surface_id).cloned() {
                     if let Some(window) = state.get_window_by_key_mut(&key) {
                         window.handle_pointer_enter(serial, &surface, surface_x, surface_y);
                     }
-                    state.set_active_window_key(Some(key));
+                    state.set_active_surface_key(Some(key));
                 }
             }
 
@@ -220,16 +220,16 @@ impl Dispatch<WlPointer, ()> for AppState {
                 surface_y,
                 ..
             } => {
-                if let Some(window) = state.active_window_mut() {
+                if let Some(window) = state.active_surface_mut() {
                     window.handle_pointer_motion(surface_x, surface_y);
                 }
             }
 
             wl_pointer::Event::Leave { .. } => {
-                if let Some(window) = state.active_window_mut() {
+                if let Some(window) = state.active_surface_mut() {
                     window.handle_pointer_leave();
                 }
-                state.set_active_window_key(None);
+                state.set_active_surface_key(None);
             }
 
             wl_pointer::Event::Button {
@@ -237,7 +237,7 @@ impl Dispatch<WlPointer, ()> for AppState {
                 state: button_state,
                 ..
             } => {
-                if let Some(window) = state.active_window_mut() {
+                if let Some(window) = state.active_surface_mut() {
                     window.handle_pointer_button(serial, button_state);
                 }
             }

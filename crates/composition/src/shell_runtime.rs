@@ -1,6 +1,6 @@
 use layer_shika_adapters::platform::slint_interpreter::ComponentInstance;
 
-pub const DEFAULT_WINDOW_NAME: &str = "main";
+pub const DEFAULT_SURFACE_NAME: &str = "main";
 
 pub trait ShellRuntime {
     type LoopHandle;

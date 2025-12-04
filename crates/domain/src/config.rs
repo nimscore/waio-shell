@@ -1,14 +1,14 @@
 use crate::dimensions::ScaleFactor;
 use crate::value_objects::anchor::AnchorEdges;
-use crate::value_objects::dimensions::WindowDimension;
+use crate::value_objects::dimensions::SurfaceDimension;
 use crate::value_objects::keyboard_interactivity::KeyboardInteractivity;
 use crate::value_objects::layer::Layer;
 use crate::value_objects::margins::Margins;
 use crate::value_objects::output_policy::OutputPolicy;
 
 #[derive(Debug, Clone)]
-pub struct WindowConfig {
-    pub dimensions: WindowDimension,
+pub struct SurfaceConfig {
+    pub dimensions: SurfaceDimension,
     pub margin: Margins,
     pub exclusive_zone: i32,
     pub scale_factor: ScaleFactor,
@@ -19,11 +19,11 @@ pub struct WindowConfig {
     pub output_policy: OutputPolicy,
 }
 
-impl WindowConfig {
+impl SurfaceConfig {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            dimensions: WindowDimension::default(),
+            dimensions: SurfaceDimension::default(),
             margin: Margins::default(),
             exclusive_zone: -1,
             namespace: "layer-shika".to_owned(),
@@ -36,7 +36,7 @@ impl WindowConfig {
     }
 }
 
-impl Default for WindowConfig {
+impl Default for SurfaceConfig {
     fn default() -> Self {
         Self::new()
     }

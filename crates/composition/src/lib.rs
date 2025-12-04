@@ -27,15 +27,15 @@ pub use layer_shika_domain::value_objects::popup_request::{
     PopupHandle, PopupPlacement, PopupRequest, PopupSize,
 };
 pub use popup_builder::PopupBuilder;
-pub use shell_runtime::{DEFAULT_WINDOW_NAME, ShellRuntime};
+pub use shell_runtime::{DEFAULT_SURFACE_NAME, ShellRuntime};
 pub use system::{EventContext, EventLoopHandle, ShellControl, SingleWindowShell};
 pub use value_conversion::IntoValue;
 
-pub use layer_surface::{LayerSurfaceHandle, ShellWindowConfigHandler, ShellWindowHandle};
+pub use layer_surface::{LayerSurfaceHandle, ShellSurfaceConfigHandler, ShellSurfaceHandle};
 
 pub use shell::{
     DEFAULT_COMPONENT_NAME, Shell, ShellBuilder, ShellEventContext, ShellEventLoopHandle,
-    WindowConfigBuilder, WindowDefinition,
+    SurfaceConfigBuilder, SurfaceDefinition,
 };
 
 pub mod calloop {
@@ -60,13 +60,13 @@ pub enum Error {
 
 pub mod prelude {
     pub use crate::{
-        AnchorEdges, AnchorStrategy, DEFAULT_COMPONENT_NAME, DEFAULT_WINDOW_NAME, EventContext,
+        AnchorEdges, AnchorStrategy, DEFAULT_COMPONENT_NAME, DEFAULT_SURFACE_NAME, EventContext,
         EventLoopHandle, IntoValue, KeyboardInteractivity, Layer, LayerSurfaceHandle,
         OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry, PopupBuilder,
         PopupHandle, PopupPlacement, PopupPositioningMode, PopupRequest, PopupSize, PopupWindow,
         Result, Shell, ShellBuilder, ShellControl, ShellEventContext, ShellEventLoopHandle,
-        ShellRuntime, ShellWindowConfigHandler, ShellWindowHandle, SingleWindowShell,
-        WindowConfigBuilder, WindowDefinition,
+        ShellRuntime, ShellSurfaceConfigHandler, ShellSurfaceHandle, SingleWindowShell,
+        SurfaceConfigBuilder, SurfaceDefinition,
     };
 
     pub use crate::calloop::{Generic, Interest, Mode, PostAction, RegistrationToken, Timer};
@@ -74,7 +74,7 @@ pub mod prelude {
     pub use crate::{slint, slint_interpreter};
 
     pub use layer_shika_domain::prelude::{
-        LogicalSize, Margins, PhysicalSize, ScaleFactor, WindowConfig, WindowDimension,
+        LogicalSize, Margins, PhysicalSize, ScaleFactor, SurfaceConfig, SurfaceDimension,
     };
 
     pub use layer_shika_adapters::platform::wayland::Anchor;

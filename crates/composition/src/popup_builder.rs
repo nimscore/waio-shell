@@ -148,7 +148,7 @@ impl<'a> PopupBuilder<'a> {
         let request = self.build_request();
         let control = self.shell.control();
 
-        self.shell.with_all_windows(|_name, instance| {
+        self.shell.with_all_surfaces(|_name, instance| {
             let request_clone = request.clone();
             let control_clone = control.clone();
 
@@ -174,7 +174,7 @@ impl<'a> PopupBuilder<'a> {
         let control = self.shell.control();
         let component_name = request.component.clone();
 
-        self.shell.with_all_windows(|_name, instance| {
+        self.shell.with_all_surfaces(|_name, instance| {
             let request_clone = request.clone();
             let control_clone = control.clone();
             let component_clone = component_name.clone();
@@ -205,7 +205,7 @@ impl<'a> PopupBuilder<'a> {
         let resize_callback = self.resize_callback.clone();
         let control = self.shell.control();
 
-        self.shell.with_all_windows(|_name, instance| {
+        self.shell.with_all_surfaces(|_name, instance| {
             let component_clone = component_name.clone();
             let control_clone = control.clone();
             let close_cb = close_callback.clone();

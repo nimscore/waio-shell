@@ -61,20 +61,20 @@ impl<'a> LayerSurfaceHandle<'a> {
     }
 }
 
-pub trait ShellWindowConfigHandler {
-    fn configure_window(&self, instance: &ComponentInstance, surface: LayerSurfaceHandle<'_>);
+pub trait ShellSurfaceConfigHandler {
+    fn configure_surface(&self, instance: &ComponentInstance, surface: LayerSurfaceHandle<'_>);
 }
 
-impl<F> ShellWindowConfigHandler for F
+impl<F> ShellSurfaceConfigHandler for F
 where
     F: Fn(&ComponentInstance, LayerSurfaceHandle<'_>),
 {
-    fn configure_window(&self, instance: &ComponentInstance, surface: LayerSurfaceHandle<'_>) {
+    fn configure_surface(&self, instance: &ComponentInstance, surface: LayerSurfaceHandle<'_>) {
         self(instance, surface);
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct ShellWindowHandle {
+pub struct ShellSurfaceHandle {
     pub name: String,
 }

@@ -1,6 +1,6 @@
 //! layer-shika: A Wayland layer shell library with Slint UI integration
 //!
-//! This crate provides a high-level API for creating Wayland layer shell windows
+//! This crate provides a high-level API for creating Wayland layer shell surfaces
 //! with Slint-based user interfaces. It's built on a clean architecture with three
 //! internal layers (domain, adapters, composition), but users should only depend on
 //! this root crate.
@@ -22,7 +22,7 @@
 //! The API is organized into conceptual facets:
 //!
 //! - [`shell`] – Main runtime and shell composition types
-//! - [`window`] – Window configuration, layers, anchors, and popup types
+//! - [`window`] – Surface configuration, layers, anchors, and popup types
 //! - [`output`] – Output (monitor) info, geometry, and policies
 //! - [`event`] – Event loop handles and contexts
 //! - [`slint_integration`] – Slint framework re-exports and wrappers
@@ -30,13 +30,13 @@
 //!
 //! # Quick Start
 //!
-//! Single-window use case:
+//! Single-surface use case:
 //!
 //! ```rust,no_run
 //! use layer_shika::prelude::*;
 //!
 //! Shell::from_file("ui/bar.slint")
-//!     .window("Main")
+//!     .surface("Main")
 //!         .height(42)
 //!         .anchor(AnchorEdges::top_bar())
 //!         .exclusive_zone(42)
@@ -45,18 +45,18 @@
 //! # Ok::<(), layer_shika::Error>(())
 //! ```
 //!
-//! # Multi-Window Shell
+//! # Multi-Surface Shell
 //!
-//! Same API naturally extends to multiple windows:
+//! Same API naturally extends to multiple surfaces:
 //!
 //! ```rust,no_run
 //! use layer_shika::prelude::*;
 //!
 //! Shell::from_file("ui/shell.slint")
-//!     .window("TopBar")
+//!     .surface("TopBar")
 //!         .height(42)
 //!         .anchor(AnchorEdges::top_bar())
-//!     .window("Dock")
+//!     .surface("Dock")
 //!         .height(64)
 //!         .anchor(AnchorEdges::bottom_bar())
 //!     .build()?
@@ -74,10 +74,10 @@
 //! let compilation = Shell::compile_file("ui/shell.slint")?;
 //!
 //! Shell::from_compilation(compilation)
-//!     .window("TopBar")
+//!     .surface("TopBar")
 //!         .output_policy(OutputPolicy::AllOutputs)
 //!         .height(42)
-//!     .window("Dock")
+//!     .surface("Dock")
 //!         .output_policy(OutputPolicy::PrimaryOnly)
 //!         .height(64)
 //!     .build()?
@@ -98,9 +98,9 @@ pub mod window;
 pub use layer_shika_composition::{Error, Result};
 
 pub use shell::{
-    DEFAULT_COMPONENT_NAME, DEFAULT_WINDOW_NAME, LayerSurfaceHandle, Shell, ShellBuilder,
-    ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime, ShellWindowConfigHandler,
-    ShellWindowHandle, SingleWindowShell, WindowConfigBuilder, WindowDefinition,
+    DEFAULT_COMPONENT_NAME, DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Shell, ShellBuilder,
+    ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime, ShellSurfaceConfigHandler,
+    ShellSurfaceHandle, SingleWindowShell, SurfaceConfigBuilder, SurfaceDefinition,
 };
 
 pub use window::{

@@ -1,4 +1,4 @@
-use layer_shika_domain::config::WindowConfig as DomainWindowConfig;
+use layer_shika_domain::config::SurfaceConfig as DomainSurfaceConfig;
 use layer_shika_domain::value_objects::anchor::AnchorEdges;
 use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteractivity as DomainKeyboardInteractivity;
 use layer_shika_domain::value_objects::layer::Layer;
@@ -22,7 +22,7 @@ pub(crate) struct LayerSurfaceConfig {
 }
 
 #[derive(Clone)]
-pub struct WaylandWindowConfig {
+pub struct WaylandSurfaceConfig {
     pub height: u32,
     pub width: u32,
     pub layer: zwlr_layer_shell_v1::Layer,
@@ -37,12 +37,12 @@ pub struct WaylandWindowConfig {
     pub output_policy: OutputPolicy,
 }
 
-impl WaylandWindowConfig {
+impl WaylandSurfaceConfig {
     #[must_use]
     pub fn from_domain_config(
         component_definition: ComponentDefinition,
         compilation_result: Option<Rc<CompilationResult>>,
-        domain_config: DomainWindowConfig,
+        domain_config: DomainSurfaceConfig,
     ) -> Self {
         Self {
             height: domain_config.dimensions.height(),
@@ -102,35 +102,35 @@ const fn convert_keyboard_interactivity(
 }
 
 #[derive(Clone)]
-pub struct ShellWindowConfig {
+pub struct ShellSurfaceConfig {
     pub name: String,
-    pub config: WaylandWindowConfig,
+    pub config: WaylandSurfaceConfig,
 }
 
 #[derive(Clone)]
-pub struct MultiWindowConfig {
-    pub windows: Vec<ShellWindowConfig>,
+pub struct MultiSurfaceConfig {
+    pub surfaces: Vec<ShellSurfaceConfig>,
     pub compilation_result: Rc<CompilationResult>,
 }
 
-impl MultiWindowConfig {
+impl MultiSurfaceConfig {
     pub fn new(compilation_result: Rc<CompilationResult>) -> Self {
         Self {
-            windows: Vec::new(),
+            surfaces: Vec::new(),
             compilation_result,
         }
     }
 
     #[must_use]
-    pub fn add_window(mut self, name: impl Into<String>, config: WaylandWindowConfig) -> Self {
-        self.windows.push(ShellWindowConfig {
+    pub fn add_surface(mut self, name: impl Into<String>, config: WaylandSurfaceConfig) -> Self {
+        self.surfaces.push(ShellSurfaceConfig {
             name: name.into(),
             config,
         });
         self
     }
 
-    pub fn primary_config(&self) -> Option<&WaylandWindowConfig> {
-        self.windows.first().map(|w| &w.config)
+    pub fn primary_config(&self) -> Option<&WaylandSurfaceConfig> {
+        self.surfaces.first().map(|s| &s.config)
     }
 }

@@ -11,13 +11,13 @@ use layer_shika_adapters::platform::slint_interpreter::{
     CompilationResult, Compiler, ComponentInstance, Value,
 };
 use layer_shika_adapters::{
-    AppState, ShellWindowConfig, WaylandWindowConfig, WindowState, WindowingSystemFacade,
+    AppState, ShellSurfaceConfig, WaylandSurfaceConfig, WindowState, WindowingSystemFacade,
 };
-use layer_shika_domain::config::WindowConfig;
+use layer_shika_domain::config::SurfaceConfig;
 use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::prelude::{
-    AnchorEdges, KeyboardInteractivity, Layer, Margins, OutputPolicy, ScaleFactor, WindowDimension,
+    AnchorEdges, KeyboardInteractivity, Layer, Margins, OutputPolicy, ScaleFactor, SurfaceDimension,
 };
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
@@ -30,9 +30,9 @@ use std::rc::Rc;
 pub const DEFAULT_COMPONENT_NAME: &str = "Main";
 
 #[derive(Debug, Clone)]
-pub struct WindowDefinition {
+pub struct SurfaceDefinition {
     pub component: String,
-    pub config: WindowConfig,
+    pub config: SurfaceConfig,
 }
 
 enum CompilationSource {
@@ -43,40 +43,40 @@ enum CompilationSource {
 
 pub struct ShellBuilder {
     compilation: CompilationSource,
-    windows: Vec<WindowDefinition>,
+    surfaces: Vec<SurfaceDefinition>,
 }
 
 impl ShellBuilder {
-    pub fn window(self, component: impl Into<String>) -> WindowConfigBuilder {
-        WindowConfigBuilder {
+    pub fn surface(self, component: impl Into<String>) -> SurfaceConfigBuilder {
+        SurfaceConfigBuilder {
             shell_builder: self,
             component: component.into(),
-            config: WindowConfig::default(),
+            config: SurfaceConfig::default(),
         }
     }
 
     #[must_use]
-    pub fn discover_windows(
+    pub fn discover_surfaces(
         mut self,
         components: impl IntoIterator<Item = impl Into<String>>,
     ) -> Self {
         for component in components {
-            self.windows.push(WindowDefinition {
+            self.surfaces.push(SurfaceDefinition {
                 component: component.into(),
-                config: WindowConfig::default(),
+                config: SurfaceConfig::default(),
             });
         }
         self
     }
 
     pub fn build(self) -> Result<Shell> {
-        let windows = if self.windows.is_empty() {
-            vec![WindowDefinition {
+        let surfaces = if self.surfaces.is_empty() {
+            vec![SurfaceDefinition {
                 component: DEFAULT_COMPONENT_NAME.to_string(),
-                config: WindowConfig::default(),
+                config: SurfaceConfig::default(),
             }]
         } else {
-            self.windows
+            self.surfaces
         };
 
         let compilation_result = match self.compilation {
@@ -116,32 +116,32 @@ impl ShellBuilder {
             CompilationSource::Compiled(result) => result,
         };
 
-        Shell::new(compilation_result, windows)
+        Shell::new(compilation_result, surfaces)
     }
 }
 
-pub struct WindowConfigBuilder {
+pub struct SurfaceConfigBuilder {
     shell_builder: ShellBuilder,
     component: String,
-    config: WindowConfig,
+    config: SurfaceConfig,
 }
 
-impl WindowConfigBuilder {
+impl SurfaceConfigBuilder {
     #[must_use]
     pub fn size(mut self, width: u32, height: u32) -> Self {
-        self.config.dimensions = WindowDimension::new(width, height);
+        self.config.dimensions = SurfaceDimension::new(width, height);
         self
     }
 
     #[must_use]
     pub fn height(mut self, height: u32) -> Self {
-        self.config.dimensions = WindowDimension::new(self.config.dimensions.width(), height);
+        self.config.dimensions = SurfaceDimension::new(self.config.dimensions.width(), height);
         self
     }
 
     #[must_use]
     pub fn width(mut self, width: u32) -> Self {
-        self.config.dimensions = WindowDimension::new(width, self.config.dimensions.height());
+        self.config.dimensions = SurfaceDimension::new(width, self.config.dimensions.height());
         self
     }
 
@@ -194,9 +194,9 @@ impl WindowConfigBuilder {
     }
 
     #[must_use]
-    pub fn window(self, component: impl Into<String>) -> WindowConfigBuilder {
+    pub fn surface(self, component: impl Into<String>) -> SurfaceConfigBuilder {
         let shell_builder = self.complete();
-        shell_builder.window(component)
+        shell_builder.surface(component)
     }
 
     pub fn build(self) -> Result<Shell> {
@@ -209,7 +209,7 @@ impl WindowConfigBuilder {
     }
 
     fn complete(mut self) -> ShellBuilder {
-        self.shell_builder.windows.push(WindowDefinition {
+        self.shell_builder.surfaces.push(SurfaceDefinition {
             component: self.component,
             config: self.config,
         });
@@ -219,7 +219,7 @@ impl WindowConfigBuilder {
 
 pub struct Shell {
     inner: Rc<RefCell<WindowingSystemFacade>>,
-    windows: HashMap<String, WindowDefinition>,
+    surfaces: HashMap<String, SurfaceDefinition>,
     compilation_result: Rc<CompilationResult>,
     popup_command_sender: channel::Sender<PopupCommand>,
 }
@@ -231,7 +231,7 @@ impl Shell {
                 path: path.as_ref().to_path_buf(),
                 compiler: Compiler::default(),
             },
-            windows: Vec::new(),
+            surfaces: Vec::new(),
         }
     }
 
@@ -241,7 +241,7 @@ impl Shell {
                 path: path.as_ref().to_path_buf(),
                 compiler,
             },
-            windows: Vec::new(),
+            surfaces: Vec::new(),
         }
     }
 
@@ -251,7 +251,7 @@ impl Shell {
                 code: code.into(),
                 compiler: Compiler::default(),
             },
-            windows: Vec::new(),
+            surfaces: Vec::new(),
         }
     }
 
@@ -261,14 +261,14 @@ impl Shell {
                 code: code.into(),
                 compiler,
             },
-            windows: Vec::new(),
+            surfaces: Vec::new(),
         }
     }
 
     pub fn from_compilation(result: Rc<CompilationResult>) -> ShellBuilder {
         ShellBuilder {
             compilation: CompilationSource::Compiled(result),
-            windows: Vec::new(),
+            surfaces: Vec::new(),
         }
     }
 
@@ -278,7 +278,7 @@ impl Shell {
                 code: String::new(),
                 compiler: Compiler::default(),
             },
-            windows: Vec::new(),
+            surfaces: Vec::new(),
         }
     }
 
@@ -316,7 +316,7 @@ impl Shell {
 
     pub(crate) fn new(
         compilation_result: Rc<CompilationResult>,
-        definitions: Vec<WindowDefinition>,
+        definitions: Vec<SurfaceDefinition>,
     ) -> Result<Self> {
         log::info!("Creating Shell with {} windows", definitions.len());
 
@@ -342,7 +342,7 @@ impl Shell {
 
     fn new_single_window(
         compilation_result: Rc<CompilationResult>,
-        definition: WindowDefinition,
+        definition: SurfaceDefinition,
     ) -> Result<Self> {
         let component_definition = compilation_result
             .component(&definition.component)
@@ -355,7 +355,7 @@ impl Shell {
                 })
             })?;
 
-        let wayland_config = WaylandWindowConfig::from_domain_config(
+        let wayland_config = WaylandSurfaceConfig::from_domain_config(
             component_definition,
             Some(Rc::clone(&compilation_result)),
             definition.config.clone(),
@@ -367,12 +367,12 @@ impl Shell {
 
         let (sender, receiver) = channel::channel();
 
-        let mut windows = HashMap::new();
-        windows.insert(definition.component.clone(), definition);
+        let mut surfaces = HashMap::new();
+        surfaces.insert(definition.component.clone(), definition);
 
         let shell = Self {
             inner: Rc::clone(&inner_rc),
-            windows,
+            surfaces,
             compilation_result,
             popup_command_sender: sender,
         };
@@ -386,9 +386,9 @@ impl Shell {
 
     fn new_multi_window(
         compilation_result: Rc<CompilationResult>,
-        definitions: Vec<WindowDefinition>,
+        definitions: Vec<SurfaceDefinition>,
     ) -> Result<Self> {
-        let shell_configs: Vec<ShellWindowConfig> = definitions
+        let shell_configs: Vec<ShellSurfaceConfig> = definitions
             .iter()
             .map(|def| {
                 let component_definition = compilation_result
@@ -402,13 +402,13 @@ impl Shell {
                         })
                     })?;
 
-                let wayland_config = WaylandWindowConfig::from_domain_config(
+                let wayland_config = WaylandSurfaceConfig::from_domain_config(
                     component_definition,
                     Some(Rc::clone(&compilation_result)),
                     def.config.clone(),
                 );
 
-                Ok(ShellWindowConfig {
+                Ok(ShellSurfaceConfig {
                     name: def.component.clone(),
                     config: wayland_config,
                 })
@@ -421,14 +421,14 @@ impl Shell {
 
         let (sender, receiver) = channel::channel();
 
-        let mut windows = HashMap::new();
+        let mut surfaces = HashMap::new();
         for definition in definitions {
-            windows.insert(definition.component.clone(), definition);
+            surfaces.insert(definition.component.clone(), definition);
         }
 
         let shell = Self {
             inner: Rc::clone(&inner_rc),
-            windows,
+            surfaces,
             compilation_result,
             popup_command_sender: sender,
         };
@@ -436,8 +436,8 @@ impl Shell {
         shell.setup_popup_command_handler(receiver)?;
 
         log::info!(
-            "Shell created (multi-window mode) with windows: {:?}",
-            shell.window_names()
+            "Shell created (multi-surface mode) with surfaces: {:?}",
+            shell.surface_names()
         );
 
         Ok(shell)
@@ -492,12 +492,12 @@ impl Shell {
         ShellControl::new(self.popup_command_sender.clone())
     }
 
-    pub fn window_names(&self) -> Vec<&str> {
-        self.windows.keys().map(String::as_str).collect()
+    pub fn surface_names(&self) -> Vec<&str> {
+        self.surfaces.keys().map(String::as_str).collect()
     }
 
-    pub fn has_window(&self, name: &str) -> bool {
-        self.windows.contains_key(name)
+    pub fn has_surface(&self, name: &str) -> bool {
+        self.surfaces.contains_key(name)
     }
 
     pub fn event_loop_handle(&self) -> ShellEventLoopHandle {
@@ -507,17 +507,17 @@ impl Shell {
     pub fn run(&mut self) -> Result<()> {
         log::info!(
             "Starting Shell event loop with {} windows",
-            self.windows.len()
+            self.surfaces.len()
         );
         self.inner.borrow_mut().run()?;
         Ok(())
     }
 
-    pub fn with_window<F, R>(&self, name: &str, f: F) -> Result<R>
+    pub fn with_surface<F, R>(&self, name: &str, f: F) -> Result<R>
     where
         F: FnOnce(&ComponentInstance) -> R,
     {
-        if !self.windows.contains_key(name) {
+        if !self.surfaces.contains_key(name) {
             return Err(Error::Domain(DomainError::Configuration {
                 message: format!("Window '{}' not found", name),
             }));
@@ -528,7 +528,7 @@ impl Shell {
 
         system
             .app_state()
-            .windows_by_shell_name(name)
+            .surfaces_by_name(name)
             .next()
             .map(|window| f(window.component_instance()))
             .ok_or_else(|| {
@@ -538,15 +538,15 @@ impl Shell {
             })
     }
 
-    pub fn with_all_windows<F>(&self, mut f: F)
+    pub fn with_all_surfaces<F>(&self, mut f: F)
     where
         F: FnMut(&str, &ComponentInstance),
     {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        for name in self.windows.keys() {
-            for window in system.app_state().windows_by_shell_name(name) {
+        for name in self.surfaces.keys() {
+            for window in system.app_state().surfaces_by_name(name) {
                 f(name, window.component_instance());
             }
         }
@@ -595,7 +595,7 @@ impl Shell {
         F: Fn(ShellControl) -> R + 'static,
         R: IntoValue,
     {
-        if !self.windows.contains_key(window_name) {
+        if !self.surfaces.contains_key(window_name) {
             return Err(Error::Domain(DomainError::Configuration {
                 message: format!("Window '{}' not found", window_name),
             }));
@@ -606,7 +606,7 @@ impl Shell {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        for window in system.app_state().windows_by_shell_name(window_name) {
+        for window in system.app_state().surfaces_by_name(window_name) {
             let handler_rc = Rc::clone(&handler);
             let control_clone = control.clone();
             if let Err(e) = window
@@ -637,7 +637,7 @@ impl Shell {
         F: Fn(&[Value], ShellControl) -> R + 'static,
         R: IntoValue,
     {
-        if !self.windows.contains_key(window_name) {
+        if !self.surfaces.contains_key(window_name) {
             return Err(Error::Domain(DomainError::Configuration {
                 message: format!("Window '{}' not found", window_name),
             }));
@@ -648,7 +648,7 @@ impl Shell {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        for window in system.app_state().windows_by_shell_name(window_name) {
+        for window in system.app_state().surfaces_by_name(window_name) {
             let handler_rc = Rc::clone(&handler);
             let control_clone = control.clone();
             if let Err(e) = window
@@ -729,15 +729,15 @@ impl Shell {
         Ok(())
     }
 
-    pub fn apply_window_config<F>(&self, window_name: &str, f: F)
+    pub fn apply_surface_config<F>(&self, window_name: &str, f: F)
     where
         F: Fn(&ComponentInstance, LayerSurfaceHandle<'_>),
     {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        if self.windows.contains_key(window_name) {
-            for window in system.app_state().windows_by_shell_name(window_name) {
+        if self.surfaces.contains_key(window_name) {
+            for window in system.app_state().surfaces_by_name(window_name) {
                 let surface_handle = LayerSurfaceHandle::from_window_state(window);
                 f(window.component_instance(), surface_handle);
             }
@@ -791,8 +791,8 @@ impl ShellRuntime for Shell {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        if self.windows.contains_key(name) {
-            for window in system.app_state().windows_by_shell_name(name) {
+        if self.surfaces.contains_key(name) {
+            for window in system.app_state().surfaces_by_name(name) {
                 f(window.component_instance());
             }
         }
@@ -805,8 +805,8 @@ impl ShellRuntime for Shell {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        for name in self.windows.keys() {
-            for window in system.app_state().windows_by_shell_name(name) {
+        for name in self.surfaces.keys() {
+            for window in system.app_state().surfaces_by_name(name) {
                 f(name, window.component_instance());
             }
         }
@@ -833,7 +833,7 @@ impl<'a> FromAppState<'a> for ShellEventContext<'a> {
 impl ShellEventContext<'_> {
     pub fn get_window_component(&self, name: &str) -> Option<&ComponentInstance> {
         self.app_state
-            .windows_by_shell_name(name)
+            .surfaces_by_name(name)
             .next()
             .map(WindowState::component_instance)
     }

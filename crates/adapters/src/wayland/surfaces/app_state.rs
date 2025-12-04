@@ -14,16 +14,16 @@ use wayland_client::backend::ObjectId;
 pub type PerOutputWindow = WindowState;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ShellWindowKey {
+pub struct ShellSurfaceKey {
     pub output_handle: OutputHandle,
-    pub shell_window_name: String,
+    pub surface_name: String,
 }
 
-impl ShellWindowKey {
-    pub fn new(output_handle: OutputHandle, shell_window_name: impl Into<String>) -> Self {
+impl ShellSurfaceKey {
+    pub fn new(output_handle: OutputHandle, surface_name: impl Into<String>) -> Self {
         Self {
             output_handle,
-            shell_window_name: shell_window_name.into(),
+            surface_name: surface_name.into(),
         }
     }
 }
@@ -31,13 +31,13 @@ impl ShellWindowKey {
 pub struct AppState {
     output_registry: OutputRegistry,
     output_mapping: OutputMapping,
-    windows: HashMap<ShellWindowKey, PerOutputWindow>,
-    surface_to_key: HashMap<ObjectId, ShellWindowKey>,
+    surfaces: HashMap<ShellSurfaceKey, PerOutputWindow>,
+    surface_to_key: HashMap<ObjectId, ShellSurfaceKey>,
     _pointer: ManagedWlPointer,
     shared_pointer_serial: Rc<SharedPointerSerial>,
     output_manager: Option<Rc<RefCell<OutputManager>>>,
     registry_name_to_output_id: HashMap<u32, ObjectId>,
-    active_window_key: Option<ShellWindowKey>,
+    active_surface_key: Option<ShellSurfaceKey>,
 }
 
 impl AppState {
@@ -45,13 +45,13 @@ impl AppState {
         Self {
             output_registry: OutputRegistry::new(),
             output_mapping: OutputMapping::new(),
-            windows: HashMap::new(),
+            surfaces: HashMap::new(),
             surface_to_key: HashMap::new(),
             _pointer: pointer,
             shared_pointer_serial: shared_serial,
             output_manager: None,
             registry_name_to_output_id: HashMap::new(),
-            active_window_key: None,
+            active_surface_key: None,
         }
     }
 
@@ -75,12 +75,12 @@ impl AppState {
         self.registry_name_to_output_id.remove(&name)
     }
 
-    pub fn add_shell_window(
+    pub fn add_shell_surface(
         &mut self,
         output_id: &ObjectId,
-        shell_window_name: &str,
+        surface_name: &str,
         main_surface_id: ObjectId,
-        window: PerOutputWindow,
+        surface_state: PerOutputWindow,
     ) {
         let handle = self.output_mapping.get(output_id).unwrap_or_else(|| {
             let h = self.output_mapping.insert(output_id.clone());
@@ -91,25 +91,25 @@ impl AppState {
             h
         });
 
-        let key = ShellWindowKey::new(handle, shell_window_name);
+        let key = ShellSurfaceKey::new(handle, surface_name);
         self.surface_to_key.insert(main_surface_id, key.clone());
-        self.windows.insert(key, window);
+        self.surfaces.insert(key, surface_state);
     }
 
     pub fn add_output(
         &mut self,
         output_id: &ObjectId,
         main_surface_id: ObjectId,
-        window: PerOutputWindow,
+        surface_state: PerOutputWindow,
     ) {
-        self.add_shell_window(output_id, "default", main_surface_id, window);
+        self.add_shell_surface(output_id, "default", main_surface_id, surface_state);
     }
 
     pub fn remove_output(&mut self, handle: OutputHandle) -> Vec<PerOutputWindow> {
         self.output_registry.remove(handle);
 
         let keys_to_remove: Vec<_> = self
-            .windows
+            .surfaces
             .keys()
             .filter(|k| k.output_handle == handle)
             .cloned()
@@ -117,7 +117,7 @@ impl AppState {
 
         let mut removed = Vec::new();
         for key in keys_to_remove {
-            if let Some(window) = self.windows.remove(&key) {
+            if let Some(window) = self.surfaces.remove(&key) {
                 removed.push(window);
             }
         }
@@ -127,12 +127,12 @@ impl AppState {
         removed
     }
 
-    pub fn get_window_by_key(&self, key: &ShellWindowKey) -> Option<&PerOutputWindow> {
-        self.windows.get(key)
+    pub fn get_window_by_key(&self, key: &ShellSurfaceKey) -> Option<&PerOutputWindow> {
+        self.surfaces.get(key)
     }
 
-    pub fn get_window_by_key_mut(&mut self, key: &ShellWindowKey) -> Option<&mut PerOutputWindow> {
-        self.windows.get_mut(key)
+    pub fn get_window_by_key_mut(&mut self, key: &ShellSurfaceKey) -> Option<&mut PerOutputWindow> {
+        self.surfaces.get_mut(key)
     }
 
     pub fn get_window_by_name(
@@ -140,8 +140,8 @@ impl AppState {
         output_handle: OutputHandle,
         shell_window_name: &str,
     ) -> Option<&PerOutputWindow> {
-        let key = ShellWindowKey::new(output_handle, shell_window_name);
-        self.windows.get(&key)
+        let key = ShellSurfaceKey::new(output_handle, shell_window_name);
+        self.surfaces.get(&key)
     }
 
     pub fn get_window_by_name_mut(
@@ -149,8 +149,8 @@ impl AppState {
         output_handle: OutputHandle,
         shell_window_name: &str,
     ) -> Option<&mut PerOutputWindow> {
-        let key = ShellWindowKey::new(output_handle, shell_window_name);
-        self.windows.get_mut(&key)
+        let key = ShellSurfaceKey::new(output_handle, shell_window_name);
+        self.surfaces.get_mut(&key)
     }
 
     pub fn get_output_by_output_id(&self, output_id: &ObjectId) -> Option<&PerOutputWindow> {
@@ -169,7 +169,7 @@ impl AppState {
     }
 
     fn get_first_window_for_output(&self, handle: OutputHandle) -> Option<&PerOutputWindow> {
-        self.windows
+        self.surfaces
             .iter()
             .find(|(k, _)| k.output_handle == handle)
             .map(|(_, v)| v)
@@ -179,7 +179,7 @@ impl AppState {
         &mut self,
         handle: OutputHandle,
     ) -> Option<&mut PerOutputWindow> {
-        self.windows
+        self.surfaces
             .iter_mut()
             .find(|(k, _)| k.output_handle == handle)
             .map(|(_, v)| v)
@@ -188,7 +188,7 @@ impl AppState {
     pub fn get_output_by_surface(&self, surface_id: &ObjectId) -> Option<&PerOutputWindow> {
         self.surface_to_key
             .get(surface_id)
-            .and_then(|key| self.windows.get(key))
+            .and_then(|key| self.surfaces.get(key))
     }
 
     pub fn get_output_by_surface_mut(
@@ -197,19 +197,19 @@ impl AppState {
     ) -> Option<&mut PerOutputWindow> {
         self.surface_to_key
             .get(surface_id)
-            .and_then(|key| self.windows.get_mut(key))
+            .and_then(|key| self.surfaces.get_mut(key))
     }
 
     pub fn get_output_by_layer_surface_mut(
         &mut self,
         layer_surface_id: &ObjectId,
     ) -> Option<&mut PerOutputWindow> {
-        self.windows
+        self.surfaces
             .values_mut()
             .find(|window| window.layer_surface().as_ref().id() == *layer_surface_id)
     }
 
-    pub fn get_key_by_surface(&self, surface_id: &ObjectId) -> Option<&ShellWindowKey> {
+    pub fn get_key_by_surface(&self, surface_id: &ObjectId) -> Option<&ShellSurfaceKey> {
         self.surface_to_key.get(surface_id)
     }
 
@@ -231,22 +231,22 @@ impl AppState {
         self.output_registry.active_handle()
     }
 
-    pub fn set_active_window_key(&mut self, key: Option<ShellWindowKey>) {
+    pub fn set_active_surface_key(&mut self, key: Option<ShellSurfaceKey>) {
         if let Some(ref k) = key {
             self.output_registry.set_active(Some(k.output_handle));
         } else {
             self.output_registry.set_active(None);
         }
-        self.active_window_key = key;
+        self.active_surface_key = key;
     }
 
-    pub fn active_window_key(&self) -> Option<&ShellWindowKey> {
-        self.active_window_key.as_ref()
+    pub fn active_surface_key(&self) -> Option<&ShellSurfaceKey> {
+        self.active_surface_key.as_ref()
     }
 
-    pub fn active_window_mut(&mut self) -> Option<&mut PerOutputWindow> {
-        let key = self.active_window_key.clone()?;
-        self.windows.get_mut(&key)
+    pub fn active_surface_mut(&mut self) -> Option<&mut PerOutputWindow> {
+        let key = self.active_surface_key.clone()?;
+        self.surfaces.get_mut(&key)
     }
 
     pub fn primary_output(&self) -> Option<&PerOutputWindow> {
@@ -266,25 +266,25 @@ impl AppState {
     }
 
     pub fn all_outputs(&self) -> impl Iterator<Item = &PerOutputWindow> {
-        self.windows.values()
+        self.surfaces.values()
     }
 
     pub fn all_outputs_mut(&mut self) -> impl Iterator<Item = &mut PerOutputWindow> {
-        self.windows.values_mut()
+        self.surfaces.values_mut()
     }
 
     pub fn windows_for_output(
         &self,
         handle: OutputHandle,
     ) -> impl Iterator<Item = (&str, &PerOutputWindow)> {
-        self.windows
+        self.surfaces
             .iter()
             .filter(move |(k, _)| k.output_handle == handle)
-            .map(|(k, v)| (k.shell_window_name.as_str(), v))
+            .map(|(k, v)| (k.surface_name.as_str(), v))
     }
 
-    pub fn windows_with_keys(&self) -> impl Iterator<Item = (&ShellWindowKey, &PerOutputWindow)> {
-        self.windows.iter()
+    pub fn windows_with_keys(&self) -> impl Iterator<Item = (&ShellSurfaceKey, &PerOutputWindow)> {
+        self.surfaces.iter()
     }
 
     pub const fn shared_pointer_serial(&self) -> &Rc<SharedPointerSerial> {
@@ -292,7 +292,7 @@ impl AppState {
     }
 
     pub fn find_output_by_popup(&self, popup_surface_id: &ObjectId) -> Option<&PerOutputWindow> {
-        self.windows.values().find(|window| {
+        self.surfaces.values().find(|window| {
             window
                 .popup_manager()
                 .as_ref()
@@ -305,7 +305,7 @@ impl AppState {
         &mut self,
         popup_surface_id: &ObjectId,
     ) -> Option<&mut PerOutputWindow> {
-        self.windows.values_mut().find(|window| {
+        self.surfaces.values_mut().find(|window| {
             window
                 .popup_manager()
                 .as_ref()
@@ -314,8 +314,8 @@ impl AppState {
         })
     }
 
-    pub fn get_key_by_popup(&self, popup_surface_id: &ObjectId) -> Option<&ShellWindowKey> {
-        self.windows.iter().find_map(|(key, window)| {
+    pub fn get_key_by_popup(&self, popup_surface_id: &ObjectId) -> Option<&ShellSurfaceKey> {
+        self.surfaces.iter().find_map(|(key, window)| {
             window
                 .popup_manager()
                 .as_ref()
@@ -352,24 +352,21 @@ impl AppState {
         &self.output_registry
     }
 
-    pub fn shell_window_names(&self) -> Vec<&str> {
+    pub fn shell_surface_names(&self) -> Vec<&str> {
         let mut names: Vec<_> = self
-            .windows
+            .surfaces
             .keys()
-            .map(|k| k.shell_window_name.as_str())
+            .map(|k| k.surface_name.as_str())
             .collect();
         names.sort_unstable();
         names.dedup();
         names
     }
 
-    pub fn windows_by_shell_name(
-        &self,
-        shell_window_name: &str,
-    ) -> impl Iterator<Item = &PerOutputWindow> {
-        self.windows
+    pub fn surfaces_by_name(&self, surface_name: &str) -> impl Iterator<Item = &PerOutputWindow> {
+        self.surfaces
             .iter()
-            .filter(move |(k, _)| k.shell_window_name == shell_window_name)
+            .filter(move |(k, _)| k.surface_name == surface_name)
             .map(|(_, v)| v)
     }
 
@@ -378,7 +375,7 @@ impl AppState {
     }
 
     pub fn outputs_with_handles(&self) -> impl Iterator<Item = (OutputHandle, &PerOutputWindow)> {
-        self.windows
+        self.surfaces
             .iter()
             .map(|(key, window)| (key.output_handle, window))
     }
@@ -399,7 +396,7 @@ impl AppState {
             return Vec::new();
         };
 
-        self.windows
+        self.surfaces
             .iter_mut()
             .filter(|(k, _)| k.output_handle == handle)
             .map(|(_, v)| v)
