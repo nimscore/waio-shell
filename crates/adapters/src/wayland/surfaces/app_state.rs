@@ -99,10 +99,11 @@ impl AppState {
     pub fn add_output(
         &mut self,
         output_id: &ObjectId,
+        surface_name: &str,
         main_surface_id: ObjectId,
         surface_state: PerOutputWindow,
     ) {
-        self.add_shell_surface(output_id, "default", main_surface_id, surface_state);
+        self.add_shell_surface(output_id, surface_name, main_surface_id, surface_state);
     }
 
     pub fn remove_output(&mut self, handle: OutputHandle) -> Vec<PerOutputWindow> {

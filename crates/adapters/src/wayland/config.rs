@@ -23,6 +23,7 @@ pub(crate) struct LayerSurfaceConfig {
 
 #[derive(Clone)]
 pub struct WaylandSurfaceConfig {
+    pub surface_name: String,
     pub height: u32,
     pub width: u32,
     pub layer: zwlr_layer_shell_v1::Layer,
@@ -40,11 +41,13 @@ pub struct WaylandSurfaceConfig {
 impl WaylandSurfaceConfig {
     #[must_use]
     pub fn from_domain_config(
+        surface_name: impl Into<String>,
         component_definition: ComponentDefinition,
         compilation_result: Option<Rc<CompilationResult>>,
         domain_config: DomainSurfaceConfig,
     ) -> Self {
         Self {
+            surface_name: surface_name.into(),
             height: domain_config.dimensions.height(),
             width: domain_config.dimensions.width(),
             layer: convert_layer(domain_config.layer),

@@ -144,7 +144,12 @@ impl OutputManager {
         let (window, main_surface_id) =
             self.create_window_for_output(&pending_output.proxy, output_id, queue_handle)?;
 
-        app_state.add_output(output_id, main_surface_id, window);
+        app_state.add_output(
+            output_id,
+            &self.config.surface_name,
+            main_surface_id,
+            window,
+        );
 
         Ok(())
     }

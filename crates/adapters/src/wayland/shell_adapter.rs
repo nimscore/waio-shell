@@ -198,7 +198,7 @@ impl WaylandWindowingSystem {
                 main_surface_id,
                 window,
                 builder,
-                shell_surface_name: "default".to_string(),
+                shell_surface_name: config.surface_name.clone(),
             });
         }
 

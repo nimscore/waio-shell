@@ -566,6 +566,7 @@ impl SingleWindowShell {
         config: SurfaceConfig,
     ) -> Result<Self> {
         let wayland_config = WaylandSurfaceConfig::from_domain_config(
+            "default",
             component_definition,
             compilation_result,
             config,

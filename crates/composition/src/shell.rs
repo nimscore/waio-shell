@@ -383,6 +383,7 @@ impl Shell {
             })?;
 
         let wayland_config = WaylandSurfaceConfig::from_domain_config(
+            &definition.component,
             component_definition,
             Some(Rc::clone(&compilation_result)),
             definition.config.clone(),
@@ -430,6 +431,7 @@ impl Shell {
                     })?;
 
                 let wayland_config = WaylandSurfaceConfig::from_domain_config(
+                    &def.component,
                     component_definition,
                     Some(Rc::clone(&compilation_result)),
                     def.config.clone(),
