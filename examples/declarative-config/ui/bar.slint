@@ -1,0 +1,40 @@
+import { Button } from "std-widgets.slint";
+
+export component StatusBar inherits Window {
+
+    callback settings-clicked();
+
+    HorizontalLayout {
+        padding: 8px;
+        spacing: 16px;
+
+        Text {
+            text: "Declarative Config Example";
+            font-size: 14px;
+            vertical-alignment: center;
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+
+        HorizontalLayout {
+            spacing: 12px;
+
+            Text {
+                text: "Layer: Top | Zone: 42px | Anchor: Top";
+                color: #88c0d0;
+                font-size: 12px;
+                vertical-alignment: center;
+            }
+
+            settings-btn := Button {
+                text: "⚙️";
+                min-width: 32px;
+                clicked => {
+                    settings-clicked();
+                }
+            }
+        }
+    }
+}

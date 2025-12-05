@@ -19,7 +19,7 @@ Please note that this library is currently in early development and is not yet r
   - Event handling system
 - **UI Integration**: Slint integration layer with custom rendering backend
 - **Documentation**: Work in progress
-- **Examples**: Coming soon (examples directory prepared)
+- **Examples**: Available - see [examples/](examples/) directory
 
 **What's Working:**
 
@@ -34,13 +34,28 @@ Please note that this library is currently in early development and is not yet r
 
 - Not all features are fully implemented or tested
 - API is still unstable and may change
-- Examples and comprehensive documentation pending
+- Comprehensive documentation pending
 
 It's recommended to wait for a stable release before using this library in production projects. Development is trying to be as fast as a running skippy deer!
 
+## Quick Start
+
+Check out the [examples/](examples/) directory for comprehensive demonstrations.
+Each example includes detailed documentation and can be run with:
+
+```bash
+cargo run -p simple-bar
+cargo run -p multi-surface
+cargo run -p declarative-config
+...
+...
+```
+
+See the [examples README](examples/README.md) for detailed usage instructions and patterns.
+
 ## Usage
 
-Examples and usage instructions are coming soon. Hoping that they will not be too deer-ifying, like the current state of this library. If you want to use it now, use this repo as dependency instead of crates.io outdated versions.
+If you want to use it now, use this repo as dependency instead of crates.io outdated versions.
 
 ## First Stable Release
 

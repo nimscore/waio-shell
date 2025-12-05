@@ -1,0 +1,36 @@
+import { VerticalBox, HorizontalBox } from "std-widgets.slint";
+
+export component Bar inherits Window {
+    default-font-size: 16px;
+
+    HorizontalBox {
+        // Left section
+        Text {
+            text: "Simple Bar Example";
+            vertical-alignment: center;
+        }
+
+        // Center section (spacer)
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+
+        // Right section
+        HorizontalLayout {
+            alignment: end;
+            spacing: 12px;
+
+            Text {
+                text: "🕐 12:34";
+                color: #88c0d0;
+                vertical-alignment: center;
+            }
+
+            Text {
+                text: "🔋 75%";
+                color: #a3be8c;
+                vertical-alignment: center;
+            }
+        }
+    }
+}

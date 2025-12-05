@@ -1,0 +1,104 @@
+import { HorizontalBox, Button } from "std-widgets.slint";
+
+export component TopBar inherits Window {
+
+    callback workspace-clicked <=> workspace-btn.clicked;
+
+    HorizontalLayout {
+        padding: 8px;
+        spacing: 12px;
+
+        // Workspace switcher
+        HorizontalLayout {
+            alignment: start;
+            spacing: 8px;
+
+            workspace-btn := Button {
+                text: "Workspaces";
+            }
+
+            Text {
+                text: "1";
+                color: #88c0d0;
+                font-size: 14px;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+                min-width: 24px;
+            }
+
+            Text {
+                text: "2";
+                color: #4c566a;
+                font-size: 14px;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+                min-width: 24px;
+            }
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+
+        // System info
+        HorizontalLayout {
+            alignment: end;
+            spacing: 12px;
+
+            Text {
+                text: "🕐 12:34";
+                color: #88c0d0;
+                font-size: 14px;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+export component Dock inherits Window {
+
+    callback app-clicked(string);
+
+    HorizontalBox {
+        padding: 12px;
+        spacing: 16px;
+        alignment: center;
+
+        // App icons
+        Button {
+            text: "🌐";
+            min-width: 48px;
+            min-height: 48px;
+            clicked => {
+                app-clicked("browser");
+            }
+        }
+
+        Button {
+            text: "📁";
+            min-width: 48px;
+            min-height: 48px;
+            clicked => {
+                app-clicked("files");
+            }
+        }
+
+        Button {
+            text: "💻";
+            min-width: 48px;
+            min-height: 48px;
+            clicked => {
+                app-clicked("terminal");
+            }
+        }
+
+        Button {
+            text: "🎵";
+            min-width: 48px;
+            min-height: 48px;
+            clicked => {
+                app-clicked("music");
+            }
+        }
+    }
+}

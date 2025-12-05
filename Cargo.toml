@@ -18,7 +18,14 @@ layer-shika-composition.workspace = true
 
 [workspace]
 resolver = "2"
-members = ["crates/domain", "crates/adapters", "crates/composition"]
+members = [
+    "crates/domain",
+    "crates/adapters",
+    "crates/composition",
+    "examples/simple-bar",
+    "examples/multi-surface",
+    "examples/declarative-config",
+]
 
 [workspace.package]
 version = "0.1.0"
