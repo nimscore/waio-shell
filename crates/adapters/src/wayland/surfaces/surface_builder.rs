@@ -13,7 +13,7 @@ use crate::errors::{LayerShikaError, Result};
 use crate::rendering::femtovg::main_window::FemtoVGWindow;
 use crate::rendering::slint_integration::platform::CustomSlintPlatform;
 
-use super::surface_state::WindowState;
+use super::surface_state::SurfaceState;
 
 pub struct PlatformWrapper(pub Rc<CustomSlintPlatform>);
 
@@ -23,7 +23,7 @@ impl Platform for PlatformWrapper {
     }
 }
 
-pub struct WindowStateBuilder {
+pub struct SurfaceStateBuilder {
     pub component_definition: Option<ComponentDefinition>,
     pub compilation_result: Option<Rc<CompilationResult>>,
     pub surface: Option<Rc<WlSurface>>,
@@ -41,7 +41,7 @@ pub struct WindowStateBuilder {
     pub exclusive_zone: i32,
 }
 
-impl WindowStateBuilder {
+impl SurfaceStateBuilder {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -140,7 +140,7 @@ impl WindowStateBuilder {
         self
     }
 
-    pub fn build(self) -> Result<(WindowState, Rc<CustomSlintPlatform>)> {
+    pub fn build(self) -> Result<(SurfaceState, Rc<CustomSlintPlatform>)> {
         let platform = CustomSlintPlatform::new(self.window.as_ref().ok_or_else(|| {
             LayerShikaError::InvalidInput {
                 message: "Window is required".into(),
@@ -149,12 +149,12 @@ impl WindowStateBuilder {
         set_platform(Box::new(PlatformWrapper(Rc::clone(&platform))))
             .map_err(|e| LayerShikaError::PlatformSetup { source: e })?;
 
-        let state = WindowState::new(self)?;
+        let state = SurfaceState::new(self)?;
         Ok((state, platform))
     }
 }
 
-impl Default for WindowStateBuilder {
+impl Default for SurfaceStateBuilder {
     fn default() -> Self {
         Self {
             component_definition: None,

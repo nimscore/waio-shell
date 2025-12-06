@@ -33,8 +33,8 @@ fn main() -> Result<()> {
     let handle = shell.event_loop_handle();
 
     let (_token, sender) = handle.add_channel(|message: UiMessage, app_state| {
-        for window in app_state.all_outputs() {
-            let component = window.component_instance();
+        for surface in app_state.all_outputs() {
+            let component = surface.component_instance();
 
             match &message {
                 UiMessage::UpdateStatus(status) => {
@@ -72,8 +72,8 @@ fn main() -> Result<()> {
     handle.add_timer(Duration::from_secs(1), |_instant, app_state| {
         let time_str = current_time_string();
 
-        for window in app_state.all_outputs() {
-            if let Err(e) = window
+        for surface in app_state.all_outputs() {
+            if let Err(e) = surface
                 .component_instance()
                 .set_property("time", Value::String(time_str.clone().into()))
             {

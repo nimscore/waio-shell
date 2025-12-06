@@ -8,5 +8,5 @@ pub mod popup_manager;
 pub mod popup_surface;
 pub mod rendering_state;
 pub mod surface_builder;
+pub mod surface_renderer;
 pub mod surface_state;
-pub mod window_renderer;

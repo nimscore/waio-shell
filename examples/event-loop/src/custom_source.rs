@@ -56,8 +56,8 @@ fn main() -> Result<()> {
 
         let status_text = format!("Events received: {count}");
 
-        for window in app_state.all_outputs() {
-            let component = window.component_instance();
+        for surface in app_state.all_outputs() {
+            let component = surface.component_instance();
             if let Err(e) = component.set_property("counter", Value::Number(f64::from(count))) {
                 log::error!("Failed to set counter: {e}");
             }
@@ -88,8 +88,8 @@ fn main() -> Result<()> {
     handle.add_timer(Duration::from_secs(1), |_instant, app_state| {
         let time_str = current_time_string();
 
-        for window in app_state.all_outputs() {
-            if let Err(e) = window
+        for surface in app_state.all_outputs() {
+            if let Err(e) = surface
                 .component_instance()
                 .set_property("time", Value::String(time_str.clone().into()))
             {

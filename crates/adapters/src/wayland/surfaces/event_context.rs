@@ -42,7 +42,7 @@ pub struct EventContext {
     current_pointer_position: LogicalPosition,
     last_pointer_serial: u32,
     shared_pointer_serial: Option<Rc<SharedPointerSerial>>,
-    active_window: ActiveWindow,
+    active_surface: ActiveWindow,
 }
 
 impl EventContext {
@@ -60,7 +60,7 @@ impl EventContext {
             current_pointer_position: LogicalPosition::new(0.0, 0.0),
             last_pointer_serial: 0,
             shared_pointer_serial: None,
-            active_window: ActiveWindow::None,
+            active_surface: ActiveWindow::None,
         }
     }
 
@@ -126,7 +126,7 @@ impl EventContext {
     }
 
     pub fn set_entered_surface(&mut self, surface: &WlSurface) {
-        self.active_window = if let Some(popup_manager) = &self.popup_manager {
+        self.active_surface = if let Some(popup_manager) = &self.popup_manager {
             popup_manager.get_active_window(surface, &self.main_surface_id)
         } else {
             let surface_id = surface.id();
@@ -139,18 +139,18 @@ impl EventContext {
     }
 
     pub fn clear_entered_surface(&mut self) {
-        self.active_window = ActiveWindow::None;
+        self.active_surface = ActiveWindow::None;
     }
 
     pub fn dispatch_to_active_window(&self, event: WindowEvent) {
-        match self.active_window {
+        match self.active_surface {
             ActiveWindow::Main => {
                 self.main_window.window().dispatch_event(event);
             }
             ActiveWindow::Popup(handle) => {
                 if let Some(popup_manager) = &self.popup_manager {
-                    if let Some(popup_window) = popup_manager.get_popup_window(handle.key()) {
-                        popup_window.dispatch_event(event);
+                    if let Some(popup_surface) = popup_manager.get_popup_window(handle.key()) {
+                        popup_surface.dispatch_event(event);
                     }
                 }
             }

@@ -105,8 +105,7 @@ impl GlobalContext {
             info!("Viewporter protocol not available");
         }
 
-        let render_context_manager =
-            RenderContextManager::new(&connection.display().id())?;
+        let render_context_manager = RenderContextManager::new(&connection.display().id())?;
 
         Ok(Self {
             compositor,

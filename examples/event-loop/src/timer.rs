@@ -28,8 +28,8 @@ fn main() -> Result<()> {
     handle.add_timer(Duration::ZERO, |_instant, app_state| {
         let time_str = current_time_string();
 
-        for window in app_state.all_outputs() {
-            if let Err(e) = window
+        for surface in app_state.all_outputs() {
+            if let Err(e) = surface
                 .component_instance()
                 .set_property("time", Value::String(time_str.clone().into()))
             {
@@ -47,8 +47,8 @@ fn main() -> Result<()> {
         let count = counter.get() + 1;
         counter.set(count);
 
-        for window in app_state.all_outputs() {
-            if let Err(e) = window
+        for surface in app_state.all_outputs() {
+            if let Err(e) = surface
                 .component_instance()
                 .set_property("counter", Value::Number(f64::from(count)))
             {

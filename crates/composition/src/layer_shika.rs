@@ -11,7 +11,7 @@ use layer_shika_adapters::platform::slint_interpreter::{
     CompilationResult, Compiler, ComponentInstance, Value,
 };
 use layer_shika_adapters::{
-    AppState, ShellWindowConfig, WaylandWindowConfig, WindowState, WindowingSystemFacade,
+    AppState, ShellWindowConfig, WaylandWindowConfig, SurfaceState, ShellSystemFacade,
 };
 use layer_shika_domain::config::WindowConfig;
 use layer_shika_domain::entities::output_registry::OutputRegistry;
@@ -30,7 +30,7 @@ use std::rc::Rc;
 pub const DEFAULT_COMPONENT_NAME: &str = "Main";
 
 #[derive(Debug, Clone)]
-pub struct WindowDefinition {
+pub struct SurfaceDefinition {
     pub component: String,
     pub config: WindowConfig,
 }
@@ -43,12 +43,12 @@ enum CompilationSource {
 
 pub struct ShellBuilder {
     compilation: CompilationSource,
-    windows: Vec<WindowDefinition>,
+    windows: Vec<SurfaceDefinition>,
 }
 
 impl ShellBuilder {
-    pub fn window(self, component: impl Into<String>) -> WindowConfigBuilder {
-        WindowConfigBuilder {
+    pub fn window(self, component: impl Into<String>) -> SurfaceConfigBuilder {
+        SurfaceConfigBuilder {
             shell_builder: self,
             component: component.into(),
             config: WindowConfig::default(),
@@ -56,12 +56,12 @@ impl ShellBuilder {
     }
 
     #[must_use]
-    pub fn discover_windows(
+    pub fn discover_surfaces(
         mut self,
         components: impl IntoIterator<Item = impl Into<String>>,
     ) -> Self {
         for component in components {
-            self.windows.push(WindowDefinition {
+            self.surfaces.push(SurfaceDefinition {
                 component: component.into(),
                 config: WindowConfig::default(),
             });
@@ -70,13 +70,13 @@ impl ShellBuilder {
     }
 
     pub fn build(self) -> Result<Runtime> {
-        let windows = if self.windows.is_empty() {
-            vec![WindowDefinition {
+        let windows = if self.surfaces.is_empty() {
+            vec![SurfaceDefinition {
                 component: DEFAULT_COMPONENT_NAME.to_string(),
                 config: WindowConfig::default(),
             }]
         } else {
-            self.windows
+            self.surfaces
         };
 
         let compilation_result = match self.compilation {
@@ -120,13 +120,13 @@ impl ShellBuilder {
     }
 }
 
-pub struct WindowConfigBuilder {
+pub struct SurfaceConfigBuilder {
     shell_builder: ShellBuilder,
     component: String,
     config: WindowConfig,
 }
 
-impl WindowConfigBuilder {
+impl SurfaceConfigBuilder {
     #[must_use]
     pub fn size(mut self, width: u32, height: u32) -> Self {
         self.config.dimensions = WindowDimension::new(width, height);
@@ -194,7 +194,7 @@ impl WindowConfigBuilder {
     }
 
     #[must_use]
-    pub fn window(self, component: impl Into<String>) -> WindowConfigBuilder {
+    pub fn window(self, component: impl Into<String>) -> SurfaceConfigBuilder {
         let shell_builder = self.complete();
         shell_builder.window(component)
     }
@@ -209,7 +209,7 @@ impl WindowConfigBuilder {
     }
 
     fn complete(mut self) -> ShellBuilder {
-        self.shell_builder.windows.push(WindowDefinition {
+        self.shell_builder.surfaces.push(SurfaceDefinition {
             component: self.component,
             config: self.config,
         });
@@ -301,8 +301,8 @@ impl LayerShika {
 }
 
 pub struct Runtime {
-    inner: Rc<RefCell<WindowingSystemFacade>>,
-    windows: HashMap<String, WindowDefinition>,
+    inner: Rc<RefCell<ShellSystemFacade>>,
+    windows: HashMap<String, SurfaceDefinition>,
     compilation_result: Rc<CompilationResult>,
     popup_command_sender: channel::Sender<PopupCommand>,
 }
@@ -310,7 +310,7 @@ pub struct Runtime {
 impl Runtime {
     pub(crate) fn new(
         compilation_result: Rc<CompilationResult>,
-        definitions: Vec<WindowDefinition>,
+        definitions: Vec<SurfaceDefinition>,
     ) -> Result<Self> {
         log::info!(
             "Creating LayerShika runtime with {} windows",
@@ -339,7 +339,7 @@ impl Runtime {
 
     fn new_single_window(
         compilation_result: Rc<CompilationResult>,
-        definition: WindowDefinition,
+        definition: SurfaceDefinition,
     ) -> Result<Self> {
         let component_definition = compilation_result
             .component(&definition.component)
@@ -358,8 +358,8 @@ impl Runtime {
             definition.config.clone(),
         );
 
-        let inner = layer_shika_adapters::WaylandWindowingSystem::new(&wayland_config)?;
-        let facade = WindowingSystemFacade::new(inner);
+        let inner = layer_shika_adapters::WaylandShellSystem::new(&wayland_config)?;
+        let facade = ShellSystemFacade::new(inner);
         let inner_rc = Rc::new(RefCell::new(facade));
 
         let (sender, receiver) = channel::channel();
@@ -383,7 +383,7 @@ impl Runtime {
 
     fn new_multi_window(
         compilation_result: Rc<CompilationResult>,
-        definitions: Vec<WindowDefinition>,
+        definitions: Vec<SurfaceDefinition>,
     ) -> Result<Self> {
         let shell_configs: Vec<ShellWindowConfig> = definitions
             .iter()
@@ -412,8 +412,8 @@ impl Runtime {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let inner = layer_shika_adapters::WaylandWindowingSystem::new_multi(&shell_configs)?;
-        let facade = WindowingSystemFacade::new(inner);
+        let inner = layer_shika_adapters::WaylandShellSystem::new_multi(&shell_configs)?;
+        let facade = ShellSystemFacade::new(inner);
         let inner_rc = Rc::new(RefCell::new(facade));
 
         let (sender, receiver) = channel::channel();
@@ -434,7 +434,7 @@ impl Runtime {
 
         log::info!(
             "LayerShika runtime created (multi-window mode) with windows: {:?}",
-            shell.window_names()
+            shell.surface_names()
         );
 
         Ok(shell)
@@ -489,12 +489,12 @@ impl Runtime {
         ShellControl::new(self.popup_command_sender.clone())
     }
 
-    pub fn window_names(&self) -> Vec<&str> {
-        self.windows.keys().map(String::as_str).collect()
+    pub fn surface_names(&self) -> Vec<&str> {
+        self.surfaces.keys().map(String::as_str).collect()
     }
 
-    pub fn has_window(&self, name: &str) -> bool {
-        self.windows.contains_key(name)
+    pub fn has_surface(&self, name: &str) -> bool {
+        self.surfaces.contains_key(name)
     }
 
     pub fn event_loop_handle(&self) -> EventLoopHandle {
@@ -504,17 +504,17 @@ impl Runtime {
     pub fn run(&mut self) -> Result<()> {
         log::info!(
             "Starting LayerShika event loop with {} windows",
-            self.windows.len()
+            self.surfaces.len()
         );
         self.inner.borrow_mut().run()?;
         Ok(())
     }
 
-    pub fn with_window<F, R>(&self, name: &str, f: F) -> Result<R>
+    pub fn with_surface<F, R>(&self, name: &str, f: F) -> Result<R>
     where
         F: FnOnce(&ComponentInstance) -> R,
     {
-        if !self.windows.contains_key(name) {
+        if !self.surfaces.contains_key(name) {
             return Err(Error::Domain(DomainError::Configuration {
                 message: format!("Window '{}' not found", name),
             }));
@@ -527,7 +527,7 @@ impl Runtime {
             .app_state()
             .windows_by_shell_name(name)
             .next()
-            .map(|window| f(window.component_instance()))
+            .map(|surface| f(surface.component_instance()))
             .ok_or_else(|| {
                 Error::Domain(DomainError::Configuration {
                     message: format!("No instance found for window '{}'", name),
@@ -535,16 +535,16 @@ impl Runtime {
             })
     }
 
-    pub fn with_all_windows<F>(&self, mut f: F)
+    pub fn with_all_surfaces<F>(&self, mut f: F)
     where
         F: FnMut(&str, &ComponentInstance),
     {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        for name in self.windows.keys() {
-            for window in system.app_state().windows_by_shell_name(name) {
-                f(name, window.component_instance());
+        for name in self.surfaces.keys() {
+            for surface in system.app_state().windows_by_shell_name(name) {
+                f(name, surface.component_instance());
             }
         }
     }
@@ -563,7 +563,7 @@ impl Runtime {
                     message: format!("Output with handle {:?} not found", handle),
                 })
             })?;
-        Ok(f(window.component_instance()))
+        Ok(f(surface.component_instance()))
     }
 
     pub fn with_all_outputs<F>(&self, mut f: F)
@@ -572,8 +572,8 @@ impl Runtime {
     {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
-        for (handle, window) in system.app_state().outputs_with_handles() {
-            f(handle, window.component_instance());
+        for (handle, surface) in system.app_state().outputs_with_handles() {
+            f(handle, surface.component_instance());
         }
     }
 
@@ -587,14 +587,14 @@ impl Runtime {
         PopupBuilder::new(self, component_name.into())
     }
 
-    pub fn on<F, R>(&self, window_name: &str, callback_name: &str, handler: F) -> Result<()>
+    pub fn on<F, R>(&self, surface_name: &str, callback_name: &str, handler: F) -> Result<()>
     where
         F: Fn(ShellControl) -> R + 'static,
         R: IntoValue,
     {
-        if !self.windows.contains_key(window_name) {
+        if !self.surfaces.contains_key(surface_name) {
             return Err(Error::Domain(DomainError::Configuration {
-                message: format!("Window '{}' not found", window_name),
+                message: format!("Window '{}' not found", surface_name),
             }));
         }
 
@@ -603,7 +603,7 @@ impl Runtime {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        for window in system.app_state().windows_by_shell_name(window_name) {
+        for surface in system.app_state().windows_by_shell_name(surface_name) {
             let handler_rc = Rc::clone(&handler);
             let control_clone = control.clone();
             if let Err(e) = window
@@ -615,7 +615,7 @@ impl Runtime {
                 log::error!(
                     "Failed to register callback '{}' on window '{}': {}",
                     callback_name,
-                    window_name,
+                    surface_name,
                     e
                 );
             }
@@ -626,7 +626,7 @@ impl Runtime {
 
     pub fn on_with_args<F, R>(
         &self,
-        window_name: &str,
+        surface_name: &str,
         callback_name: &str,
         handler: F,
     ) -> Result<()>
@@ -634,9 +634,9 @@ impl Runtime {
         F: Fn(&[Value], ShellControl) -> R + 'static,
         R: IntoValue,
     {
-        if !self.windows.contains_key(window_name) {
+        if !self.surfaces.contains_key(surface_name) {
             return Err(Error::Domain(DomainError::Configuration {
-                message: format!("Window '{}' not found", window_name),
+                message: format!("Window '{}' not found", surface_name),
             }));
         }
 
@@ -645,7 +645,7 @@ impl Runtime {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        for window in system.app_state().windows_by_shell_name(window_name) {
+        for surface in system.app_state().windows_by_shell_name(surface_name) {
             let handler_rc = Rc::clone(&handler);
             let control_clone = control.clone();
             if let Err(e) = window
@@ -657,7 +657,7 @@ impl Runtime {
                 log::error!(
                     "Failed to register callback '{}' on window '{}': {}",
                     callback_name,
-                    window_name,
+                    surface_name,
                     e
                 );
             }
@@ -676,7 +676,7 @@ impl Runtime {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        for window in system.app_state().all_outputs() {
+        for surface in system.app_state().all_outputs() {
             let handler_rc = Rc::clone(&handler);
             let control_clone = control.clone();
             if let Err(e) = window
@@ -706,7 +706,7 @@ impl Runtime {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        for window in system.app_state().all_outputs() {
+        for surface in system.app_state().all_outputs() {
             let handler_rc = Rc::clone(&handler);
             let control_clone = control.clone();
             if let Err(e) = window
@@ -726,17 +726,17 @@ impl Runtime {
         Ok(())
     }
 
-    pub fn apply_window_config<F>(&self, window_name: &str, f: F)
+    pub fn apply_surface_config<F>(&self, surface_name: &str, f: F)
     where
         F: Fn(&ComponentInstance, LayerSurfaceHandle<'_>),
     {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        if self.windows.contains_key(window_name) {
-            for window in system.app_state().windows_by_shell_name(window_name) {
-                let surface_handle = LayerSurfaceHandle::from_window_state(window);
-                f(window.component_instance(), surface_handle);
+        if self.surfaces.contains_key(surface_name) {
+            for surface in system.app_state().windows_by_shell_name(surface_name) {
+                let surface_handle = LayerSurfaceHandle::from_window_state(surface);
+                f(surface.component_instance(), surface_handle);
             }
         }
     }
@@ -748,9 +748,9 @@ impl Runtime {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        for window in system.app_state().all_outputs() {
-            let surface_handle = LayerSurfaceHandle::from_window_state(window);
-            f(window.component_instance(), surface_handle);
+        for surface in system.app_state().all_outputs() {
+            let surface_handle = LayerSurfaceHandle::from_window_state(surface);
+            f(surface.component_instance(), surface_handle);
         }
     }
 
@@ -788,9 +788,9 @@ impl ShellRuntime for Runtime {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        if self.windows.contains_key(name) {
-            for window in system.app_state().windows_by_shell_name(name) {
-                f(window.component_instance());
+        if self.surfaces.contains_key(name) {
+            for surface in system.app_state().windows_by_shell_name(name) {
+                f(surface.component_instance());
             }
         }
     }
@@ -802,9 +802,9 @@ impl ShellRuntime for Runtime {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
 
-        for name in self.windows.keys() {
-            for window in system.app_state().windows_by_shell_name(name) {
-                f(name, window.component_instance());
+        for name in self.surfaces.keys() {
+            for surface in system.app_state().windows_by_shell_name(name) {
+                f(name, surface.component_instance());
             }
         }
     }
@@ -828,22 +828,22 @@ impl<'a> FromAppState<'a> for EventContext<'a> {
 }
 
 impl EventContext<'_> {
-    pub fn get_window_component(&self, name: &str) -> Option<&ComponentInstance> {
+    pub fn get_surface_component(&self, name: &str) -> Option<&ComponentInstance> {
         self.app_state
             .windows_by_shell_name(name)
             .next()
-            .map(WindowState::component_instance)
+            .map(SurfaceState::component_instance)
     }
 
-    pub fn all_window_components(&self) -> impl Iterator<Item = &ComponentInstance> {
+    pub fn all_surface_components(&self) -> impl Iterator<Item = &ComponentInstance> {
         self.app_state
             .all_outputs()
-            .map(WindowState::component_instance)
+            .map(SurfaceState::component_instance)
     }
 
     pub fn render_frame_if_dirty(&mut self) -> Result<()> {
-        for window in self.app_state.all_outputs() {
-            window.render_frame_if_dirty()?;
+        for surface in self.app_state.all_outputs() {
+            surface.render_frame_if_dirty()?;
         }
         Ok(())
     }
@@ -865,13 +865,13 @@ impl EventContext<'_> {
     pub fn outputs(&self) -> impl Iterator<Item = (OutputHandle, &ComponentInstance)> {
         self.app_state
             .outputs_with_handles()
-            .map(|(handle, window)| (handle, window.component_instance()))
+            .map(|(handle, surface)| (handle, surface.component_instance()))
     }
 
     pub fn get_output_component(&self, handle: OutputHandle) -> Option<&ComponentInstance> {
         self.app_state
             .get_output_by_handle(handle)
-            .map(WindowState::component_instance)
+            .map(SurfaceState::component_instance)
     }
 
     pub fn get_output_info(&self, handle: OutputHandle) -> Option<&OutputInfo> {
@@ -885,13 +885,13 @@ impl EventContext<'_> {
     pub fn outputs_with_info(&self) -> impl Iterator<Item = (&OutputInfo, &ComponentInstance)> {
         self.app_state
             .outputs_with_info()
-            .map(|(info, window)| (info, window.component_instance()))
+            .map(|(info, surface)| (info, surface.component_instance()))
     }
 
     #[must_use]
     pub fn compilation_result(&self) -> Option<Rc<CompilationResult>> {
         self.app_state
             .primary_output()
-            .and_then(WindowState::compilation_result)
+            .and_then(SurfaceState::compilation_result)
     }
 }

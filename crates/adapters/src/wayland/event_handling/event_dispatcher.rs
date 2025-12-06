@@ -1,4 +1,4 @@
-use crate::wayland::surfaces::surface_state::WindowState;
+use crate::wayland::surfaces::surface_state::SurfaceState;
 use log::info;
 use slint::{
     PhysicalSize,
@@ -24,7 +24,7 @@ use wayland_protocols::xdg::shell::client::{
     xdg_wm_base::XdgWmBase,
 };
 
-impl WindowState {
+impl SurfaceState {
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_sign_loss)]
     #[allow(clippy::cast_precision_loss)]

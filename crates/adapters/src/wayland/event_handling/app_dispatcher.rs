@@ -1,6 +1,6 @@
 use crate::wayland::surfaces::app_state::AppState;
 use crate::wayland::surfaces::display_metrics::DisplayMetrics;
-use crate::wayland::surfaces::surface_state::WindowState;
+use crate::wayland::surfaces::surface_state::SurfaceState;
 use layer_shika_domain::value_objects::output_info::OutputGeometry;
 use log::{debug, info};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
@@ -50,7 +50,7 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for AppState {
                 height,
             } => {
                 let layer_surface_id = layer_surface.id();
-                let Some(window) = state.get_output_by_layer_surface_mut(&layer_surface_id) else {
+                let Some(surface) = state.get_output_by_layer_surface_mut(&layer_surface_id) else {
                     info!(
                         "Could not find window for layer surface {:?}",
                         layer_surface_id
@@ -58,12 +58,12 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for AppState {
                     return;
                 };
 
-                window.handle_layer_surface_configure(layer_surface, serial, width, height);
+                surface.handle_layer_surface_configure(layer_surface, serial, width, height);
             }
             zwlr_layer_surface_v1::Event::Closed => {
                 let layer_surface_id = layer_surface.id();
-                if let Some(window) = state.get_output_by_layer_surface_mut(&layer_surface_id) {
-                    window.handle_layer_surface_closed();
+                if let Some(surface) = state.get_output_by_layer_surface_mut(&layer_surface_id) {
+                    surface.handle_layer_surface_closed();
                 }
             }
             _ => {}
@@ -98,8 +98,8 @@ impl Dispatch<WlOutput, ()> for AppState {
                     width, height, is_current, is_preferred
                 );
                 if is_current {
-                    for window in state.all_windows_for_output_mut(&output_id) {
-                        window.handle_output_mode(width, height);
+                    for surface in state.all_surfaces_for_output_mut(&output_id) {
+                        surface.handle_output_mode(width, height);
                     }
                 }
             }
@@ -203,13 +203,13 @@ impl Dispatch<WlPointer, ()> for AppState {
                 let surface_id = surface.id();
 
                 if let Some(key) = state.get_key_by_surface(&surface_id).cloned() {
-                    if let Some(window) = state.get_window_by_key_mut(&key) {
-                        window.handle_pointer_enter(serial, &surface, surface_x, surface_y);
+                    if let Some(layer_surface) = state.get_surface_by_key_mut(&key) {
+                        layer_surface.handle_pointer_enter(serial, &surface, surface_x, surface_y);
                     }
                     state.set_active_surface_key(Some(key));
                 } else if let Some(key) = state.get_key_by_popup(&surface_id).cloned() {
-                    if let Some(window) = state.get_window_by_key_mut(&key) {
-                        window.handle_pointer_enter(serial, &surface, surface_x, surface_y);
+                    if let Some(layer_surface) = state.get_surface_by_key_mut(&key) {
+                        layer_surface.handle_pointer_enter(serial, &surface, surface_x, surface_y);
                     }
                     state.set_active_surface_key(Some(key));
                 }
@@ -220,14 +220,14 @@ impl Dispatch<WlPointer, ()> for AppState {
                 surface_y,
                 ..
             } => {
-                if let Some(window) = state.active_surface_mut() {
-                    window.handle_pointer_motion(surface_x, surface_y);
+                if let Some(surface) = state.active_surface_mut() {
+                    surface.handle_pointer_motion(surface_x, surface_y);
                 }
             }
 
             wl_pointer::Event::Leave { .. } => {
-                if let Some(window) = state.active_surface_mut() {
-                    window.handle_pointer_leave();
+                if let Some(surface) = state.active_surface_mut() {
+                    surface.handle_pointer_leave();
                 }
                 state.set_active_surface_key(None);
             }
@@ -237,8 +237,8 @@ impl Dispatch<WlPointer, ()> for AppState {
                 state: button_state,
                 ..
             } => {
-                if let Some(window) = state.active_surface_mut() {
-                    window.handle_pointer_button(serial, button_state);
+                if let Some(surface) = state.active_surface_mut() {
+                    surface.handle_pointer_button(serial, button_state);
                 }
             }
             _ => {}
@@ -259,8 +259,8 @@ impl Dispatch<WpFractionalScaleV1, ()> for AppState {
             let scale_float = DisplayMetrics::scale_factor_from_120ths(scale);
             info!("Fractional scale received: {scale_float} ({scale}x)");
 
-            for window in state.all_outputs_mut() {
-                window.handle_fractional_scale(proxy, scale);
+            for surface in state.all_outputs_mut() {
+                surface.handle_fractional_scale(proxy, scale);
             }
         }
     }
@@ -276,7 +276,7 @@ impl Dispatch<XdgWmBase, ()> for AppState {
         _qhandle: &QueueHandle<Self>,
     ) {
         if let xdg_wm_base::Event::Ping { serial } = event {
-            WindowState::handle_xdg_wm_base_ping(xdg_wm_base, serial);
+            SurfaceState::handle_xdg_wm_base_ping(xdg_wm_base, serial);
         }
     }
 }
@@ -298,10 +298,10 @@ impl Dispatch<XdgPopup, ()> for AppState {
                 height,
             } => {
                 let popup_id = xdg_popup.id();
-                for window in state.all_outputs_mut() {
-                    if let Some(popup_manager) = window.popup_manager() {
+                for surface in state.all_outputs_mut() {
+                    if let Some(popup_manager) = surface.popup_manager() {
                         if popup_manager.find_by_xdg_popup(&popup_id).is_some() {
-                            window.handle_xdg_popup_configure(xdg_popup, x, y, width, height);
+                            surface.handle_xdg_popup_configure(xdg_popup, x, y, width, height);
                             break;
                         }
                     }
@@ -311,14 +311,14 @@ impl Dispatch<XdgPopup, ()> for AppState {
                 info!("XdgPopup dismissed by compositor");
                 let popup_id = xdg_popup.id();
 
-                for window in state.all_outputs_mut() {
-                    let popup_handle = window
+                for surface in state.all_outputs_mut() {
+                    let popup_handle = surface
                         .popup_manager()
                         .as_ref()
                         .and_then(|pm| pm.find_by_xdg_popup(&popup_id));
 
                     if popup_handle.is_some() {
-                        window.handle_xdg_popup_done(xdg_popup);
+                        surface.handle_xdg_popup_done(xdg_popup);
                         break;
                     }
                 }
@@ -327,8 +327,8 @@ impl Dispatch<XdgPopup, ()> for AppState {
                 info!("XdgPopup repositioned with token {token}");
 
                 let popup_id = xdg_popup.id();
-                for window in state.all_outputs_mut() {
-                    if let Some(popup_manager) = window.popup_manager() {
+                for surface in state.all_outputs_mut() {
+                    if let Some(popup_manager) = surface.popup_manager() {
                         if let Some(handle) = popup_manager.find_by_xdg_popup(&popup_id) {
                             info!("Committing popup surface after reposition");
                             popup_manager.commit_popup_surface(handle.key());
@@ -353,10 +353,10 @@ impl Dispatch<XdgSurface, ()> for AppState {
     ) {
         if let xdg_surface::Event::Configure { serial } = event {
             let xdg_surface_id = xdg_surface.id();
-            for window in state.all_outputs_mut() {
-                if let Some(popup_manager) = window.popup_manager() {
+            for surface in state.all_outputs_mut() {
+                if let Some(popup_manager) = surface.popup_manager() {
                     if popup_manager.find_by_xdg_surface(&xdg_surface_id).is_some() {
-                        window.handle_xdg_surface_configure(xdg_surface, serial);
+                        surface.handle_xdg_surface_configure(xdg_surface, serial);
                         break;
                     }
                 }

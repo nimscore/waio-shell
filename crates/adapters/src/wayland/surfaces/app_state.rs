@@ -1,5 +1,5 @@
 use super::event_context::SharedPointerSerial;
-use super::surface_state::WindowState;
+use super::surface_state::SurfaceState;
 use crate::wayland::managed_proxies::ManagedWlPointer;
 use crate::wayland::outputs::{OutputManager, OutputMapping};
 use layer_shika_domain::entities::output_registry::OutputRegistry;
@@ -11,7 +11,7 @@ use std::rc::Rc;
 use wayland_client::Proxy;
 use wayland_client::backend::ObjectId;
 
-pub type PerOutputWindow = WindowState;
+pub type PerOutputSurface = SurfaceState;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ShellSurfaceKey {
@@ -31,7 +31,7 @@ impl ShellSurfaceKey {
 pub struct AppState {
     output_registry: OutputRegistry,
     output_mapping: OutputMapping,
-    surfaces: HashMap<ShellSurfaceKey, PerOutputWindow>,
+    surfaces: HashMap<ShellSurfaceKey, PerOutputSurface>,
     surface_to_key: HashMap<ObjectId, ShellSurfaceKey>,
     _pointer: ManagedWlPointer,
     shared_pointer_serial: Rc<SharedPointerSerial>,
@@ -80,7 +80,7 @@ impl AppState {
         output_id: &ObjectId,
         surface_name: &str,
         main_surface_id: ObjectId,
-        surface_state: PerOutputWindow,
+        surface_state: PerOutputSurface,
     ) {
         let handle = self.output_mapping.get(output_id).unwrap_or_else(|| {
             let h = self.output_mapping.insert(output_id.clone());
@@ -101,12 +101,12 @@ impl AppState {
         output_id: &ObjectId,
         surface_name: &str,
         main_surface_id: ObjectId,
-        surface_state: PerOutputWindow,
+        surface_state: PerOutputSurface,
     ) {
         self.add_shell_surface(output_id, surface_name, main_surface_id, surface_state);
     }
 
-    pub fn remove_output(&mut self, handle: OutputHandle) -> Vec<PerOutputWindow> {
+    pub fn remove_output(&mut self, handle: OutputHandle) -> Vec<PerOutputSurface> {
         self.output_registry.remove(handle);
 
         let keys_to_remove: Vec<_> = self
@@ -118,8 +118,8 @@ impl AppState {
 
         let mut removed = Vec::new();
         for key in keys_to_remove {
-            if let Some(window) = self.surfaces.remove(&key) {
-                removed.push(window);
+            if let Some(surface) = self.surfaces.remove(&key) {
+                removed.push(surface);
             }
         }
 
@@ -128,65 +128,68 @@ impl AppState {
         removed
     }
 
-    pub fn get_window_by_key(&self, key: &ShellSurfaceKey) -> Option<&PerOutputWindow> {
+    pub fn get_surface_by_key(&self, key: &ShellSurfaceKey) -> Option<&PerOutputSurface> {
         self.surfaces.get(key)
     }
 
-    pub fn get_window_by_key_mut(&mut self, key: &ShellSurfaceKey) -> Option<&mut PerOutputWindow> {
+    pub fn get_surface_by_key_mut(
+        &mut self,
+        key: &ShellSurfaceKey,
+    ) -> Option<&mut PerOutputSurface> {
         self.surfaces.get_mut(key)
     }
 
-    pub fn get_window_by_name(
+    pub fn get_surface_by_name(
         &self,
         output_handle: OutputHandle,
         shell_window_name: &str,
-    ) -> Option<&PerOutputWindow> {
+    ) -> Option<&PerOutputSurface> {
         let key = ShellSurfaceKey::new(output_handle, shell_window_name);
         self.surfaces.get(&key)
     }
 
-    pub fn get_window_by_name_mut(
+    pub fn get_surface_by_name_mut(
         &mut self,
         output_handle: OutputHandle,
         shell_window_name: &str,
-    ) -> Option<&mut PerOutputWindow> {
+    ) -> Option<&mut PerOutputSurface> {
         let key = ShellSurfaceKey::new(output_handle, shell_window_name);
         self.surfaces.get_mut(&key)
     }
 
-    pub fn get_output_by_output_id(&self, output_id: &ObjectId) -> Option<&PerOutputWindow> {
+    pub fn get_output_by_output_id(&self, output_id: &ObjectId) -> Option<&PerOutputSurface> {
         self.output_mapping
             .get(output_id)
-            .and_then(|handle| self.get_first_window_for_output(handle))
+            .and_then(|handle| self.get_first_surface_for_output(handle))
     }
 
     pub fn get_output_by_output_id_mut(
         &mut self,
         output_id: &ObjectId,
-    ) -> Option<&mut PerOutputWindow> {
+    ) -> Option<&mut PerOutputSurface> {
         self.output_mapping
             .get(output_id)
-            .and_then(|handle| self.get_first_window_for_output_mut(handle))
+            .and_then(|handle| self.get_first_surface_for_output_mut(handle))
     }
 
-    fn get_first_window_for_output(&self, handle: OutputHandle) -> Option<&PerOutputWindow> {
+    fn get_first_surface_for_output(&self, handle: OutputHandle) -> Option<&PerOutputSurface> {
         self.surfaces
             .iter()
             .find(|(k, _)| k.output_handle == handle)
             .map(|(_, v)| v)
     }
 
-    fn get_first_window_for_output_mut(
+    fn get_first_surface_for_output_mut(
         &mut self,
         handle: OutputHandle,
-    ) -> Option<&mut PerOutputWindow> {
+    ) -> Option<&mut PerOutputSurface> {
         self.surfaces
             .iter_mut()
             .find(|(k, _)| k.output_handle == handle)
             .map(|(_, v)| v)
     }
 
-    pub fn get_output_by_surface(&self, surface_id: &ObjectId) -> Option<&PerOutputWindow> {
+    pub fn get_output_by_surface(&self, surface_id: &ObjectId) -> Option<&PerOutputSurface> {
         self.surface_to_key
             .get(surface_id)
             .and_then(|key| self.surfaces.get(key))
@@ -195,7 +198,7 @@ impl AppState {
     pub fn get_output_by_surface_mut(
         &mut self,
         surface_id: &ObjectId,
-    ) -> Option<&mut PerOutputWindow> {
+    ) -> Option<&mut PerOutputSurface> {
         self.surface_to_key
             .get(surface_id)
             .and_then(|key| self.surfaces.get_mut(key))
@@ -204,10 +207,10 @@ impl AppState {
     pub fn get_output_by_layer_surface_mut(
         &mut self,
         layer_surface_id: &ObjectId,
-    ) -> Option<&mut PerOutputWindow> {
+    ) -> Option<&mut PerOutputSurface> {
         self.surfaces
             .values_mut()
-            .find(|window| window.layer_surface().as_ref().id() == *layer_surface_id)
+            .find(|surface| surface.layer_surface().as_ref().id() == *layer_surface_id)
     }
 
     pub fn get_key_by_surface(&self, surface_id: &ObjectId) -> Option<&ShellSurfaceKey> {
@@ -245,46 +248,48 @@ impl AppState {
         self.active_surface_key.as_ref()
     }
 
-    pub fn active_surface_mut(&mut self) -> Option<&mut PerOutputWindow> {
+    pub fn active_surface_mut(&mut self) -> Option<&mut PerOutputSurface> {
         let key = self.active_surface_key.clone()?;
         self.surfaces.get_mut(&key)
     }
 
-    pub fn primary_output(&self) -> Option<&PerOutputWindow> {
+    pub fn primary_output(&self) -> Option<&PerOutputSurface> {
         self.output_registry
             .primary_handle()
-            .and_then(|handle| self.get_first_window_for_output(handle))
+            .and_then(|handle| self.get_first_surface_for_output(handle))
     }
 
     pub fn primary_output_handle(&self) -> Option<OutputHandle> {
         self.output_registry.primary_handle()
     }
 
-    pub fn active_output(&self) -> Option<&PerOutputWindow> {
+    pub fn active_output(&self) -> Option<&PerOutputSurface> {
         self.output_registry
             .active_handle()
-            .and_then(|handle| self.get_first_window_for_output(handle))
+            .and_then(|handle| self.get_first_surface_for_output(handle))
     }
 
-    pub fn all_outputs(&self) -> impl Iterator<Item = &PerOutputWindow> {
+    pub fn all_outputs(&self) -> impl Iterator<Item = &PerOutputSurface> {
         self.surfaces.values()
     }
 
-    pub fn all_outputs_mut(&mut self) -> impl Iterator<Item = &mut PerOutputWindow> {
+    pub fn all_outputs_mut(&mut self) -> impl Iterator<Item = &mut PerOutputSurface> {
         self.surfaces.values_mut()
     }
 
-    pub fn windows_for_output(
+    pub fn surfaces_for_output(
         &self,
         handle: OutputHandle,
-    ) -> impl Iterator<Item = (&str, &PerOutputWindow)> {
+    ) -> impl Iterator<Item = (&str, &PerOutputSurface)> {
         self.surfaces
             .iter()
             .filter(move |(k, _)| k.output_handle == handle)
             .map(|(k, v)| (k.surface_name.as_str(), v))
     }
 
-    pub fn windows_with_keys(&self) -> impl Iterator<Item = (&ShellSurfaceKey, &PerOutputWindow)> {
+    pub fn surfaces_with_keys(
+        &self,
+    ) -> impl Iterator<Item = (&ShellSurfaceKey, &PerOutputSurface)> {
         self.surfaces.iter()
     }
 
@@ -292,9 +297,9 @@ impl AppState {
         &self.shared_pointer_serial
     }
 
-    pub fn find_output_by_popup(&self, popup_surface_id: &ObjectId) -> Option<&PerOutputWindow> {
-        self.surfaces.values().find(|window| {
-            window
+    pub fn find_output_by_popup(&self, popup_surface_id: &ObjectId) -> Option<&PerOutputSurface> {
+        self.surfaces.values().find(|surface| {
+            surface
                 .popup_manager()
                 .as_ref()
                 .and_then(|pm| pm.find_by_surface(popup_surface_id))
@@ -305,9 +310,9 @@ impl AppState {
     pub fn find_output_by_popup_mut(
         &mut self,
         popup_surface_id: &ObjectId,
-    ) -> Option<&mut PerOutputWindow> {
-        self.surfaces.values_mut().find(|window| {
-            window
+    ) -> Option<&mut PerOutputSurface> {
+        self.surfaces.values_mut().find(|surface| {
+            surface
                 .popup_manager()
                 .as_ref()
                 .and_then(|pm| pm.find_by_surface(popup_surface_id))
@@ -316,8 +321,8 @@ impl AppState {
     }
 
     pub fn get_key_by_popup(&self, popup_surface_id: &ObjectId) -> Option<&ShellSurfaceKey> {
-        self.surfaces.iter().find_map(|(key, window)| {
-            window
+        self.surfaces.iter().find_map(|(key, surface)| {
+            surface
                 .popup_manager()
                 .as_ref()
                 .and_then(|pm| pm.find_by_surface(popup_surface_id))
@@ -333,8 +338,8 @@ impl AppState {
     pub fn get_output_by_handle_mut(
         &mut self,
         handle: OutputHandle,
-    ) -> Option<&mut PerOutputWindow> {
-        self.get_first_window_for_output_mut(handle)
+    ) -> Option<&mut PerOutputSurface> {
+        self.get_first_surface_for_output_mut(handle)
     }
 
     pub fn get_output_info(&self, handle: OutputHandle) -> Option<&OutputInfo> {
@@ -364,35 +369,35 @@ impl AppState {
         names
     }
 
-    pub fn surfaces_by_name(&self, surface_name: &str) -> impl Iterator<Item = &PerOutputWindow> {
+    pub fn surfaces_by_name(&self, surface_name: &str) -> impl Iterator<Item = &PerOutputSurface> {
         self.surfaces
             .iter()
             .filter(move |(k, _)| k.surface_name == surface_name)
             .map(|(_, v)| v)
     }
 
-    pub fn get_output_by_handle(&self, handle: OutputHandle) -> Option<&PerOutputWindow> {
-        self.get_first_window_for_output(handle)
+    pub fn get_output_by_handle(&self, handle: OutputHandle) -> Option<&PerOutputSurface> {
+        self.get_first_surface_for_output(handle)
     }
 
-    pub fn outputs_with_handles(&self) -> impl Iterator<Item = (OutputHandle, &PerOutputWindow)> {
+    pub fn outputs_with_handles(&self) -> impl Iterator<Item = (OutputHandle, &PerOutputSurface)> {
         self.surfaces
             .iter()
-            .map(|(key, window)| (key.output_handle, window))
+            .map(|(key, surface)| (key.output_handle, surface))
     }
 
-    pub fn outputs_with_info(&self) -> impl Iterator<Item = (&OutputInfo, &PerOutputWindow)> {
+    pub fn outputs_with_info(&self) -> impl Iterator<Item = (&OutputInfo, &PerOutputSurface)> {
         self.output_registry.all_info().filter_map(|info| {
             let handle = info.handle();
-            self.get_first_window_for_output(handle)
-                .map(|window| (info, window))
+            self.get_first_surface_for_output(handle)
+                .map(|surface| (info, surface))
         })
     }
 
-    pub fn all_windows_for_output_mut(
+    pub fn all_surfaces_for_output_mut(
         &mut self,
         output_id: &ObjectId,
-    ) -> Vec<&mut PerOutputWindow> {
+    ) -> Vec<&mut PerOutputSurface> {
         let Some(handle) = self.output_mapping.get(output_id) else {
             return Vec::new();
         };

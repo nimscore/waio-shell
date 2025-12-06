@@ -11,7 +11,7 @@
 pub use crate::shell::{
     CompiledUiSource, DEFAULT_COMPONENT_NAME, DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Shell,
     ShellBuilder, ShellConfig, ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime,
-    ShellSurfaceConfigHandler, ShellSurfaceHandle, SingleWindowShell, SurfaceComponentConfig,
+    ShellSurfaceConfigHandler, ShellSurfaceHandle, SingleSurfaceShell, SurfaceComponentConfig,
     SurfaceConfigBuilder, SurfaceDefinition,
 };
 

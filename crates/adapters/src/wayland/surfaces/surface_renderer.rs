@@ -17,7 +17,7 @@ enum ScalingMode {
     Integer,
 }
 
-pub struct WindowRendererParams<W: RenderableWindow> {
+pub struct SurfaceRendererParams<W: RenderableWindow> {
     pub window: Rc<W>,
     pub surface: ManagedWlSurface,
     pub layer_surface: ManagedZwlrLayerSurfaceV1,
@@ -27,7 +27,7 @@ pub struct WindowRendererParams<W: RenderableWindow> {
     pub size: PhysicalSize,
 }
 
-pub struct WindowRenderer<W: RenderableWindow> {
+pub struct SurfaceRenderer<W: RenderableWindow> {
     window: Rc<W>,
     surface: ManagedWlSurface,
     layer_surface: ManagedZwlrLayerSurfaceV1,
@@ -38,9 +38,9 @@ pub struct WindowRenderer<W: RenderableWindow> {
     logical_size: PhysicalSize,
 }
 
-impl<W: RenderableWindow> WindowRenderer<W> {
+impl<W: RenderableWindow> SurfaceRenderer<W> {
     #[must_use]
-    pub fn new(params: WindowRendererParams<W>) -> Self {
+    pub fn new(params: SurfaceRendererParams<W>) -> Self {
         Self {
             window: params.window,
             surface: params.surface,

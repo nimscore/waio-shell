@@ -1,21 +1,21 @@
 use crate::errors::Result;
-use crate::wayland::shell_adapter::WaylandWindowingSystem;
+use crate::wayland::shell_adapter::WaylandShellSystem;
 use slint_interpreter::ComponentInstance;
 
-pub struct WindowingSystemFacade {
-    inner: WaylandWindowingSystem,
+pub struct ShellSystemFacade {
+    inner: WaylandShellSystem,
 }
 
-impl WindowingSystemFacade {
-    pub fn new(inner: WaylandWindowingSystem) -> Self {
+impl ShellSystemFacade {
+    pub fn new(inner: WaylandShellSystem) -> Self {
         Self { inner }
     }
 
-    pub fn inner_ref(&self) -> &WaylandWindowingSystem {
+    pub fn inner_ref(&self) -> &WaylandShellSystem {
         &self.inner
     }
 
-    pub fn inner_mut(&mut self) -> &mut WaylandWindowingSystem {
+    pub fn inner_mut(&mut self) -> &mut WaylandShellSystem {
         &mut self.inner
     }
 

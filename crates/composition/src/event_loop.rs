@@ -4,7 +4,7 @@ use layer_shika_adapters::platform::calloop::{
     EventSource, Generic, Interest, Mode, PostAction, RegistrationToken, TimeoutAction, Timer,
     channel,
 };
-use layer_shika_adapters::{AppState, WindowingSystemFacade};
+use layer_shika_adapters::{AppState, ShellSystemFacade};
 use std::cell::RefCell;
 use std::os::unix::io::AsFd;
 use std::rc::Weak;
@@ -15,11 +15,11 @@ pub trait FromAppState<'a> {
 }
 
 pub struct EventLoopHandleBase {
-    system: Weak<RefCell<WindowingSystemFacade>>,
+    system: Weak<RefCell<ShellSystemFacade>>,
 }
 
 impl EventLoopHandleBase {
-    pub fn new(system: Weak<RefCell<WindowingSystemFacade>>) -> Self {
+    pub fn new(system: Weak<RefCell<ShellSystemFacade>>) -> Self {
         Self { system }
     }
 

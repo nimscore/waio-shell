@@ -9,7 +9,7 @@ use layer_shika_adapters::platform::slint_interpreter::{
     CompilationResult, ComponentDefinition, ComponentInstance, Value,
 };
 use layer_shika_adapters::{
-    AppState, PopupManager, WaylandSurfaceConfig, WindowState, WindowingSystemFacade,
+    AppState, PopupManager, ShellSystemFacade, SurfaceState, WaylandSurfaceConfig,
 };
 use layer_shika_domain::config::SurfaceConfig;
 use layer_shika_domain::entities::output_registry::OutputRegistry;
@@ -134,13 +134,13 @@ impl EventContext<'_> {
     pub fn component_instance(&self) -> Option<&ComponentInstance> {
         self.app_state
             .primary_output()
-            .map(WindowState::component_instance)
+            .map(SurfaceState::component_instance)
     }
 
     pub fn all_component_instances(&self) -> impl Iterator<Item = &ComponentInstance> {
         self.app_state
             .all_outputs()
-            .map(WindowState::component_instance)
+            .map(SurfaceState::component_instance)
     }
 
     pub const fn output_registry(&self) -> &OutputRegistry {
@@ -160,13 +160,13 @@ impl EventContext<'_> {
     pub fn outputs(&self) -> impl Iterator<Item = (OutputHandle, &ComponentInstance)> {
         self.app_state
             .outputs_with_handles()
-            .map(|(handle, window)| (handle, window.component_instance()))
+            .map(|(handle, surface)| (handle, surface.component_instance()))
     }
 
     pub fn get_output_component(&self, handle: OutputHandle) -> Option<&ComponentInstance> {
         self.app_state
             .get_output_by_handle(handle)
-            .map(WindowState::component_instance)
+            .map(SurfaceState::component_instance)
     }
 
     pub fn get_output_info(&self, handle: OutputHandle) -> Option<&OutputInfo> {
@@ -180,18 +180,18 @@ impl EventContext<'_> {
     pub fn outputs_with_info(&self) -> impl Iterator<Item = (&OutputInfo, &ComponentInstance)> {
         self.app_state
             .outputs_with_info()
-            .map(|(info, window)| (info, window.component_instance()))
+            .map(|(info, surface)| (info, surface.component_instance()))
     }
 
-    fn active_or_primary_output(&self) -> Option<&WindowState> {
+    fn active_or_primary_output(&self) -> Option<&SurfaceState> {
         self.app_state
             .active_output()
             .or_else(|| self.app_state.primary_output())
     }
 
     pub fn render_frame_if_dirty(&mut self) -> Result<()> {
-        for window in self.app_state.all_outputs() {
-            window.render_frame_if_dirty()?;
+        for surface in self.app_state.all_outputs() {
+            surface.render_frame_if_dirty()?;
         }
         Ok(())
     }
@@ -200,7 +200,7 @@ impl EventContext<'_> {
     pub fn compilation_result(&self) -> Option<Rc<CompilationResult>> {
         self.app_state
             .primary_output()
-            .and_then(WindowState::compilation_result)
+            .and_then(SurfaceState::compilation_result)
     }
 
     pub fn show_popup(
@@ -242,7 +242,7 @@ impl EventContext<'_> {
         self.close_current_popup()?;
 
         let is_using_active = self.app_state.active_output().is_some();
-        let active_window = self.active_or_primary_output().ok_or_else(|| {
+        let active_surface = self.active_or_primary_output().ok_or_else(|| {
             log::error!("No active or primary output available");
             Error::Domain(DomainError::Configuration {
                 message: "No active or primary output available".to_string(),
@@ -254,7 +254,7 @@ impl EventContext<'_> {
             if is_using_active { "active" } else { "primary" }
         );
 
-        let popup_manager = active_window.popup_manager().ok_or_else(|| {
+        let popup_manager = active_surface.popup_manager().ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
                 message: "No popup manager available".to_string(),
             })
@@ -289,8 +289,8 @@ impl EventContext<'_> {
 
         popup_key_cell.set(popup_handle.key());
 
-        if let Some(popup_window) = popup_manager.get_popup_window(popup_handle.key()) {
-            popup_window.set_component_instance(instance);
+        if let Some(popup_surface) = popup_manager.get_popup_window(popup_handle.key()) {
+            popup_surface.set_component_instance(instance);
         } else {
             return Err(Error::Domain(DomainError::Configuration {
                 message: "Popup window not found after creation".to_string(),
@@ -301,8 +301,8 @@ impl EventContext<'_> {
     }
 
     pub fn close_popup(&mut self, handle: PopupHandle) -> Result<()> {
-        if let Some(active_window) = self.active_or_primary_output() {
-            if let Some(popup_manager) = active_window.popup_manager() {
+        if let Some(active_surface) = self.active_or_primary_output() {
+            if let Some(popup_manager) = active_surface.popup_manager() {
                 popup_manager.close(handle)?;
             }
         }
@@ -310,8 +310,8 @@ impl EventContext<'_> {
     }
 
     pub fn close_current_popup(&mut self) -> Result<()> {
-        if let Some(active_window) = self.active_or_primary_output() {
-            if let Some(popup_manager) = active_window.popup_manager() {
+        if let Some(active_surface) = self.active_or_primary_output() {
+            if let Some(popup_manager) = active_surface.popup_manager() {
                 popup_manager.close_current_popup();
             }
         }
@@ -319,13 +319,13 @@ impl EventContext<'_> {
     }
 
     pub fn resize_popup(&mut self, handle: PopupHandle, width: f32, height: f32) -> Result<()> {
-        let active_window = self.active_or_primary_output().ok_or_else(|| {
+        let active_surface = self.active_or_primary_output().ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
                 message: "No active or primary output available".to_string(),
             })
         })?;
 
-        let popup_manager = active_window.popup_manager().ok_or_else(|| {
+        let popup_manager = active_surface.popup_manager().ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
                 message: "No popup manager available".to_string(),
             })
@@ -344,8 +344,8 @@ impl EventContext<'_> {
             current_size.is_none_or(|(w, h)| (w - width).abs() > 0.01 || (h - height).abs() > 0.01);
 
         if size_changed {
-            if let Some(popup_window) = popup_manager.get_popup_window(handle.key()) {
-                popup_window.request_resize(width, height);
+            if let Some(popup_surface) = popup_manager.get_popup_window(handle.key()) {
+                popup_surface.request_resize(width, height);
 
                 #[allow(clippy::cast_possible_truncation)]
                 #[allow(clippy::cast_possible_wrap)]
@@ -518,8 +518,8 @@ impl EventContext<'_> {
                 );
 
                 if let Some(popup_manager) = popup_manager_weak.upgrade() {
-                    if let Some(popup_window) = popup_manager.get_popup_window(popup_key) {
-                        popup_window.request_resize(dimensions.width, dimensions.height);
+                    if let Some(popup_surface) = popup_manager.get_popup_window(popup_key) {
+                        popup_surface.request_resize(dimensions.width, dimensions.height);
 
                         #[allow(clippy::cast_possible_truncation)]
                         #[allow(clippy::cast_possible_wrap)]
@@ -552,14 +552,14 @@ impl EventContext<'_> {
     }
 }
 
-pub struct SingleWindowShell {
-    inner: Rc<RefCell<WindowingSystemFacade>>,
+pub struct SingleSurfaceShell {
+    inner: Rc<RefCell<ShellSystemFacade>>,
     popup_command_sender: channel::Sender<PopupCommand>,
-    window_name: String,
+    surface_name: String,
 }
 
 #[allow(dead_code)]
-impl SingleWindowShell {
+impl SingleSurfaceShell {
     pub(crate) fn new(
         component_definition: ComponentDefinition,
         compilation_result: Option<Rc<CompilationResult>>,
@@ -571,8 +571,8 @@ impl SingleWindowShell {
             compilation_result,
             config,
         );
-        let inner = layer_shika_adapters::WaylandWindowingSystem::new(&wayland_config)?;
-        let facade = WindowingSystemFacade::new(inner);
+        let inner = layer_shika_adapters::WaylandShellSystem::new(&wayland_config)?;
+        let facade = ShellSystemFacade::new(inner);
         let inner_rc = Rc::new(RefCell::new(facade));
 
         let (sender, receiver) = channel::channel();
@@ -580,7 +580,7 @@ impl SingleWindowShell {
         let shell = Self {
             inner: Rc::clone(&inner_rc),
             popup_command_sender: sender,
-            window_name: DEFAULT_SURFACE_NAME.to_string(),
+            surface_name: DEFAULT_SURFACE_NAME.to_string(),
         };
 
         shell.setup_popup_command_handler(receiver)?;
@@ -589,14 +589,14 @@ impl SingleWindowShell {
     }
 
     #[must_use]
-    pub fn with_window_name(mut self, name: impl Into<String>) -> Self {
-        self.window_name = name.into();
+    pub fn with_surface_name(mut self, name: impl Into<String>) -> Self {
+        self.surface_name = name.into();
         self
     }
 
     #[must_use]
-    pub fn window_name(&self) -> &str {
-        &self.window_name
+    pub fn surface_name(&self) -> &str {
+        &self.surface_name
     }
 
     fn setup_popup_command_handler(&self, receiver: channel::Channel<PopupCommand>) -> Result<()> {
@@ -777,8 +777,8 @@ impl SingleWindowShell {
     {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
-        for window in system.app_state().all_outputs() {
-            f(window.component_instance());
+        for surface in system.app_state().all_outputs() {
+            f(surface.component_instance());
         }
     }
 
@@ -805,8 +805,8 @@ impl SingleWindowShell {
     {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
-        for (handle, window) in system.app_state().outputs_with_handles() {
-            f(handle, window.component_instance());
+        for (handle, surface) in system.app_state().outputs_with_handles() {
+            f(handle, surface.component_instance());
         }
     }
 
@@ -829,7 +829,7 @@ impl SingleWindowShell {
     }
 }
 
-impl ShellRuntime for SingleWindowShell {
+impl ShellRuntime for SingleSurfaceShell {
     type LoopHandle = EventLoopHandle;
     type Context<'a> = EventContext<'a>;
 
@@ -843,8 +843,8 @@ impl ShellRuntime for SingleWindowShell {
     {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
-        for window in system.app_state().all_outputs() {
-            f(window.component_instance());
+        for surface in system.app_state().all_outputs() {
+            f(surface.component_instance());
         }
     }
 
@@ -854,8 +854,8 @@ impl ShellRuntime for SingleWindowShell {
     {
         let facade = self.inner.borrow();
         let system = facade.inner_ref();
-        for window in system.app_state().all_outputs() {
-            f(&self.window_name, window.component_instance());
+        for surface in system.app_state().all_outputs() {
+            f(&self.surface_name, surface.component_instance());
         }
     }
 

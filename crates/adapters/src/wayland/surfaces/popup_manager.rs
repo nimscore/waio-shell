@@ -310,29 +310,30 @@ impl PopupManager {
 
         info!("Popup physical size: {popup_size:?}");
 
-        let popup_surface = PopupSurface::create(&super::popup_surface::PopupSurfaceParams {
-            compositor: &self.context.compositor,
-            xdg_wm_base,
-            parent_layer_surface,
-            fractional_scale_manager: self.context.fractional_scale_manager.as_ref(),
-            viewporter: self.context.viewporter.as_ref(),
-            queue_handle,
-            popup_config,
-            physical_size: popup_size,
-            scale_factor,
-        });
+        let wayland_popup_surface =
+            PopupSurface::create(&super::popup_surface::PopupSurfaceParams {
+                compositor: &self.context.compositor,
+                xdg_wm_base,
+                parent_layer_surface,
+                fractional_scale_manager: self.context.fractional_scale_manager.as_ref(),
+                viewporter: self.context.viewporter.as_ref(),
+                queue_handle,
+                popup_config,
+                physical_size: popup_size,
+                scale_factor,
+            });
 
         if params.grab {
-            popup_surface.grab(&self.context.seat, params.last_pointer_serial);
+            wayland_popup_surface.grab(&self.context.seat, params.last_pointer_serial);
         } else {
             info!("Skipping popup grab (grab disabled in request)");
-            popup_surface.surface.commit();
+            wayland_popup_surface.surface.commit();
         }
 
         let context = self
             .context
             .render_factory
-            .create_context(&popup_surface.surface.id(), popup_size)?;
+            .create_context(&wayland_popup_surface.surface.id(), popup_size)?;
 
         let renderer = FemtoVGRenderer::new(context)
             .map_err(|e| LayerShikaError::FemtoVGRendererCreation { source: e })?;
@@ -359,7 +360,7 @@ impl PopupManager {
         state.popups.insert(
             popup_id,
             ActivePopup {
-                surface: popup_surface,
+                surface: wayland_popup_surface,
                 window: Rc::clone(&popup_window),
                 request,
                 last_serial: params.last_pointer_serial,
@@ -542,11 +543,11 @@ impl PopupManager {
         let fractional_scale_id = fractional_scale_proxy.id();
 
         if let Some(popup_key) = self.find_popup_key_by_fractional_scale_id(&fractional_scale_id) {
-            if let Some(popup_window) = self.get_popup_window(popup_key) {
+            if let Some(popup_surface) = self.get_popup_window(popup_key) {
                 let new_scale_factor = DisplayMetrics::scale_factor_from_120ths(scale_120ths);
                 info!("Updating popup scale factor to {new_scale_factor} ({scale_120ths}x)");
-                popup_window.set_scale_factor(new_scale_factor);
-                popup_window.request_redraw();
+                popup_surface.set_scale_factor(new_scale_factor);
+                popup_surface.request_redraw();
             }
         }
     }

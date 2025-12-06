@@ -3,14 +3,14 @@ use crate::{
     rendering::egl::context_factory::RenderContextFactory,
     wayland::{
         config::{LayerSurfaceConfig, WaylandSurfaceConfig},
-        shell_adapter::WaylandWindowingSystem,
+        shell_adapter::WaylandShellSystem,
         surfaces::{
             app_state::AppState,
             event_context::SharedPointerSerial,
             layer_surface::{SurfaceCtx, SurfaceSetupParams},
             popup_manager::{PopupContext, PopupManager},
-            surface_builder::WindowStateBuilder,
-            surface_state::WindowState,
+            surface_builder::SurfaceStateBuilder,
+            surface_state::SurfaceState,
         },
     },
 };
@@ -141,14 +141,14 @@ impl OutputManager {
             output_id, is_primary
         );
 
-        let (window, main_surface_id) =
+        let (surface, main_surface_id) =
             self.create_window_for_output(&pending_output.proxy, output_id, queue_handle)?;
 
         app_state.add_output(
             output_id,
             &self.config.surface_name,
             main_surface_id,
-            window,
+            surface,
         );
 
         Ok(())
@@ -159,7 +159,7 @@ impl OutputManager {
         output: &WlOutput,
         _output_id: &ObjectId,
         queue_handle: &QueueHandle<AppState>,
-    ) -> Result<(WindowState, ObjectId)> {
+    ) -> Result<(SurfaceState, ObjectId)> {
         let setup_params = SurfaceSetupParams {
             compositor: &self.context.compositor,
             output,
@@ -174,13 +174,13 @@ impl OutputManager {
         let surface_ctx = SurfaceCtx::setup(&setup_params, &self.layer_surface_config);
         let main_surface_id = surface_ctx.surface.id();
 
-        let window = WaylandWindowingSystem::initialize_renderer(
+        let window = WaylandShellSystem::initialize_renderer(
             &surface_ctx.surface,
             &self.config,
             &self.context.render_factory,
         )?;
 
-        let mut builder = WindowStateBuilder::new()
+        let mut builder = SurfaceStateBuilder::new()
             .with_component_definition(self.config.component_definition.clone())
             .with_compilation_result(self.config.compilation_result.clone())
             .with_surface(Rc::clone(&surface_ctx.surface))
@@ -202,7 +202,7 @@ impl OutputManager {
         }
 
         let mut window_state =
-            WindowState::new(builder).map_err(|e| LayerShikaError::WindowConfiguration {
+            SurfaceState::new(builder).map_err(|e| LayerShikaError::WindowConfiguration {
                 message: e.to_string(),
             })?;
 

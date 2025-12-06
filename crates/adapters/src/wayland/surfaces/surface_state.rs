@@ -1,11 +1,11 @@
 use std::rc::Rc;
 use std::cell::RefCell;
-use super::surface_builder::WindowStateBuilder;
+use super::surface_builder::SurfaceStateBuilder;
 use super::component_state::ComponentState;
 use super::rendering_state::RenderingState;
 use super::event_context::{EventContext, SharedPointerSerial};
 use super::popup_manager::PopupManager;
-use super::window_renderer::WindowRendererParams;
+use super::surface_renderer::SurfaceRendererParams;
 use super::display_metrics::{DisplayMetrics, SharedDisplayMetrics};
 use crate::wayland::managed_proxies::{
     ManagedWlPointer, ManagedWlSurface, ManagedZwlrLayerSurfaceV1,
@@ -15,7 +15,7 @@ use crate::rendering::femtovg::main_window::FemtoVGWindow;
 use crate::errors::{LayerShikaError, Result};
 use core::result::Result as CoreResult;
 use layer_shika_domain::errors::DomainError;
-use layer_shika_domain::ports::windowing::ShellContextPort;
+use layer_shika_domain::ports::shell::ShellContextPort;
 use slint::{LogicalPosition, PhysicalSize};
 use slint::platform::WindowEvent;
 use slint_interpreter::{ComponentInstance, CompilationResult};
@@ -23,7 +23,7 @@ use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::z
 use wayland_client::{protocol::wl_surface::WlSurface, Proxy};
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 
-pub struct WindowState {
+pub struct SurfaceState {
     component: ComponentState,
     rendering: RenderingState<FemtoVGWindow>,
     event_context: RefCell<EventContext>,
@@ -32,8 +32,8 @@ pub struct WindowState {
     pointer: ManagedWlPointer,
 }
 
-impl WindowState {
-    pub fn new(builder: WindowStateBuilder) -> Result<Self> {
+impl SurfaceState {
+    pub fn new(builder: SurfaceStateBuilder) -> Result<Self> {
         let component_definition =
             builder
                 .component_definition
@@ -99,7 +99,7 @@ impl WindowState {
             Rc::clone(&display_metrics),
         );
 
-        let rendering = RenderingState::new(WindowRendererParams {
+        let rendering = RenderingState::new(SurfaceRendererParams {
             window: Rc::clone(&window),
             surface,
             layer_surface,
@@ -257,9 +257,9 @@ impl WindowState {
     }
 }
 
-impl ShellContextPort for WindowState {
+impl ShellContextPort for SurfaceState {
     fn render_frame_if_dirty(&mut self) -> CoreResult<(), DomainError> {
-        WindowState::render_frame_if_dirty(self).map_err(|e| DomainError::Adapter {
+        SurfaceState::render_frame_if_dirty(self).map_err(|e| DomainError::Adapter {
             source: Box::new(e),
         })
     }

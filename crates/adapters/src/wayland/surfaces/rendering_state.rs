@@ -1,20 +1,20 @@
 use std::rc::Rc;
 use crate::errors::Result;
 use crate::rendering::femtovg::renderable_window::RenderableWindow;
-use crate::wayland::surfaces::window_renderer::{WindowRenderer, WindowRendererParams};
+use crate::wayland::surfaces::surface_renderer::{SurfaceRenderer, SurfaceRendererParams};
 use slint::PhysicalSize;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use crate::wayland::managed_proxies::ManagedWpFractionalScaleV1;
 
 pub struct RenderingState<W: RenderableWindow> {
-    renderer: WindowRenderer<W>,
+    renderer: SurfaceRenderer<W>,
 }
 
 impl<W: RenderableWindow> RenderingState<W> {
     #[must_use]
-    pub fn new(params: WindowRendererParams<W>) -> Self {
+    pub fn new(params: SurfaceRendererParams<W>) -> Self {
         Self {
-            renderer: WindowRenderer::new(params),
+            renderer: SurfaceRenderer::new(params),
         }
     }
 

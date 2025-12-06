@@ -8,8 +8,8 @@ use crate::wayland::{
     surfaces::{
         app_state::AppState,
         event_context::SharedPointerSerial,
-        surface_builder::{PlatformWrapper, WindowStateBuilder},
-        surface_state::WindowState,
+        surface_builder::{PlatformWrapper, SurfaceStateBuilder},
+        surface_state::SurfaceState,
     },
 };
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
@@ -23,7 +23,7 @@ use crate::{
 };
 use core::result::Result as CoreResult;
 use layer_shika_domain::errors::DomainError;
-use layer_shika_domain::ports::windowing::WindowingSystemPort;
+use layer_shika_domain::ports::shell::ShellSystemPort;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
 use log::{error, info};
@@ -49,7 +49,7 @@ struct OutputSetup {
     output_id: ObjectId,
     main_surface_id: ObjectId,
     window: Rc<FemtoVGWindow>,
-    builder: WindowStateBuilder,
+    builder: SurfaceStateBuilder,
     shell_surface_name: String,
 }
 
@@ -64,14 +64,14 @@ struct OutputManagerParams<'a> {
     shared_serial: &'a Rc<SharedPointerSerial>,
 }
 
-pub struct WaylandWindowingSystem {
+pub struct WaylandShellSystem {
     state: AppState,
     connection: Rc<Connection>,
     event_queue: EventQueue<AppState>,
     event_loop: EventLoop<'static, AppState>,
 }
 
-impl WaylandWindowingSystem {
+impl WaylandShellSystem {
     pub fn new(config: &WaylandSurfaceConfig) -> Result<Self> {
         info!("Initializing WindowingSystem");
         let (connection, mut event_queue) = Self::init_wayland_connection()?;
@@ -172,7 +172,7 @@ impl WaylandWindowingSystem {
 
             let window = Self::initialize_renderer(&surface_ctx.surface, config, &render_factory)?;
 
-            let mut builder = WindowStateBuilder::new()
+            let mut builder = SurfaceStateBuilder::new()
                 .with_component_definition(config.component_definition.clone())
                 .with_compilation_result(config.compilation_result.clone())
                 .with_surface(Rc::clone(&surface_ctx.surface))
@@ -234,7 +234,7 @@ impl WaylandWindowingSystem {
         let mut layer_surfaces = Vec::new();
 
         for setup in setups {
-            let mut per_output_window = WindowState::new(setup.builder).map_err(|e| {
+            let mut per_output_surface = SurfaceState::new(setup.builder).map_err(|e| {
                 LayerShikaError::WindowConfiguration {
                     message: e.to_string(),
                 }
@@ -242,20 +242,20 @@ impl WaylandWindowingSystem {
 
             let popup_manager = Rc::new(PopupManager::new(
                 popup_context.clone(),
-                Rc::clone(per_output_window.display_metrics()),
+                Rc::clone(per_output_surface.display_metrics()),
             ));
 
-            per_output_window.set_popup_manager(Rc::clone(&popup_manager));
-            per_output_window.set_shared_pointer_serial(Rc::clone(shared_serial));
+            per_output_surface.set_popup_manager(Rc::clone(&popup_manager));
+            per_output_surface.set_shared_pointer_serial(Rc::clone(shared_serial));
 
             popup_managers.push(Rc::clone(&popup_manager));
-            layer_surfaces.push(per_output_window.layer_surface());
+            layer_surfaces.push(per_output_surface.layer_surface());
 
             app_state.add_shell_surface(
                 &setup.output_id,
                 &setup.shell_surface_name,
                 setup.main_surface_id,
-                per_output_window,
+                per_output_surface,
             );
         }
 
@@ -447,7 +447,7 @@ impl WaylandWindowingSystem {
                 let window =
                     Self::initialize_renderer(&surface_ctx.surface, config, &render_factory)?;
 
-                let mut builder = WindowStateBuilder::new()
+                let mut builder = SurfaceStateBuilder::new()
                     .with_component_definition(config.component_definition.clone())
                     .with_compilation_result(config.compilation_result.clone())
                     .with_surface(Rc::clone(&surface_ctx.surface))
@@ -542,14 +542,14 @@ impl WaylandWindowingSystem {
                 if popup_manager.has_pending_popup() {
                     info!("Found pending popup in output #{}", idx);
 
-                    let popup_window = popup_manager
+                    let popup_surface = popup_manager
                         .create_pending_popup(&queue_handle_clone, layer_surface, serial)
                         .map_err(|e| {
                             PlatformError::Other(format!("Failed to create popup: {e}"))
                         })?;
 
                     info!("Popup created successfully for output #{}", idx);
-                    return Ok(popup_window as Rc<dyn WindowAdapter>);
+                    return Ok(popup_surface as Rc<dyn WindowAdapter>);
                 }
             }
 
@@ -594,23 +594,22 @@ impl WaylandWindowingSystem {
 
             update_timers_and_animations();
 
-            for window in self.state.all_outputs() {
-                window
-                    .window()
-                    .render_frame_if_dirty()
-                    .map_err(|e| RenderingError::Operation {
+            for surface in self.state.all_outputs() {
+                surface.window().render_frame_if_dirty().map_err(|e| {
+                    RenderingError::Operation {
                         message: e.to_string(),
-                    })?;
+                    }
+                })?;
             }
         }
 
         info!("Initial configuration complete, requesting final render");
-        for window in self.state.all_outputs() {
-            RenderableWindow::request_redraw(window.window().as_ref());
+        for surface in self.state.all_outputs() {
+            RenderableWindow::request_redraw(surface.window().as_ref());
         }
         update_timers_and_animations();
-        for window in self.state.all_outputs() {
-            window
+        for surface in self.state.all_outputs() {
+            surface
                 .window()
                 .render_frame_if_dirty()
                 .map_err(|e| RenderingError::Operation {
@@ -668,15 +667,15 @@ impl WaylandWindowingSystem {
 
         update_timers_and_animations();
 
-        for window in shared_data.all_outputs() {
-            window
+        for surface in shared_data.all_outputs() {
+            surface
                 .window()
                 .render_frame_if_dirty()
                 .map_err(|e| RenderingError::Operation {
                     message: e.to_string(),
                 })?;
 
-            if let Some(popup_manager) = window.popup_manager() {
+            if let Some(popup_manager) = surface.popup_manager() {
                 popup_manager
                     .render_popups()
                     .map_err(|e| RenderingError::Operation {
@@ -698,10 +697,10 @@ impl WaylandWindowingSystem {
             .ok_or_else(|| LayerShikaError::InvalidInput {
                 message: "No outputs available".into(),
             })
-            .map(WindowState::component_instance)
+            .map(SurfaceState::component_instance)
     }
 
-    pub fn state(&self) -> Result<&WindowState> {
+    pub fn state(&self) -> Result<&SurfaceState> {
         self.state
             .primary_output()
             .ok_or_else(|| LayerShikaError::InvalidInput {
@@ -714,9 +713,9 @@ impl WaylandWindowingSystem {
     }
 }
 
-impl WindowingSystemPort for WaylandWindowingSystem {
+impl ShellSystemPort for WaylandShellSystem {
     fn run(&mut self) -> CoreResult<(), DomainError> {
-        WaylandWindowingSystem::run(self).map_err(|e| DomainError::Adapter {
+        WaylandShellSystem::run(self).map_err(|e| DomainError::Adapter {
             source: Box::new(e),
         })
     }

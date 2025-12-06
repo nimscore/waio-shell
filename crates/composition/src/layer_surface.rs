@@ -1,4 +1,4 @@
-use layer_shika_adapters::WindowState;
+use layer_shika_adapters::SurfaceState;
 use layer_shika_adapters::platform::slint_interpreter::ComponentInstance;
 use layer_shika_adapters::platform::wayland::{Anchor, WaylandKeyboardInteractivity, WaylandLayer};
 use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteractivity;
@@ -6,11 +6,11 @@ use layer_shika_domain::value_objects::layer::Layer;
 use layer_shika_domain::value_objects::margins::Margins;
 
 pub struct LayerSurfaceHandle<'a> {
-    window_state: &'a WindowState,
+    window_state: &'a SurfaceState,
 }
 
 impl<'a> LayerSurfaceHandle<'a> {
-    pub(crate) fn from_window_state(window_state: &'a WindowState) -> Self {
+    pub(crate) fn from_window_state(window_state: &'a SurfaceState) -> Self {
         Self { window_state }
     }
 

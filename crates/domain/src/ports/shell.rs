@@ -1,6 +1,6 @@
 use crate::errors::DomainError;
 
-pub trait WindowingSystemPort {
+pub trait ShellSystemPort {
     fn run(&mut self) -> Result<(), DomainError>;
 }
 

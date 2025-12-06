@@ -7,11 +7,11 @@ pub(crate) mod wayland;
 pub use rendering::femtovg::popup_window::PopupWindow;
 
 pub use wayland::config::{MultiSurfaceConfig, ShellSurfaceConfig, WaylandSurfaceConfig};
-pub use wayland::facade::WindowingSystemFacade;
-pub use wayland::shell_adapter::WaylandWindowingSystem;
+pub use wayland::facade::ShellSystemFacade;
+pub use wayland::shell_adapter::WaylandShellSystem;
 pub use wayland::surfaces::app_state::AppState;
 pub use wayland::surfaces::popup_manager::PopupManager;
-pub use wayland::surfaces::surface_state::WindowState;
+pub use wayland::surfaces::surface_state::SurfaceState;
 
 pub mod platform {
     pub use slint;
