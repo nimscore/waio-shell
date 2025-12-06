@@ -1,0 +1,27 @@
+[package]
+name = "event-loop-examples"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "timer"
+path = "src/timer.rs"
+
+[[bin]]
+name = "channel"
+path = "src/channel.rs"
+
+[[bin]]
+name = "custom-source"
+path = "src/custom_source.rs"
+
+[dependencies]
+layer-shika = { path = "../.." }
+anyhow = "1.0"
+env_logger = "0.11.7"
+log.workspace = true

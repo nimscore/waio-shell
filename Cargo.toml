@@ -25,6 +25,7 @@ members = [
     "examples/simple-bar",
     "examples/multi-surface",
     "examples/declarative-config",
+    "examples/event-loop",
 ]
 
 [workspace.package]

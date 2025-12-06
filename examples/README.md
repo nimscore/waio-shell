@@ -20,22 +20,6 @@ cd examples/simple-bar
 cargo run
 ```
 
-## Building All Examples
-
-From the workspace root:
-
-```bash
-cargo build --workspace
-```
-
-Or build a specific example:
-
-```bash
-cargo build -p simple-bar
-cargo build -p multi-surface
-cargo build -p declarative-config
-```
-
 ## Example Progression
 
 **Recommended learning path:**
@@ -43,6 +27,7 @@ cargo build -p declarative-config
 1. **simple-bar** - Start here to understand the basics
 2. **multi-surface** - Learn about multiple surfaces and callbacks
 3. **declarative-config** - See the alternative configuration approach
+4. **event-loop** - Explore event loop integration with timers and channels
 
 ## Common Patterns
 

@@ -1,0 +1,67 @@
+
+export component Main inherits Window {
+    in property <string> time: "00:00:00";
+    in property <int> counter: 0;
+    in property <string> status: "Waiting...";
+
+    background: #2d2d2d;
+
+    VerticalLayout {
+        alignment: center;
+        padding: 20px;
+        spacing: 20px;
+
+        Text {
+            text: "Event Loop Demo";
+            font-size: 24px;
+            color: #ffffff;
+            horizontal-alignment: center;
+        }
+
+        Text {
+            text: status;
+            font-size: 16px;
+            color: #ffb74d;
+            horizontal-alignment: center;
+        }
+
+        HorizontalLayout {
+            alignment: center;
+            spacing: 40px;
+
+            VerticalLayout {
+                alignment: center;
+                Text {
+                    text: "Time";
+                    font-size: 14px;
+                    color: #888888;
+                    horizontal-alignment: center;
+                }
+
+                Text {
+                    text: time;
+                    font-size: 32px;
+                    color: #4fc3f7;
+                    horizontal-alignment: center;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                Text {
+                    text: "Counter";
+                    font-size: 14px;
+                    color: #888888;
+                    horizontal-alignment: center;
+                }
+
+                Text {
+                    text: counter;
+                    font-size: 32px;
+                    color: #81c784;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+    }
+}
