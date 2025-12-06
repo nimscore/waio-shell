@@ -105,7 +105,7 @@ impl ShellControl {
     }
 }
 
-pub type EventLoopHandle = EventLoopHandleBase<EventContext<'static>>;
+pub type EventLoopHandle = EventLoopHandleBase;
 
 pub struct EventContext<'a> {
     app_state: &'a mut AppState,

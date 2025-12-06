@@ -847,7 +847,7 @@ impl ShellRuntime for Shell {
     }
 }
 
-pub type ShellEventLoopHandle = EventLoopHandleBase<ShellEventContext<'static>>;
+pub type ShellEventLoopHandle = EventLoopHandleBase;
 
 pub struct ShellEventContext<'a> {
     app_state: &'a mut AppState,
