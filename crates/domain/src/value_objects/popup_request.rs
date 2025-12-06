@@ -1,19 +1,7 @@
+#![allow(clippy::pub_use)]
+
+pub use super::handle::PopupHandle;
 use super::popup_positioning_mode::PopupPositioningMode;
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct PopupHandle(usize);
-
-impl PopupHandle {
-    #[must_use]
-    pub const fn new(key: usize) -> Self {
-        Self(key)
-    }
-
-    #[must_use]
-    pub const fn key(self) -> usize {
-        self.0
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct PopupRequest {

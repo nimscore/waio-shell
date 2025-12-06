@@ -11,8 +11,8 @@
 pub use crate::shell::{
     CompiledUiSource, DEFAULT_COMPONENT_NAME, DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Shell,
     ShellBuilder, ShellConfig, ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime,
-    ShellSurfaceConfigHandler, ShellSurfaceHandle, SingleSurfaceShell, SurfaceComponentConfig,
-    SurfaceConfigBuilder, SurfaceDefinition,
+    ShellSurfaceConfigHandler, SingleSurfaceShell, SurfaceComponentConfig, SurfaceConfigBuilder,
+    SurfaceDefinition,
 };
 
 pub use crate::window::{
@@ -26,7 +26,7 @@ pub use crate::event::{EventContext, EventLoopHandle};
 
 pub use crate::slint_integration::{PopupWindow, slint, slint_interpreter};
 
-pub use crate::{Error, Result};
+pub use crate::{Error, Handle, Result, SurfaceHandle};
 
 pub use layer_shika_composition::prelude::{
     Anchor, LogicalSize, Margins, PhysicalSize, ScaleFactor, SurfaceConfig, SurfaceDimension,

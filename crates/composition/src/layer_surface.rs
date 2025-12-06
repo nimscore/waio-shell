@@ -73,8 +73,3 @@ where
         self(instance, surface);
     }
 }
-
-#[derive(Debug, Clone)]
-pub struct ShellSurfaceHandle {
-    pub name: String,
-}

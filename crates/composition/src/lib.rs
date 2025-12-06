@@ -18,6 +18,7 @@ pub use layer_shika_adapters::platform::{slint, slint_interpreter};
 pub use layer_shika_domain::entities::output_registry::OutputRegistry;
 pub use layer_shika_domain::prelude::AnchorStrategy;
 pub use layer_shika_domain::value_objects::anchor::AnchorEdges;
+pub use layer_shika_domain::value_objects::handle::{Handle, SurfaceHandle};
 pub use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteractivity;
 pub use layer_shika_domain::value_objects::layer::Layer;
 pub use layer_shika_domain::value_objects::output_handle::OutputHandle;
@@ -32,7 +33,7 @@ pub use shell_runtime::{DEFAULT_SURFACE_NAME, ShellRuntime};
 pub use system::{EventContext, EventLoopHandle, ShellControl, SingleSurfaceShell};
 pub use value_conversion::IntoValue;
 
-pub use layer_surface::{LayerSurfaceHandle, ShellSurfaceConfigHandler, ShellSurfaceHandle};
+pub use layer_surface::{LayerSurfaceHandle, ShellSurfaceConfigHandler};
 
 pub use shell::{
     DEFAULT_COMPONENT_NAME, Shell, ShellBuilder, ShellEventContext, ShellEventLoopHandle,
@@ -64,13 +65,13 @@ pub enum Error {
 pub mod prelude {
     pub use crate::{
         AnchorEdges, AnchorStrategy, CompiledUiSource, DEFAULT_COMPONENT_NAME,
-        DEFAULT_SURFACE_NAME, EventContext, EventLoopHandle, IntoValue, KeyboardInteractivity,
-        Layer, LayerSurfaceHandle, OutputGeometry, OutputHandle, OutputInfo, OutputPolicy,
-        OutputRegistry, PopupBuilder, PopupHandle, PopupPlacement, PopupPositioningMode,
-        PopupRequest, PopupSize, PopupWindow, Result, Shell, ShellBuilder, ShellConfig,
-        ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime,
-        ShellSurfaceConfigHandler, ShellSurfaceHandle, SingleSurfaceShell, SurfaceComponentConfig,
-        SurfaceConfigBuilder, SurfaceDefinition,
+        DEFAULT_SURFACE_NAME, EventContext, EventLoopHandle, Handle, IntoValue,
+        KeyboardInteractivity, Layer, LayerSurfaceHandle, OutputGeometry, OutputHandle, OutputInfo,
+        OutputPolicy, OutputRegistry, PopupBuilder, PopupHandle, PopupPlacement,
+        PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result, Shell, ShellBuilder,
+        ShellConfig, ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime,
+        ShellSurfaceConfigHandler, SingleSurfaceShell, SurfaceComponentConfig, SurfaceConfigBuilder,
+        SurfaceDefinition, SurfaceHandle,
     };
 
     pub use crate::calloop::{Generic, Interest, Mode, PostAction, RegistrationToken, Timer};

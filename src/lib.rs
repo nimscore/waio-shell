@@ -118,13 +118,13 @@ pub mod shell;
 pub mod slint_integration;
 pub mod window;
 
-pub use layer_shika_composition::{Error, Result};
+pub use layer_shika_composition::{Error, Handle, Result, SurfaceHandle};
 
 pub use shell::{
     CompiledUiSource, DEFAULT_COMPONENT_NAME, DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Shell,
     ShellBuilder, ShellConfig, ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime,
-    ShellSurfaceConfigHandler, ShellSurfaceHandle, SingleSurfaceShell, SurfaceComponentConfig,
-    SurfaceConfigBuilder, SurfaceDefinition,
+    ShellSurfaceConfigHandler, SingleSurfaceShell, SurfaceComponentConfig, SurfaceConfigBuilder,
+    SurfaceDefinition,
 };
 
 pub use window::{

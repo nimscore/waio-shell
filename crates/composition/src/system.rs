@@ -480,7 +480,7 @@ impl EventContext<'_> {
 
                 if control
                     .resize_popup(
-                        PopupHandle::new(popup_key),
+                        PopupHandle::from_raw(popup_key),
                         dimensions.width,
                         dimensions.height,
                     )

@@ -49,7 +49,7 @@ impl PopupId {
 
     #[must_use]
     const fn to_handle(self) -> PopupHandle {
-        PopupHandle::new(self.0)
+        PopupHandle::from_raw(self.0)
     }
 }
 
@@ -491,25 +491,25 @@ impl PopupManager {
     #[must_use]
     pub fn find_by_surface(&self, surface_id: &ObjectId) -> Option<PopupHandle> {
         self.find_popup_key_by_surface_id(surface_id)
-            .map(PopupHandle::new)
+            .map(PopupHandle::from_raw)
     }
 
     #[must_use]
     pub fn find_by_fractional_scale(&self, fractional_scale_id: &ObjectId) -> Option<PopupHandle> {
         self.find_popup_key_by_fractional_scale_id(fractional_scale_id)
-            .map(PopupHandle::new)
+            .map(PopupHandle::from_raw)
     }
 
     #[must_use]
     pub fn find_by_xdg_popup(&self, xdg_popup_id: &ObjectId) -> Option<PopupHandle> {
         self.find_popup_key_by_xdg_popup_id(xdg_popup_id)
-            .map(PopupHandle::new)
+            .map(PopupHandle::from_raw)
     }
 
     #[must_use]
     pub fn find_by_xdg_surface(&self, xdg_surface_id: &ObjectId) -> Option<PopupHandle> {
         self.find_popup_key_by_xdg_surface_id(xdg_surface_id)
-            .map(PopupHandle::new)
+            .map(PopupHandle::from_raw)
     }
 
     #[must_use]
@@ -526,7 +526,7 @@ impl PopupManager {
 
         if let Some(popup_handle) = self
             .find_popup_key_by_surface_id(&surface_id)
-            .map(PopupHandle::new)
+            .map(PopupHandle::from_raw)
         {
             return ActiveWindow::Popup(popup_handle);
         }
