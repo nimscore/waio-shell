@@ -408,4 +408,25 @@ impl AppState {
             .map(|(_, v)| v)
             .collect()
     }
+
+    pub fn remove_surfaces_by_name(&mut self, surface_name: &str) -> Vec<PerOutputSurface> {
+        let keys_to_remove: Vec<_> = self
+            .surfaces
+            .keys()
+            .filter(|k| k.surface_name == surface_name)
+            .cloned()
+            .collect();
+
+        let mut removed = Vec::new();
+        for key in keys_to_remove {
+            if let Some(surface) = self.surfaces.remove(&key) {
+                removed.push(surface);
+            }
+        }
+
+        self.surface_to_key
+            .retain(|_, k| k.surface_name != surface_name);
+
+        removed
+    }
 }

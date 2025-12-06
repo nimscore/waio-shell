@@ -30,7 +30,7 @@ pub use layer_shika_domain::value_objects::popup_request::{
 };
 pub use popup_builder::PopupBuilder;
 pub use shell_runtime::{DEFAULT_SURFACE_NAME, ShellRuntime};
-pub use system::{EventContext, EventLoopHandle, ShellControl, SingleSurfaceShell};
+pub use system::{EventContext, EventLoopHandle, ShellControl};
 pub use value_conversion::IntoValue;
 
 pub use layer_surface::{LayerSurfaceHandle, ShellSurfaceConfigHandler};
@@ -70,8 +70,8 @@ pub mod prelude {
         OutputPolicy, OutputRegistry, PopupBuilder, PopupHandle, PopupPlacement,
         PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result, Shell, ShellBuilder,
         ShellConfig, ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime,
-        ShellSurfaceConfigHandler, SingleSurfaceShell, SurfaceComponentConfig, SurfaceConfigBuilder,
-        SurfaceDefinition, SurfaceHandle,
+        ShellSurfaceConfigHandler, SurfaceComponentConfig, SurfaceConfigBuilder, SurfaceDefinition,
+        SurfaceHandle,
     };
 
     pub use crate::calloop::{Generic, Interest, Mode, PostAction, RegistrationToken, Timer};

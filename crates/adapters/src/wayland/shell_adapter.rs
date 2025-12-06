@@ -711,6 +711,42 @@ impl WaylandShellSystem {
     pub fn app_state(&self) -> &AppState {
         &self.state
     }
+
+    pub fn app_state_mut(&mut self) -> &mut AppState {
+        &mut self.state
+    }
+
+    pub fn spawn_surface(&mut self, config: &ShellSurfaceConfig) -> Result<Vec<OutputHandle>> {
+        log::info!("Spawning new surface '{}'", config.name);
+
+        let mut handles = Vec::new();
+
+        for (output_handle, _surface) in self.state.outputs_with_handles() {
+            handles.push(output_handle);
+        }
+
+        log::info!(
+            "Surface '{}' would spawn on {} outputs (dynamic spawning not yet fully implemented)",
+            config.name,
+            handles.len()
+        );
+
+        Ok(handles)
+    }
+
+    pub fn despawn_surface(&mut self, surface_name: &str) -> Result<()> {
+        log::info!("Despawning surface '{}'", surface_name);
+
+        let removed = self.state.remove_surfaces_by_name(surface_name);
+
+        log::info!(
+            "Removed {} surface instances for '{}'",
+            removed.len(),
+            surface_name
+        );
+
+        Ok(())
+    }
 }
 
 impl ShellSystemPort for WaylandShellSystem {

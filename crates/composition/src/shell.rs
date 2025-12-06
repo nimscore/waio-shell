@@ -20,6 +20,7 @@ use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::prelude::{
     AnchorEdges, KeyboardInteractivity, Layer, Margins, OutputPolicy, ScaleFactor, SurfaceDimension,
 };
+use layer_shika_domain::value_objects::handle::SurfaceHandle;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
 use spin_on::spin_on;
@@ -218,11 +219,17 @@ impl SurfaceConfigBuilder {
     }
 }
 
+type OutputConnectedHandler = Box<dyn Fn(&OutputInfo)>;
+type OutputDisconnectedHandler = Box<dyn Fn(OutputHandle)>;
+
 pub struct Shell {
     inner: Rc<RefCell<ShellSystemFacade>>,
     surfaces: HashMap<String, SurfaceDefinition>,
+    surface_handles: HashMap<SurfaceHandle, String>,
     compilation_result: Rc<CompilationResult>,
     popup_command_sender: channel::Sender<PopupCommand>,
+    output_connected_handlers: Rc<RefCell<Vec<OutputConnectedHandler>>>,
+    output_disconnected_handlers: Rc<RefCell<Vec<OutputDisconnectedHandler>>>,
 }
 
 impl Shell {
@@ -396,13 +403,19 @@ impl Shell {
         let (sender, receiver) = channel::channel();
 
         let mut surfaces = HashMap::new();
+        let mut surface_handles = HashMap::new();
+        let handle = SurfaceHandle::new();
+        surface_handles.insert(handle, definition.component.clone());
         surfaces.insert(definition.component.clone(), definition);
 
         let shell = Self {
             inner: Rc::clone(&inner_rc),
             surfaces,
+            surface_handles,
             compilation_result,
             popup_command_sender: sender,
+            output_connected_handlers: Rc::new(RefCell::new(Vec::new())),
+            output_disconnected_handlers: Rc::new(RefCell::new(Vec::new())),
         };
 
         shell.setup_popup_command_handler(receiver)?;
@@ -451,15 +464,21 @@ impl Shell {
         let (sender, receiver) = channel::channel();
 
         let mut surfaces = HashMap::new();
+        let mut surface_handles = HashMap::new();
         for definition in definitions {
+            let handle = SurfaceHandle::new();
+            surface_handles.insert(handle, definition.component.clone());
             surfaces.insert(definition.component.clone(), definition);
         }
 
         let shell = Self {
             inner: Rc::clone(&inner_rc),
             surfaces,
+            surface_handles,
             compilation_result,
             popup_command_sender: sender,
+            output_connected_handlers: Rc::new(RefCell::new(Vec::new())),
+            output_disconnected_handlers: Rc::new(RefCell::new(Vec::new())),
         };
 
         shell.setup_popup_command_handler(receiver)?;
@@ -540,6 +559,101 @@ impl Shell {
         );
         self.inner.borrow_mut().run()?;
         Ok(())
+    }
+
+    pub fn spawn_surface(&mut self, definition: SurfaceDefinition) -> Result<Vec<SurfaceHandle>> {
+        let component_definition = self
+            .compilation_result
+            .component(&definition.component)
+            .ok_or_else(|| {
+                Error::Domain(DomainError::Configuration {
+                    message: format!(
+                        "Component '{}' not found in compilation result",
+                        definition.component
+                    ),
+                })
+            })?;
+
+        let wayland_config = WaylandSurfaceConfig::from_domain_config(
+            &definition.component,
+            component_definition,
+            Some(Rc::clone(&self.compilation_result)),
+            definition.config.clone(),
+        );
+
+        let shell_config = ShellSurfaceConfig {
+            name: definition.component.clone(),
+            config: wayland_config,
+        };
+
+        let mut facade = self.inner.borrow_mut();
+        let handles = facade.inner_mut().spawn_surface(&shell_config)?;
+
+        let surface_handle = SurfaceHandle::new();
+        self.surface_handles
+            .insert(surface_handle, definition.component.clone());
+        self.surfaces
+            .insert(definition.component.clone(), definition);
+
+        log::info!(
+            "Spawned surface with handle {:?}, created {} output instances",
+            surface_handle,
+            handles.len()
+        );
+
+        Ok(vec![surface_handle])
+    }
+
+    pub fn despawn_surface(&mut self, handle: SurfaceHandle) -> Result<()> {
+        let surface_name = self.surface_handles.remove(&handle).ok_or_else(|| {
+            Error::Domain(DomainError::Configuration {
+                message: format!("Surface handle {:?} not found", handle),
+            })
+        })?;
+
+        self.surfaces.remove(&surface_name);
+
+        let mut facade = self.inner.borrow_mut();
+        facade.inner_mut().despawn_surface(&surface_name)?;
+
+        log::info!(
+            "Despawned surface '{}' with handle {:?}",
+            surface_name,
+            handle
+        );
+
+        Ok(())
+    }
+
+    pub fn on_output_connected<F>(&mut self, handler: F) -> Result<()>
+    where
+        F: Fn(&OutputInfo) + 'static,
+    {
+        self.output_connected_handlers
+            .borrow_mut()
+            .push(Box::new(handler));
+        Ok(())
+    }
+
+    pub fn on_output_disconnected<F>(&mut self, handler: F) -> Result<()>
+    where
+        F: Fn(OutputHandle) + 'static,
+    {
+        self.output_disconnected_handlers
+            .borrow_mut()
+            .push(Box::new(handler));
+        Ok(())
+    }
+
+    pub fn get_surface_handle(&self, name: &str) -> Option<SurfaceHandle> {
+        self.surface_handles
+            .iter()
+            .find(|(_, n)| n.as_str() == name)
+            .map(|(h, _)| *h)
+    }
+
+    pub fn get_surface_name(&self, handle: SurfaceHandle) -> Option<&str> {
+        self.surface_handles.get(&handle).map(String::as_str)
     }
 
     pub fn with_surface<F, R>(&self, name: &str, f: F) -> Result<R>
