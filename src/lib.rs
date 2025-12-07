@@ -122,7 +122,7 @@ pub use layer_shika_composition::{Error, Handle, Result, SurfaceHandle};
 
 pub use shell::{
     CompiledUiSource, DEFAULT_COMPONENT_NAME, DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Shell,
-    ShellBuilder, ShellConfig, ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime,
+    ShellBuilder, ShellConfig, ShellControl, ShellEventContext, ShellRuntime,
     ShellSurfaceConfigHandler, SurfaceComponentConfig, SurfaceConfigBuilder, SurfaceDefinition,
 };
 
@@ -133,7 +133,7 @@ pub use window::{
 
 pub use output::{OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry};
 
-pub use event::{EventContext, EventLoopHandle};
+pub use event::{EventDispatchContext, EventLoopHandle, ShellEventLoop};
 
 pub use slint_integration::{PopupWindow, slint, slint_interpreter};
 

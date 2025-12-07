@@ -1,1 +1,1 @@
-pub use layer_shika_composition::{EventContext, EventLoopHandle};
+pub use layer_shika_composition::{EventDispatchContext, EventLoopHandle, ShellEventLoop};

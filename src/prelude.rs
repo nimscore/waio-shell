@@ -10,7 +10,7 @@
 
 pub use crate::shell::{
     CompiledUiSource, DEFAULT_COMPONENT_NAME, DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Shell,
-    ShellBuilder, ShellConfig, ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime,
+    ShellBuilder, ShellConfig, ShellControl, ShellEventContext, ShellRuntime,
     ShellSurfaceConfigHandler, SurfaceComponentConfig, SurfaceConfigBuilder, SurfaceDefinition,
 };
 
@@ -21,7 +21,7 @@ pub use crate::window::{
 
 pub use crate::output::{OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry};
 
-pub use crate::event::{EventContext, EventLoopHandle};
+pub use crate::event::{EventDispatchContext, EventLoopHandle, ShellEventLoop};
 
 pub use crate::slint_integration::{PopupWindow, slint, slint_interpreter};
 

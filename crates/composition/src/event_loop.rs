@@ -7,18 +7,37 @@ use layer_shika_adapters::platform::calloop::{
 use layer_shika_adapters::{AppState, WaylandSystemOps};
 use std::cell::RefCell;
 use std::os::unix::io::AsFd;
-use std::rc::Weak;
+use std::rc::{Rc, Weak};
 use std::time::{Duration, Instant};
 
 pub trait FromAppState<'a> {
     fn from_app_state(app_state: &'a mut AppState) -> Self;
 }
 
-pub struct EventLoopHandleBase {
+pub struct ShellEventLoop {
+    inner: Rc<RefCell<dyn WaylandSystemOps>>,
+}
+
+impl ShellEventLoop {
+    pub fn new(inner: Rc<RefCell<dyn WaylandSystemOps>>) -> Self {
+        Self { inner }
+    }
+
+    pub fn run(&mut self) -> Result<()> {
+        self.inner.borrow_mut().run()?;
+        Ok(())
+    }
+
+    pub fn get_handle(&self) -> EventLoopHandle {
+        EventLoopHandle::new(Rc::downgrade(&self.inner))
+    }
+}
+
+pub struct EventLoopHandle {
     system: Weak<RefCell<dyn WaylandSystemOps>>,
 }
 
-impl EventLoopHandleBase {
+impl EventLoopHandle {
     pub fn new(system: Weak<RefCell<dyn WaylandSystemOps>>) -> Self {
         Self { system }
     }

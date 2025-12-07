@@ -1,4 +1,4 @@
-use crate::event_loop::{EventLoopHandleBase, FromAppState};
+use crate::event_loop::FromAppState;
 use crate::{Error, Result};
 use layer_shika_adapters::platform::calloop::channel;
 use layer_shika_adapters::platform::slint::ComponentHandle;
@@ -98,13 +98,11 @@ impl ShellControl {
     }
 }
 
-pub type EventLoopHandle = EventLoopHandleBase;
-
-pub struct EventContext<'a> {
+pub struct EventDispatchContext<'a> {
     app_state: &'a mut AppState,
 }
 
-impl<'a> FromAppState<'a> for EventContext<'a> {
+impl<'a> FromAppState<'a> for EventDispatchContext<'a> {
     fn from_app_state(app_state: &'a mut AppState) -> Self {
         Self { app_state }
     }
@@ -122,7 +120,38 @@ fn extract_dimensions_from_callback(args: &[Value]) -> PopupDimensions {
     )
 }
 
-impl EventContext<'_> {
+impl EventDispatchContext<'_> {
+    pub fn with_surface<F, R>(&self, name: &str, f: F) -> Result<R>
+    where
+        F: FnOnce(&ComponentInstance) -> R,
+    {
+        let component = self.get_surface_component(name).ok_or_else(|| {
+            Error::Domain(DomainError::Configuration {
+                message: format!("Surface '{}' not found", name),
+            })
+        })?;
+        Ok(f(component))
+    }
+
+    pub fn with_output<F, R>(&self, handle: OutputHandle, f: F) -> Result<R>
+    where
+        F: FnOnce(&ComponentInstance) -> R,
+    {
+        let component = self.get_output_component(handle).ok_or_else(|| {
+            Error::Domain(DomainError::Configuration {
+                message: format!("Output with handle {:?} not found", handle),
+            })
+        })?;
+        Ok(f(component))
+    }
+
+    fn get_surface_component(&self, name: &str) -> Option<&ComponentInstance> {
+        self.app_state
+            .surfaces_by_name(name)
+            .next()
+            .map(SurfaceState::component_instance)
+    }
+
     #[must_use]
     pub fn component_instance(&self) -> Option<&ComponentInstance> {
         self.app_state

@@ -1,4 +1,4 @@
-use crate::event_loop::{EventLoopHandleBase, FromAppState};
+use crate::event_loop::{EventLoopHandle, FromAppState};
 use crate::popup_builder::PopupBuilder;
 use crate::shell::LayerSurfaceHandle;
 use crate::shell_runtime::ShellRuntime;
@@ -447,7 +447,7 @@ impl Runtime {
         loop_handle
             .insert_source(receiver, move |event, (), app_state| {
                 if let channel::Event::Msg(command) = event {
-                    let mut ctx = crate::system::EventContext::from_app_state(app_state);
+                    let mut ctx = crate::system::EventDispatchContext::from_app_state(app_state);
 
                     match command {
                         PopupCommand::Show(request) => {
@@ -814,8 +814,6 @@ impl ShellRuntime for Runtime {
         Ok(())
     }
 }
-
-pub type EventLoopHandle = EventLoopHandleBase;
 
 pub struct EventContext<'a> {
     app_state: &'a mut AppState,

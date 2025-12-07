@@ -14,6 +14,7 @@ use layer_shika_adapters::errors::LayerShikaError;
 use layer_shika_domain::errors::DomainError;
 use std::result::Result as StdResult;
 
+pub use event_loop::{EventLoopHandle, ShellEventLoop};
 pub use layer_shika_adapters::PopupWindow;
 pub use layer_shika_adapters::platform::{slint, slint_interpreter};
 pub use layer_shika_domain::entities::output_registry::OutputRegistry;
@@ -29,16 +30,14 @@ pub use layer_shika_domain::value_objects::popup_positioning_mode::PopupPosition
 pub use layer_shika_domain::value_objects::popup_request::{
     PopupHandle, PopupPlacement, PopupRequest, PopupSize,
 };
+pub use layer_surface::{LayerSurfaceHandle, ShellSurfaceConfigHandler};
 pub use popup_builder::PopupBuilder;
 pub use shell_runtime::{DEFAULT_SURFACE_NAME, ShellRuntime};
-pub use system::{EventContext, EventLoopHandle, ShellControl};
+pub use system::{EventDispatchContext, ShellControl};
 pub use value_conversion::IntoValue;
 
-pub use layer_surface::{LayerSurfaceHandle, ShellSurfaceConfigHandler};
-
 pub use shell::{
-    DEFAULT_COMPONENT_NAME, Shell, ShellBuilder, ShellEventContext, ShellEventLoopHandle,
-    SurfaceConfigBuilder,
+    DEFAULT_COMPONENT_NAME, Shell, ShellBuilder, ShellEventContext, SurfaceConfigBuilder,
 };
 
 pub use surface_registry::{SurfaceDefinition, SurfaceEntry, SurfaceMetadata, SurfaceRegistry};
@@ -46,9 +45,7 @@ pub use surface_registry::{SurfaceDefinition, SurfaceEntry, SurfaceMetadata, Sur
 pub use shell_config::{CompiledUiSource, ShellConfig, SurfaceComponentConfig};
 
 pub mod calloop {
-    pub use layer_shika_adapters::platform::calloop::{
-        Generic, Interest, Mode, PostAction, RegistrationToken, TimeoutAction, Timer, channel,
-    };
+    pub use layer_shika_adapters::platform::calloop::*;
 }
 
 pub type Result<T> = StdResult<T, Error>;
@@ -68,11 +65,11 @@ pub enum Error {
 pub mod prelude {
     pub use crate::{
         AnchorEdges, AnchorStrategy, CompiledUiSource, DEFAULT_COMPONENT_NAME,
-        DEFAULT_SURFACE_NAME, EventContext, EventLoopHandle, Handle, IntoValue,
+        DEFAULT_SURFACE_NAME, EventDispatchContext, EventLoopHandle, Handle, IntoValue,
         KeyboardInteractivity, Layer, LayerSurfaceHandle, OutputGeometry, OutputHandle, OutputInfo,
         OutputPolicy, OutputRegistry, PopupBuilder, PopupHandle, PopupPlacement,
         PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result, Shell, ShellBuilder,
-        ShellConfig, ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime,
+        ShellConfig, ShellControl, ShellEventContext, ShellEventLoop, ShellRuntime,
         ShellSurfaceConfigHandler, SurfaceComponentConfig, SurfaceConfigBuilder, SurfaceDefinition,
         SurfaceEntry, SurfaceHandle, SurfaceMetadata, SurfaceRegistry,
     };

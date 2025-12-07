@@ -1,4 +1,4 @@
-use crate::event_loop::{EventLoopHandleBase, FromAppState};
+use crate::event_loop::{EventLoopHandle, FromAppState};
 use crate::layer_surface::LayerSurfaceHandle;
 use crate::popup_builder::PopupBuilder;
 use crate::shell_config::{CompiledUiSource, ShellConfig};
@@ -485,7 +485,7 @@ impl Shell {
         loop_handle
             .insert_source(receiver, move |event, (), app_state| {
                 if let channel::Event::Msg(command) = event {
-                    let mut ctx = crate::system::EventContext::from_app_state(app_state);
+                    let mut ctx = crate::system::EventDispatchContext::from_app_state(app_state);
 
                     match command {
                         PopupCommand::Show(request) => {
@@ -535,8 +535,8 @@ impl Shell {
         self.registry.contains_name(name)
     }
 
-    pub fn event_loop_handle(&self) -> ShellEventLoopHandle {
-        ShellEventLoopHandle::new(Rc::downgrade(&self.inner))
+    pub fn event_loop_handle(&self) -> EventLoopHandle {
+        EventLoopHandle::new(Rc::downgrade(&self.inner))
     }
 
     pub fn run(&mut self) -> Result<()> {
@@ -887,11 +887,11 @@ impl Shell {
 }
 
 impl ShellRuntime for Shell {
-    type LoopHandle = ShellEventLoopHandle;
+    type LoopHandle = EventLoopHandle;
     type Context<'a> = ShellEventContext<'a>;
 
     fn event_loop_handle(&self) -> Self::LoopHandle {
-        ShellEventLoopHandle::new(Rc::downgrade(&self.inner))
+        EventLoopHandle::new(Rc::downgrade(&self.inner))
     }
 
     fn with_component<F>(&self, name: &str, mut f: F)
@@ -925,8 +925,6 @@ impl ShellRuntime for Shell {
         Ok(())
     }
 }
-
-pub type ShellEventLoopHandle = EventLoopHandleBase;
 
 pub struct ShellEventContext<'a> {
     app_state: &'a mut AppState,
