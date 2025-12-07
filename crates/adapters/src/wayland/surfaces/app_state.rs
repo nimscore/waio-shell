@@ -376,6 +376,16 @@ impl AppState {
             .map(|(_, v)| v)
     }
 
+    pub fn surfaces_by_name_mut(
+        &mut self,
+        surface_name: &str,
+    ) -> impl Iterator<Item = &mut PerOutputSurface> {
+        self.surfaces
+            .iter_mut()
+            .filter(move |(k, _)| k.surface_name == surface_name)
+            .map(|(_, v)| v)
+    }
+
     pub fn get_output_by_handle(&self, handle: OutputHandle) -> Option<&PerOutputSurface> {
         self.get_first_surface_for_output(handle)
     }

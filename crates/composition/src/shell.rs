@@ -4,7 +4,9 @@ use crate::popup_builder::PopupBuilder;
 use crate::shell_config::{CompiledUiSource, ShellConfig};
 use crate::shell_runtime::ShellRuntime;
 use crate::surface_registry::{SurfaceDefinition, SurfaceEntry, SurfaceRegistry};
-use crate::system::{PopupCommand, ShellControl};
+use crate::system::{
+    EventDispatchContext, PopupCommand, ShellCommand, ShellControl, SurfaceCommand,
+};
 use crate::value_conversion::IntoValue;
 use crate::{Error, Result};
 use layer_shika_adapters::errors::EventLoopError;
@@ -220,7 +222,7 @@ pub struct Shell {
     inner: Rc<RefCell<dyn WaylandSystemOps>>,
     registry: SurfaceRegistry,
     compilation_result: Rc<CompilationResult>,
-    popup_command_sender: channel::Sender<PopupCommand>,
+    command_sender: channel::Sender<ShellCommand>,
     output_connected_handlers: Rc<RefCell<Vec<OutputConnectedHandler>>>,
     output_disconnected_handlers: Rc<RefCell<Vec<OutputDisconnectedHandler>>>,
 }
@@ -403,12 +405,12 @@ impl Shell {
             inner: Rc::clone(&inner_rc),
             registry,
             compilation_result,
-            popup_command_sender: sender,
+            command_sender: sender,
             output_connected_handlers: Rc::new(RefCell::new(Vec::new())),
             output_disconnected_handlers: Rc::new(RefCell::new(Vec::new())),
         };
 
-        shell.setup_popup_command_handler(receiver)?;
+        shell.setup_command_handler(receiver)?;
 
         log::info!("Shell created (single-window mode)");
 
@@ -463,12 +465,12 @@ impl Shell {
             inner: Rc::clone(&inner_rc),
             registry,
             compilation_result,
-            popup_command_sender: sender,
+            command_sender: sender,
             output_connected_handlers: Rc::new(RefCell::new(Vec::new())),
             output_disconnected_handlers: Rc::new(RefCell::new(Vec::new())),
         };
 
-        shell.setup_popup_command_handler(receiver)?;
+        shell.setup_command_handler(receiver)?;
 
         log::info!(
             "Shell created (multi-surface mode) with surfaces: {:?}",
@@ -478,7 +480,7 @@ impl Shell {
         Ok(shell)
     }
 
-    fn setup_popup_command_handler(&self, receiver: channel::Channel<PopupCommand>) -> Result<()> {
+    fn setup_command_handler(&self, receiver: channel::Channel<ShellCommand>) -> Result<()> {
         let loop_handle = self.inner.borrow().event_loop_handle();
         let control = self.control();
 
@@ -488,23 +490,15 @@ impl Shell {
                     let mut ctx = crate::system::EventDispatchContext::from_app_state(app_state);
 
                     match command {
-                        PopupCommand::Show(request) => {
-                            if let Err(e) = ctx.show_popup(&request, Some(control.clone())) {
-                                log::error!("Failed to show popup: {}", e);
-                            }
+                        ShellCommand::Popup(popup_cmd) => {
+                            Self::handle_popup_command(popup_cmd, &mut ctx, &control);
                         }
-                        PopupCommand::Close(handle) => {
-                            if let Err(e) = ctx.close_popup(handle) {
-                                log::error!("Failed to close popup: {}", e);
-                            }
+                        ShellCommand::Surface(surface_cmd) => {
+                            Self::handle_surface_command(surface_cmd, &mut ctx);
                         }
-                        PopupCommand::Resize {
-                            handle,
-                            width,
-                            height,
-                        } => {
-                            if let Err(e) = ctx.resize_popup(handle, width, height) {
-                                log::error!("Failed to resize popup: {}", e);
+                        ShellCommand::Render => {
+                            if let Err(e) = ctx.render_frame_if_dirty() {
+                                log::error!("Failed to render frame: {}", e);
                             }
                         }
                     }
@@ -513,7 +507,7 @@ impl Shell {
             .map_err(|e| {
                 Error::Adapter(
                     EventLoopError::InsertSource {
-                        message: format!("Failed to setup popup command handler: {e:?}"),
+                        message: format!("Failed to setup command handler: {e:?}"),
                     }
                     .into(),
                 )
@@ -522,9 +516,134 @@ impl Shell {
         Ok(())
     }
 
+    fn handle_popup_command(
+        command: PopupCommand,
+        ctx: &mut EventDispatchContext<'_>,
+        control: &ShellControl,
+    ) {
+        match command {
+            PopupCommand::Show(request) => {
+                if let Err(e) = ctx.show_popup(&request, Some(control.clone())) {
+                    log::error!("Failed to show popup: {}", e);
+                }
+            }
+            PopupCommand::Close(handle) => {
+                if let Err(e) = ctx.close_popup(handle) {
+                    log::error!("Failed to close popup: {}", e);
+                }
+            }
+            PopupCommand::Resize {
+                handle,
+                width,
+                height,
+            } => {
+                if let Err(e) = ctx.resize_popup(handle, width, height) {
+                    log::error!("Failed to resize popup: {}", e);
+                }
+            }
+        }
+    }
+
+    fn handle_surface_command(command: SurfaceCommand, ctx: &mut EventDispatchContext<'_>) {
+        match command {
+            SurfaceCommand::Resize {
+                name,
+                width,
+                height,
+            } => {
+                log::debug!("Surface command: Resize '{}' to {}x{}", name, width, height);
+                for surface in ctx.surfaces_by_name_mut(&name) {
+                    let handle = LayerSurfaceHandle::from_window_state(surface);
+                    handle.set_size(width, height);
+                    handle.commit();
+
+                    surface.update_size_with_compositor_logic(width, height);
+                }
+            }
+            SurfaceCommand::SetAnchor { name, anchor } => {
+                log::debug!("Surface command: SetAnchor '{}' to {:?}", name, anchor);
+                for surface in ctx.surfaces_by_name(&name) {
+                    let handle = LayerSurfaceHandle::from_window_state(surface);
+                    handle.set_anchor_edges(anchor);
+                    handle.commit();
+                }
+            }
+            SurfaceCommand::SetExclusiveZone { name, zone } => {
+                log::debug!("Surface command: SetExclusiveZone '{}' to {}", name, zone);
+                for surface in ctx.surfaces_by_name(&name) {
+                    let handle = LayerSurfaceHandle::from_window_state(surface);
+                    handle.set_exclusive_zone(zone);
+                    handle.commit();
+                }
+            }
+            SurfaceCommand::SetMargins { name, margins } => {
+                log::debug!("Surface command: SetMargins '{}' to {:?}", name, margins);
+                for surface in ctx.surfaces_by_name(&name) {
+                    let handle = LayerSurfaceHandle::from_window_state(surface);
+                    handle.set_margins(margins);
+                    handle.commit();
+                }
+            }
+            SurfaceCommand::SetLayer { name, layer } => {
+                log::debug!("Surface command: SetLayer '{}' to {:?}", name, layer);
+                for surface in ctx.surfaces_by_name(&name) {
+                    let handle = LayerSurfaceHandle::from_window_state(surface);
+                    handle.set_layer(layer);
+                    handle.commit();
+                }
+            }
+            SurfaceCommand::SetKeyboardInteractivity { name, mode } => {
+                log::debug!(
+                    "Surface command: SetKeyboardInteractivity '{}' to {:?}",
+                    name,
+                    mode
+                );
+                for surface in ctx.surfaces_by_name(&name) {
+                    let handle = LayerSurfaceHandle::from_window_state(surface);
+                    handle.set_keyboard_interactivity(mode);
+                    handle.commit();
+                }
+            }
+            SurfaceCommand::SetOutputPolicy { name, policy } => {
+                log::debug!(
+                    "Surface command: SetOutputPolicy '{}' to {:?}",
+                    name,
+                    policy
+                );
+                log::warn!(
+                    "SetOutputPolicy is not yet implemented - requires runtime surface spawning"
+                );
+            }
+            SurfaceCommand::SetScaleFactor { name, factor } => {
+                log::debug!("Surface command: SetScaleFactor '{}' to {:?}", name, factor);
+                log::warn!(
+                    "SetScaleFactor is not yet implemented - requires runtime surface property updates"
+                );
+            }
+            SurfaceCommand::ApplyConfig { name, config } => {
+                log::debug!("Surface command: ApplyConfig '{}'", name);
+                for surface in ctx.surfaces_by_name(&name) {
+                    let handle = LayerSurfaceHandle::from_window_state(surface);
+
+                    handle.set_size(config.dimensions.width(), config.dimensions.height());
+                    handle.set_anchor_edges(config.anchor);
+                    handle.set_exclusive_zone(config.exclusive_zone);
+                    handle.set_margins(config.margin);
+                    handle.set_layer(config.layer);
+                    handle.set_keyboard_interactivity(config.keyboard_interactivity);
+                    handle.commit();
+                }
+            }
+        }
+
+        if let Err(e) = ctx.render_frame_if_dirty() {
+            log::error!("Failed to render frame after surface command: {}", e);
+        }
+    }
+
     #[must_use]
     pub fn control(&self) -> ShellControl {
-        ShellControl::new(self.popup_command_sender.clone())
+        ShellControl::new(self.command_sender.clone())
     }
 
     pub fn surface_names(&self) -> Vec<&str> {

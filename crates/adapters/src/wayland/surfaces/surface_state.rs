@@ -123,6 +123,42 @@ impl SurfaceState {
         self.rendering.update_size(width, height, scale_factor);
     }
 
+    #[allow(clippy::cast_precision_loss)]
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_sign_loss)]
+    pub fn update_size_with_compositor_logic(
+        &mut self,
+        requested_width: u32,
+        requested_height: u32,
+    ) {
+        let scale_factor = self.event_context.borrow().scale_factor();
+        let output_width = self.output_size().width;
+
+        let target_width = if requested_width == 0 || (requested_width == 1 && output_width > 1) {
+            if scale_factor > 1.0 {
+                (output_width as f32 / scale_factor).round() as u32
+            } else {
+                output_width
+            }
+        } else {
+            requested_width
+        };
+
+        let target_height = if requested_height > 0 {
+            requested_height
+        } else {
+            let h = self.height();
+            if scale_factor > 1.0 {
+                (h as f32 / scale_factor).round() as u32
+            } else {
+                h
+            }
+        };
+
+        self.rendering
+            .update_size(target_width, target_height, scale_factor);
+    }
+
     #[allow(clippy::cast_possible_truncation)]
     pub fn set_current_pointer_position(&mut self, physical_x: f64, physical_y: f64) {
         self.event_context

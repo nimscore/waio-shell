@@ -1,4 +1,5 @@
 use crate::event_loop::FromAppState;
+use crate::layer_surface::LayerSurfaceHandle;
 use crate::{Error, Result};
 use layer_shika_adapters::platform::calloop::channel;
 use layer_shika_adapters::platform::slint::ComponentHandle;
@@ -6,8 +7,12 @@ use layer_shika_adapters::platform::slint_interpreter::{
     CompilationResult, ComponentDefinition, ComponentInstance, Value,
 };
 use layer_shika_adapters::{AppState, PopupManager, SurfaceState};
+use layer_shika_domain::config::SurfaceConfig;
 use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::errors::DomainError;
+use layer_shika_domain::prelude::{
+    AnchorEdges, KeyboardInteractivity, Layer, Margins, OutputPolicy, ScaleFactor,
+};
 use layer_shika_domain::value_objects::dimensions::PopupDimensions;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
@@ -28,19 +33,65 @@ pub enum PopupCommand {
     },
 }
 
+pub enum SurfaceCommand {
+    Resize {
+        name: String,
+        width: u32,
+        height: u32,
+    },
+    SetAnchor {
+        name: String,
+        anchor: AnchorEdges,
+    },
+    SetExclusiveZone {
+        name: String,
+        zone: i32,
+    },
+    SetMargins {
+        name: String,
+        margins: Margins,
+    },
+    SetLayer {
+        name: String,
+        layer: Layer,
+    },
+    SetOutputPolicy {
+        name: String,
+        policy: OutputPolicy,
+    },
+    SetScaleFactor {
+        name: String,
+        factor: ScaleFactor,
+    },
+    SetKeyboardInteractivity {
+        name: String,
+        mode: KeyboardInteractivity,
+    },
+    ApplyConfig {
+        name: String,
+        config: SurfaceConfig,
+    },
+}
+
+pub enum ShellCommand {
+    Popup(PopupCommand),
+    Surface(SurfaceCommand),
+    Render,
+}
+
 #[derive(Clone)]
 pub struct ShellControl {
-    sender: channel::Sender<PopupCommand>,
+    sender: channel::Sender<ShellCommand>,
 }
 
 impl ShellControl {
-    pub fn new(sender: channel::Sender<PopupCommand>) -> Self {
+    pub fn new(sender: channel::Sender<ShellCommand>) -> Self {
         Self { sender }
     }
 
     pub fn show_popup(&self, request: &PopupRequest) -> Result<()> {
         self.sender
-            .send(PopupCommand::Show(request.clone()))
+            .send(ShellCommand::Popup(PopupCommand::Show(request.clone())))
             .map_err(|_| {
                 Error::Domain(DomainError::Configuration {
                     message: "Failed to send popup show command: channel closed".to_string(),
@@ -76,23 +127,183 @@ impl ShellControl {
     }
 
     pub fn close_popup(&self, handle: PopupHandle) -> Result<()> {
-        self.sender.send(PopupCommand::Close(handle)).map_err(|_| {
-            Error::Domain(DomainError::Configuration {
-                message: "Failed to send popup close command: channel closed".to_string(),
+        self.sender
+            .send(ShellCommand::Popup(PopupCommand::Close(handle)))
+            .map_err(|_| {
+                Error::Domain(DomainError::Configuration {
+                    message: "Failed to send popup close command: channel closed".to_string(),
+                })
             })
-        })
     }
 
     pub fn resize_popup(&self, handle: PopupHandle, width: f32, height: f32) -> Result<()> {
         self.sender
-            .send(PopupCommand::Resize {
+            .send(ShellCommand::Popup(PopupCommand::Resize {
                 handle,
                 width,
                 height,
-            })
+            }))
             .map_err(|_| {
                 Error::Domain(DomainError::Configuration {
                     message: "Failed to send popup resize command: channel closed".to_string(),
+                })
+            })
+    }
+
+    pub fn request_redraw(&self) -> Result<()> {
+        self.sender.send(ShellCommand::Render).map_err(|_| {
+            Error::Domain(DomainError::Configuration {
+                message: "Failed to send redraw command: channel closed".to_string(),
+            })
+        })
+    }
+
+    pub fn surface(&self, name: impl Into<String>) -> SurfaceControlHandle {
+        SurfaceControlHandle {
+            name: name.into(),
+            sender: self.sender.clone(),
+        }
+    }
+}
+
+pub struct SurfaceControlHandle {
+    name: String,
+    sender: channel::Sender<ShellCommand>,
+}
+
+impl SurfaceControlHandle {
+    pub fn resize(&self, width: u32, height: u32) -> Result<()> {
+        self.sender
+            .send(ShellCommand::Surface(SurfaceCommand::Resize {
+                name: self.name.clone(),
+                width,
+                height,
+            }))
+            .map_err(|_| {
+                Error::Domain(DomainError::Configuration {
+                    message: "Failed to send surface resize command: channel closed".to_string(),
+                })
+            })
+    }
+
+    pub fn set_width(&self, width: u32) -> Result<()> {
+        self.resize(width, 0)
+    }
+
+    pub fn set_height(&self, height: u32) -> Result<()> {
+        self.resize(0, height)
+    }
+
+    pub fn set_anchor(&self, anchor: AnchorEdges) -> Result<()> {
+        self.sender
+            .send(ShellCommand::Surface(SurfaceCommand::SetAnchor {
+                name: self.name.clone(),
+                anchor,
+            }))
+            .map_err(|_| {
+                Error::Domain(DomainError::Configuration {
+                    message: "Failed to send surface set_anchor command: channel closed"
+                        .to_string(),
+                })
+            })
+    }
+
+    pub fn set_exclusive_zone(&self, zone: i32) -> Result<()> {
+        self.sender
+            .send(ShellCommand::Surface(SurfaceCommand::SetExclusiveZone {
+                name: self.name.clone(),
+                zone,
+            }))
+            .map_err(|_| {
+                Error::Domain(DomainError::Configuration {
+                    message: "Failed to send surface set_exclusive_zone command: channel closed"
+                        .to_string(),
+                })
+            })
+    }
+
+    pub fn set_margins(&self, margins: impl Into<Margins>) -> Result<()> {
+        self.sender
+            .send(ShellCommand::Surface(SurfaceCommand::SetMargins {
+                name: self.name.clone(),
+                margins: margins.into(),
+            }))
+            .map_err(|_| {
+                Error::Domain(DomainError::Configuration {
+                    message: "Failed to send surface set_margins command: channel closed"
+                        .to_string(),
+                })
+            })
+    }
+
+    pub fn set_layer(&self, layer: Layer) -> Result<()> {
+        self.sender
+            .send(ShellCommand::Surface(SurfaceCommand::SetLayer {
+                name: self.name.clone(),
+                layer,
+            }))
+            .map_err(|_| {
+                Error::Domain(DomainError::Configuration {
+                    message: "Failed to send surface set_layer command: channel closed".to_string(),
+                })
+            })
+    }
+
+    pub fn set_output_policy(&self, policy: OutputPolicy) -> Result<()> {
+        self.sender
+            .send(ShellCommand::Surface(SurfaceCommand::SetOutputPolicy {
+                name: self.name.clone(),
+                policy,
+            }))
+            .map_err(|_| {
+                Error::Domain(DomainError::Configuration {
+                    message: "Failed to send surface set_output_policy command: channel closed"
+                        .to_string(),
+                })
+            })
+    }
+
+    pub fn set_scale_factor(&self, factor: ScaleFactor) -> Result<()> {
+        self.sender
+            .send(ShellCommand::Surface(SurfaceCommand::SetScaleFactor {
+                name: self.name.clone(),
+                factor,
+            }))
+            .map_err(|_| {
+                Error::Domain(DomainError::Configuration {
+                    message: "Failed to send surface set_scale_factor command: channel closed"
+                        .to_string(),
+                })
+            })
+    }
+
+    pub fn set_keyboard_interactivity(&self, mode: KeyboardInteractivity) -> Result<()> {
+        self.sender
+            .send(ShellCommand::Surface(
+                SurfaceCommand::SetKeyboardInteractivity {
+                    name: self.name.clone(),
+                    mode,
+                },
+            ))
+            .map_err(|_| {
+                Error::Domain(DomainError::Configuration {
+                    message:
+                        "Failed to send surface set_keyboard_interactivity command: channel closed"
+                            .to_string(),
+                })
+            })
+    }
+
+    pub fn apply_config(&self, config: SurfaceConfig) -> Result<()> {
+        self.sender
+            .send(ShellCommand::Surface(SurfaceCommand::ApplyConfig {
+                name: self.name.clone(),
+                config,
+            }))
+            .map_err(|_| {
+                Error::Domain(DomainError::Configuration {
+                    message: "Failed to send surface apply_config command: channel closed"
+                        .to_string(),
                 })
             })
     }
@@ -121,6 +332,17 @@ fn extract_dimensions_from_callback(args: &[Value]) -> PopupDimensions {
 }
 
 impl EventDispatchContext<'_> {
+    pub(crate) fn surfaces_by_name(&self, name: &str) -> impl Iterator<Item = &SurfaceState> {
+        self.app_state.surfaces_by_name(name)
+    }
+
+    pub(crate) fn surfaces_by_name_mut(
+        &mut self,
+        name: &str,
+    ) -> impl Iterator<Item = &mut SurfaceState> {
+        self.app_state.surfaces_by_name_mut(name)
+    }
+
     pub fn with_surface<F, R>(&self, name: &str, f: F) -> Result<R>
     where
         F: FnOnce(&ComponentInstance) -> R,
@@ -571,5 +793,36 @@ impl EventDispatchContext<'_> {
                     message: format!("Failed to set '{}' callback: {}", callback_name, e),
                 })
             })
+    }
+
+    pub fn configure_surface<F>(&mut self, name: &str, f: F) -> Result<()>
+    where
+        F: FnOnce(&ComponentInstance, LayerSurfaceHandle<'_>),
+    {
+        let surface = self
+            .app_state
+            .surfaces_by_name(name)
+            .next()
+            .ok_or_else(|| {
+                Error::Domain(DomainError::Configuration {
+                    message: format!("Surface '{}' not found", name),
+                })
+            })?;
+
+        let handle = LayerSurfaceHandle::from_window_state(surface);
+        let component = surface.component_instance();
+        f(component, handle);
+        Ok(())
+    }
+
+    pub fn configure_all_surfaces<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&ComponentInstance, LayerSurfaceHandle<'_>),
+    {
+        for surface in self.app_state.all_outputs() {
+            let handle = LayerSurfaceHandle::from_window_state(surface);
+            let component = surface.component_instance();
+            f(component, handle);
+        }
     }
 }

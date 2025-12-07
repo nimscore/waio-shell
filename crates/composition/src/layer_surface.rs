@@ -1,6 +1,7 @@
 use layer_shika_adapters::SurfaceState;
 use layer_shika_adapters::platform::slint_interpreter::ComponentInstance;
 use layer_shika_adapters::platform::wayland::{Anchor, WaylandKeyboardInteractivity, WaylandLayer};
+use layer_shika_domain::value_objects::anchor::AnchorEdges;
 use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteractivity;
 use layer_shika_domain::value_objects::layer::Layer;
 use layer_shika_domain::value_objects::margins::Margins;
@@ -16,6 +17,30 @@ impl<'a> LayerSurfaceHandle<'a> {
 
     pub fn set_anchor(&self, anchor: Anchor) {
         self.window_state.layer_surface().set_anchor(anchor);
+    }
+
+    pub fn set_anchor_edges(&self, anchor: AnchorEdges) {
+        let wayland_anchor = Self::convert_anchor(anchor);
+        self.window_state.layer_surface().set_anchor(wayland_anchor);
+    }
+
+    fn convert_anchor(anchor: AnchorEdges) -> Anchor {
+        let mut result = Anchor::empty();
+
+        if anchor.has_top() {
+            result = result.union(Anchor::Top);
+        }
+        if anchor.has_bottom() {
+            result = result.union(Anchor::Bottom);
+        }
+        if anchor.has_left() {
+            result = result.union(Anchor::Left);
+        }
+        if anchor.has_right() {
+            result = result.union(Anchor::Right);
+        }
+
+        result
     }
 
     pub fn set_size(&self, width: u32, height: u32) {
