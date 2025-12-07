@@ -12,7 +12,7 @@ use layer_shika_adapters::platform::slint_interpreter::{
     CompilationResult, Compiler, ComponentInstance, Value,
 };
 use layer_shika_adapters::{
-    AppState, ShellSurfaceConfig, ShellSystemFacade, SurfaceState, WaylandSurfaceConfig,
+    AppState, ShellSurfaceConfig, SurfaceState, WaylandSurfaceConfig, WaylandSystemOps,
 };
 use layer_shika_domain::config::SurfaceConfig;
 use layer_shika_domain::entities::output_registry::OutputRegistry;
@@ -223,7 +223,7 @@ type OutputConnectedHandler = Box<dyn Fn(&OutputInfo)>;
 type OutputDisconnectedHandler = Box<dyn Fn(OutputHandle)>;
 
 pub struct Shell {
-    inner: Rc<RefCell<ShellSystemFacade>>,
+    inner: Rc<RefCell<dyn WaylandSystemOps>>,
     surfaces: HashMap<String, SurfaceDefinition>,
     surface_handles: HashMap<SurfaceHandle, String>,
     compilation_result: Rc<CompilationResult>,
@@ -397,8 +397,7 @@ impl Shell {
         );
 
         let inner = layer_shika_adapters::WaylandShellSystem::new(&wayland_config)?;
-        let facade = ShellSystemFacade::new(inner);
-        let inner_rc = Rc::new(RefCell::new(facade));
+        let inner_rc: Rc<RefCell<dyn WaylandSystemOps>> = Rc::new(RefCell::new(inner));
 
         let (sender, receiver) = channel::channel();
 
@@ -458,8 +457,7 @@ impl Shell {
             .collect::<Result<Vec<_>>>()?;
 
         let inner = layer_shika_adapters::WaylandShellSystem::new_multi(&shell_configs)?;
-        let facade = ShellSystemFacade::new(inner);
-        let inner_rc = Rc::new(RefCell::new(facade));
+        let inner_rc: Rc<RefCell<dyn WaylandSystemOps>> = Rc::new(RefCell::new(inner));
 
         let (sender, receiver) = channel::channel();
 
@@ -492,7 +490,7 @@ impl Shell {
     }
 
     fn setup_popup_command_handler(&self, receiver: channel::Channel<PopupCommand>) -> Result<()> {
-        let loop_handle = self.inner.borrow().inner_ref().event_loop_handle();
+        let loop_handle = self.inner.borrow().event_loop_handle();
         let control = self.control();
 
         loop_handle
@@ -586,8 +584,8 @@ impl Shell {
             config: wayland_config,
         };
 
-        let mut facade = self.inner.borrow_mut();
-        let handles = facade.inner_mut().spawn_surface(&shell_config)?;
+        let mut system = self.inner.borrow_mut();
+        let handles = system.spawn_surface(&shell_config)?;
 
         let surface_handle = SurfaceHandle::new();
         self.surface_handles
@@ -613,8 +611,8 @@ impl Shell {
 
         self.surfaces.remove(&surface_name);
 
-        let mut facade = self.inner.borrow_mut();
-        facade.inner_mut().despawn_surface(&surface_name)?;
+        let mut system = self.inner.borrow_mut();
+        system.despawn_surface(&surface_name)?;
 
         log::info!(
             "Despawned surface '{}' with handle {:?}",
@@ -666,8 +664,7 @@ impl Shell {
             }));
         }
 
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
+        let system = self.inner.borrow();
 
         system
             .app_state()
@@ -685,8 +682,7 @@ impl Shell {
     where
         F: FnMut(&str, &ComponentInstance),
     {
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
+        let system = self.inner.borrow();
 
         for name in self.surfaces.keys() {
             for surface in system.app_state().surfaces_by_name(name) {
@@ -699,8 +695,7 @@ impl Shell {
     where
         F: FnOnce(&ComponentInstance) -> R,
     {
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
+        let system = self.inner.borrow();
         let window = system
             .app_state()
             .get_output_by_handle(handle)
@@ -716,8 +711,7 @@ impl Shell {
     where
         F: FnMut(OutputHandle, &ComponentInstance),
     {
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
+        let system = self.inner.borrow();
         for (handle, surface) in system.app_state().outputs_with_handles() {
             f(handle, surface.component_instance());
         }
@@ -746,8 +740,7 @@ impl Shell {
 
         let control = self.control();
         let handler = Rc::new(handler);
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
+        let system = self.inner.borrow();
 
         for surface in system.app_state().surfaces_by_name(surface_name) {
             let handler_rc = Rc::clone(&handler);
@@ -788,8 +781,7 @@ impl Shell {
 
         let control = self.control();
         let handler = Rc::new(handler);
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
+        let system = self.inner.borrow();
 
         for surface in system.app_state().surfaces_by_name(surface_name) {
             let handler_rc = Rc::clone(&handler);
@@ -819,8 +811,7 @@ impl Shell {
     {
         let control = self.control();
         let handler = Rc::new(handler);
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
+        let system = self.inner.borrow();
 
         for surface in system.app_state().all_outputs() {
             let handler_rc = Rc::clone(&handler);
@@ -849,8 +840,7 @@ impl Shell {
     {
         let control = self.control();
         let handler = Rc::new(handler);
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
+        let system = self.inner.borrow();
 
         for surface in system.app_state().all_outputs() {
             let handler_rc = Rc::clone(&handler);
@@ -876,8 +866,7 @@ impl Shell {
     where
         F: Fn(&ComponentInstance, LayerSurfaceHandle<'_>),
     {
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
+        let system = self.inner.borrow();
 
         if self.surfaces.contains_key(surface_name) {
             for surface in system.app_state().surfaces_by_name(surface_name) {
@@ -891,8 +880,7 @@ impl Shell {
     where
         F: Fn(&ComponentInstance, LayerSurfaceHandle<'_>),
     {
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
+        let system = self.inner.borrow();
 
         for surface in system.app_state().all_outputs() {
             let surface_handle = LayerSurfaceHandle::from_window_state(surface);
@@ -901,20 +889,17 @@ impl Shell {
     }
 
     pub fn output_registry(&self) -> OutputRegistry {
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
+        let system = self.inner.borrow();
         system.app_state().output_registry().clone()
     }
 
     pub fn get_output_info(&self, handle: OutputHandle) -> Option<OutputInfo> {
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
+        let system = self.inner.borrow();
         system.app_state().get_output_info(handle).cloned()
     }
 
     pub fn all_output_info(&self) -> Vec<OutputInfo> {
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
+        let system = self.inner.borrow();
         system.app_state().all_output_info().cloned().collect()
     }
 }
@@ -931,8 +916,7 @@ impl ShellRuntime for Shell {
     where
         F: FnMut(&ComponentInstance),
     {
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
+        let system = self.inner.borrow();
 
         if self.surfaces.contains_key(name) {
             for surface in system.app_state().surfaces_by_name(name) {
@@ -945,8 +929,7 @@ impl ShellRuntime for Shell {
     where
         F: FnMut(&str, &ComponentInstance),
     {
-        let facade = self.inner.borrow();
-        let system = facade.inner_ref();
+        let system = self.inner.borrow();
 
         for name in self.surfaces.keys() {
             for surface in system.app_state().surfaces_by_name(name) {

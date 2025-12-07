@@ -4,7 +4,7 @@ use layer_shika_adapters::platform::calloop::{
     EventSource, Generic, Interest, Mode, PostAction, RegistrationToken, TimeoutAction, Timer,
     channel,
 };
-use layer_shika_adapters::{AppState, ShellSystemFacade};
+use layer_shika_adapters::{AppState, WaylandSystemOps};
 use std::cell::RefCell;
 use std::os::unix::io::AsFd;
 use std::rc::Weak;
@@ -15,11 +15,11 @@ pub trait FromAppState<'a> {
 }
 
 pub struct EventLoopHandleBase {
-    system: Weak<RefCell<ShellSystemFacade>>,
+    system: Weak<RefCell<dyn WaylandSystemOps>>,
 }
 
 impl EventLoopHandleBase {
-    pub fn new(system: Weak<RefCell<ShellSystemFacade>>) -> Self {
+    pub fn new(system: Weak<RefCell<dyn WaylandSystemOps>>) -> Self {
         Self { system }
     }
 
@@ -29,7 +29,7 @@ impl EventLoopHandleBase {
         F: FnMut(S::Event, &mut S::Metadata, &mut AppState) -> R + 'static,
     {
         let system = self.system.upgrade().ok_or(Error::SystemDropped)?;
-        let loop_handle = system.borrow().inner_ref().event_loop_handle();
+        let loop_handle = system.borrow().event_loop_handle();
 
         loop_handle.insert_source(source, callback).map_err(|e| {
             Error::Adapter(

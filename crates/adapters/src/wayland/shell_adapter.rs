@@ -2,6 +2,7 @@ use crate::wayland::{
     config::{LayerSurfaceConfig, ShellSurfaceConfig, WaylandSurfaceConfig},
     globals::context::GlobalContext,
     managed_proxies::ManagedWlPointer,
+    ops::WaylandSystemOps,
     outputs::{OutputManager, OutputManagerContext},
     surfaces::layer_surface::{SurfaceCtx, SurfaceSetupParams},
     surfaces::popup_manager::{PopupContext, PopupManager},
@@ -754,5 +755,35 @@ impl ShellSystemPort for WaylandShellSystem {
         WaylandShellSystem::run(self).map_err(|e| DomainError::Adapter {
             source: Box::new(e),
         })
+    }
+}
+
+impl WaylandSystemOps for WaylandShellSystem {
+    fn run(&mut self) -> Result<()> {
+        WaylandShellSystem::run(self)
+    }
+
+    fn spawn_surface(&mut self, config: &ShellSurfaceConfig) -> Result<Vec<OutputHandle>> {
+        WaylandShellSystem::spawn_surface(self, config)
+    }
+
+    fn despawn_surface(&mut self, name: &str) -> Result<()> {
+        WaylandShellSystem::despawn_surface(self, name)
+    }
+
+    fn app_state(&self) -> &AppState {
+        WaylandShellSystem::app_state(self)
+    }
+
+    fn app_state_mut(&mut self) -> &mut AppState {
+        WaylandShellSystem::app_state_mut(self)
+    }
+
+    fn event_loop_handle(&self) -> LoopHandle<'static, AppState> {
+        WaylandShellSystem::event_loop_handle(self)
+    }
+
+    fn component_instance(&self) -> Result<&ComponentInstance> {
+        WaylandShellSystem::component_instance(self)
     }
 }
