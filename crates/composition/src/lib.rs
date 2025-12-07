@@ -6,6 +6,7 @@ mod popup_builder;
 mod shell;
 mod shell_config;
 mod shell_runtime;
+mod surface_registry;
 mod system;
 pub mod value_conversion;
 
@@ -37,8 +38,10 @@ pub use layer_surface::{LayerSurfaceHandle, ShellSurfaceConfigHandler};
 
 pub use shell::{
     DEFAULT_COMPONENT_NAME, Shell, ShellBuilder, ShellEventContext, ShellEventLoopHandle,
-    SurfaceConfigBuilder, SurfaceDefinition,
+    SurfaceConfigBuilder,
 };
+
+pub use surface_registry::{SurfaceDefinition, SurfaceEntry, SurfaceMetadata, SurfaceRegistry};
 
 pub use shell_config::{CompiledUiSource, ShellConfig, SurfaceComponentConfig};
 
@@ -71,7 +74,7 @@ pub mod prelude {
         PopupPositioningMode, PopupRequest, PopupSize, PopupWindow, Result, Shell, ShellBuilder,
         ShellConfig, ShellControl, ShellEventContext, ShellEventLoopHandle, ShellRuntime,
         ShellSurfaceConfigHandler, SurfaceComponentConfig, SurfaceConfigBuilder, SurfaceDefinition,
-        SurfaceHandle,
+        SurfaceEntry, SurfaceHandle, SurfaceMetadata, SurfaceRegistry,
     };
 
     pub use crate::calloop::{Generic, Interest, Mode, PostAction, RegistrationToken, Timer};

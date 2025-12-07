@@ -3,6 +3,7 @@ use crate::layer_surface::LayerSurfaceHandle;
 use crate::popup_builder::PopupBuilder;
 use crate::shell_config::{CompiledUiSource, ShellConfig};
 use crate::shell_runtime::ShellRuntime;
+use crate::surface_registry::{SurfaceDefinition, SurfaceEntry, SurfaceRegistry};
 use crate::system::{PopupCommand, ShellControl};
 use crate::value_conversion::IntoValue;
 use crate::{Error, Result};
@@ -25,17 +26,10 @@ use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
 use spin_on::spin_on;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 pub const DEFAULT_COMPONENT_NAME: &str = "Main";
-
-#[derive(Debug, Clone)]
-pub struct SurfaceDefinition {
-    pub component: String,
-    pub config: SurfaceConfig,
-}
 
 enum CompilationSource {
     File { path: PathBuf, compiler: Compiler },
@@ -224,8 +218,7 @@ type OutputDisconnectedHandler = Box<dyn Fn(OutputHandle)>;
 
 pub struct Shell {
     inner: Rc<RefCell<dyn WaylandSystemOps>>,
-    surfaces: HashMap<String, SurfaceDefinition>,
-    surface_handles: HashMap<SurfaceHandle, String>,
+    registry: SurfaceRegistry,
     compilation_result: Rc<CompilationResult>,
     popup_command_sender: channel::Sender<PopupCommand>,
     output_connected_handlers: Rc<RefCell<Vec<OutputConnectedHandler>>>,
@@ -401,16 +394,14 @@ impl Shell {
 
         let (sender, receiver) = channel::channel();
 
-        let mut surfaces = HashMap::new();
-        let mut surface_handles = HashMap::new();
+        let mut registry = SurfaceRegistry::new();
         let handle = SurfaceHandle::new();
-        surface_handles.insert(handle, definition.component.clone());
-        surfaces.insert(definition.component.clone(), definition);
+        let entry = SurfaceEntry::new(handle, definition.component.clone(), definition);
+        registry.insert(entry)?;
 
         let shell = Self {
             inner: Rc::clone(&inner_rc),
-            surfaces,
-            surface_handles,
+            registry,
             compilation_result,
             popup_command_sender: sender,
             output_connected_handlers: Rc::new(RefCell::new(Vec::new())),
@@ -461,18 +452,16 @@ impl Shell {
 
         let (sender, receiver) = channel::channel();
 
-        let mut surfaces = HashMap::new();
-        let mut surface_handles = HashMap::new();
+        let mut registry = SurfaceRegistry::new();
         for definition in definitions {
             let handle = SurfaceHandle::new();
-            surface_handles.insert(handle, definition.component.clone());
-            surfaces.insert(definition.component.clone(), definition);
+            let entry = SurfaceEntry::new(handle, definition.component.clone(), definition);
+            registry.insert(entry)?;
         }
 
         let shell = Self {
             inner: Rc::clone(&inner_rc),
-            surfaces,
-            surface_handles,
+            registry,
             compilation_result,
             popup_command_sender: sender,
             output_connected_handlers: Rc::new(RefCell::new(Vec::new())),
@@ -539,11 +528,11 @@ impl Shell {
     }
 
     pub fn surface_names(&self) -> Vec<&str> {
-        self.surfaces.keys().map(String::as_str).collect()
+        self.registry.surface_names()
     }
 
     pub fn has_surface(&self, name: &str) -> bool {
-        self.surfaces.contains_key(name)
+        self.registry.contains_name(name)
     }
 
     pub fn event_loop_handle(&self) -> ShellEventLoopHandle {
@@ -553,7 +542,7 @@ impl Shell {
     pub fn run(&mut self) -> Result<()> {
         log::info!(
             "Starting Shell event loop with {} windows",
-            self.surfaces.len()
+            self.registry.len()
         );
         self.inner.borrow_mut().run()?;
         Ok(())
@@ -588,10 +577,8 @@ impl Shell {
         let handles = system.spawn_surface(&shell_config)?;
 
         let surface_handle = SurfaceHandle::new();
-        self.surface_handles
-            .insert(surface_handle, definition.component.clone());
-        self.surfaces
-            .insert(definition.component.clone(), definition);
+        let entry = SurfaceEntry::new(surface_handle, definition.component.clone(), definition);
+        self.registry.insert(entry)?;
 
         log::info!(
             "Spawned surface with handle {:?}, created {} output instances",
@@ -603,20 +590,18 @@ impl Shell {
     }
 
     pub fn despawn_surface(&mut self, handle: SurfaceHandle) -> Result<()> {
-        let surface_name = self.surface_handles.remove(&handle).ok_or_else(|| {
+        let entry = self.registry.remove(handle).ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
                 message: format!("Surface handle {:?} not found", handle),
             })
         })?;
 
-        self.surfaces.remove(&surface_name);
-
         let mut system = self.inner.borrow_mut();
-        system.despawn_surface(&surface_name)?;
+        system.despawn_surface(&entry.name)?;
 
         log::info!(
             "Despawned surface '{}' with handle {:?}",
-            surface_name,
+            entry.name,
             handle
         );
 
@@ -644,21 +629,18 @@ impl Shell {
     }
 
     pub fn get_surface_handle(&self, name: &str) -> Option<SurfaceHandle> {
-        self.surface_handles
-            .iter()
-            .find(|(_, n)| n.as_str() == name)
-            .map(|(h, _)| *h)
+        self.registry.handle_by_name(name)
     }
 
     pub fn get_surface_name(&self, handle: SurfaceHandle) -> Option<&str> {
-        self.surface_handles.get(&handle).map(String::as_str)
+        self.registry.name_by_handle(handle)
     }
 
     pub fn with_surface<F, R>(&self, name: &str, f: F) -> Result<R>
     where
         F: FnOnce(&ComponentInstance) -> R,
     {
-        if !self.surfaces.contains_key(name) {
+        if !self.registry.contains_name(name) {
             return Err(Error::Domain(DomainError::Configuration {
                 message: format!("Window '{}' not found", name),
             }));
@@ -684,7 +666,7 @@ impl Shell {
     {
         let system = self.inner.borrow();
 
-        for name in self.surfaces.keys() {
+        for name in self.registry.surface_names() {
             for surface in system.app_state().surfaces_by_name(name) {
                 f(name, surface.component_instance());
             }
@@ -732,7 +714,7 @@ impl Shell {
         F: Fn(ShellControl) -> R + 'static,
         R: IntoValue,
     {
-        if !self.surfaces.contains_key(surface_name) {
+        if !self.registry.contains_name(surface_name) {
             return Err(Error::Domain(DomainError::Configuration {
                 message: format!("Window '{}' not found", surface_name),
             }));
@@ -773,7 +755,7 @@ impl Shell {
         F: Fn(&[Value], ShellControl) -> R + 'static,
         R: IntoValue,
     {
-        if !self.surfaces.contains_key(surface_name) {
+        if !self.registry.contains_name(surface_name) {
             return Err(Error::Domain(DomainError::Configuration {
                 message: format!("Window '{}' not found", surface_name),
             }));
@@ -868,7 +850,7 @@ impl Shell {
     {
         let system = self.inner.borrow();
 
-        if self.surfaces.contains_key(surface_name) {
+        if self.registry.contains_name(surface_name) {
             for surface in system.app_state().surfaces_by_name(surface_name) {
                 let surface_handle = LayerSurfaceHandle::from_window_state(surface);
                 f(surface.component_instance(), surface_handle);
@@ -918,7 +900,7 @@ impl ShellRuntime for Shell {
     {
         let system = self.inner.borrow();
 
-        if self.surfaces.contains_key(name) {
+        if self.registry.contains_name(name) {
             for surface in system.app_state().surfaces_by_name(name) {
                 f(surface.component_instance());
             }
@@ -931,7 +913,7 @@ impl ShellRuntime for Shell {
     {
         let system = self.inner.borrow();
 
-        for name in self.surfaces.keys() {
+        for name in self.registry.surface_names() {
             for surface in system.app_state().surfaces_by_name(name) {
                 f(name, surface.component_instance());
             }
