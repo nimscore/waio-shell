@@ -4,39 +4,51 @@
 
 ## ⚠️ WORK IN PROGRESS ⚠️
 
-Oh deer! 🦌 You've stumbled upon `layer-shika`, a rust library crate that provides a layer shell implementation for wayland compositors, using slint for the GUI. It allows you to create overlay windows and panels or bars that integrate seamlessly with wayland-based desktop environments.
+Oh deer! 🦌 You've stumbled upon `layer-shika`, a Rust library providing Wayland layer shell integration with Slint UI. Create overlay windows, status bars, panels, popups, and more, that integrate seamlessly with Wayland compositors.
 
 Please note that this library is currently in early development and is not yet ready for production use.
 
-## Current Status
+## Features
 
-- **Architecture**: Clean hexagonal architecture with domain, adapters, and composition layers
-- **Rendering**: EGL context management with `femtovg` renderer integration
-- **Wayland**: Comprehensive layer shell protocol support using `smithay-client-toolkit`
-  - Output management and configuration
-  - Surface lifecycle management
-  - Basic xdg popup support
-  - Event handling system
-- **UI Integration**: Slint integration layer with custom rendering backend
-- **Documentation**: Work in progress
-- **Examples**: Available - see [examples/](examples/) directory
+- **Slint Integration**: Runtime `.slint` file compilation via slint-interpreter or compile-time code generation. Support via pre-compiled is planned.
+- **Multi-Surface Support**: Create multiple independent layer shell windows, each with its own configuration and lifecycle
+- **Flexible Configuration**: Both fluent builder API and declarative configuration support
+- **Comprehensive Popup System**: Full xdg-popup protocol implementation with multiple positioning modes, grab support, and content-based sizing (rework in progress)
+- **Multi-Output Support**: Per-monitor component instances with flexible output policies (primary only, all outputs, specific outputs)
+- **Event Loop Integration**: Custom event sources (timers, channels, file descriptors) via calloop integration
+- **Clean-like Architecture**: Organized as a Cargo workspace with clear separation of concerns (domain, adapters, composition)
+- **HiDPI Support**: Configurable scale factors for high-resolution displays
+
+## Architecture
+
+layer-shika is organized as a **Cargo workspace** with three crates:
+
+- **domain** ([crates/domain/](crates/domain/)): Core domain models, value objects, and port trait definitions. No framework dependencies.
+- **adapters** ([crates/adapters/](crates/adapters/)): Concrete implementations for Wayland (smithay-client-toolkit), rendering (femtovg + EGL), and platform integration.
+- **composition** ([crates/composition/](crates/composition/)): Public API layer providing Shell-based API, builder patterns, and system integration.
+
+This clean-like architecture enables flexibility, and clear dependency boundaries (composition → adapters → domain).
+
+## Current Status
 
 **What's Working:**
 
-- EGL context creation and management
-- Wayland layer shell surface creation
-- XDG popup support (with some limitations: resizing needed)
-- Basic rendering with femtovg
-- Output detection and management
-- Event handling framework
+- Multi-surface shell with builder and declarative configuration APIs
+- Wayland layer shell protocol (wlr-layer-shell) via smithay-client-toolkit
+- Full xdg-popup protocol support with flexible positioning and sizing
+- EGL context management with femtovg renderer integration
+- Multi-output detection, tracking, and per-output component instances
+- Event handling framework with ShellEventContext and ShellControl
+- Custom event loop integration (timers, channels, file descriptors)
+- HiDPI scale factor support
 
 **Known Limitations:**
 
-- Not all features are fully implemented or tested
-- API is still unstable and may change
-- Comprehensive documentation pending
+- API may change before 1.0
+- Documentation is work in progress
+- Some edge cases may not be fully tested
 
-It's recommended to wait for a stable release before using this library in production projects. Development is trying to be as fast as a running skippy deer!
+It's recommended to wait for a stable release before using this library in production projects, but if you want you can experiment with the current version. Development is trying to be as fast as a running skippy deer!
 
 ## Quick Start
 
@@ -59,7 +71,7 @@ If you want to use it now, use this repo as dependency instead of crates.io outd
 
 ## First Stable Release
 
-It aim to have the first stable release by the end of 2025, with a focus on core functionality and API stability.
+The aim is to have the first stable release by the end of 2025, with a focus on core functionality and API stability.
 
 Stay tuned!
 
