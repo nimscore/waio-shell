@@ -1,0 +1,58 @@
+// Runtime Control Example - Interactive Status Bar
+
+import { Button } from "std-widgets.slint";
+export component Bar inherits Window {
+    in-out property <bool> is-expanded: false;
+    in-out property <string> current-anchor: "Top";
+    in-out property <string> current-layer: "Top";
+
+    callback toggle-size() -> {expanded: bool};
+    callback switch-anchor() -> {anchor: string};
+    callback switch-layer() -> {layer: string};
+
+    HorizontalLayout {
+        spacing: 12px;
+
+        Text {
+            text: "Click buttons to control surface";
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: "Anchor: " + current-anchor;
+            font-size: 12px;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: "Layer: " + current-layer;
+            font-size: 12px;
+            vertical-alignment: center;
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+
+        Button {
+            text: is-expanded ? "Collapse" : "Expand";
+            clicked => {
+                root.is-expanded = toggle-size().expanded;
+            }
+        }
+
+        Button {
+            text: "Switch Anchor";
+            clicked => {
+                root.current-anchor = switch-anchor().anchor;
+            }
+        }
+
+        Button {
+            text: "Switch Layer";
+            clicked => {
+                root.current-layer = switch-layer().layer;
+            }
+        }
+    }
+}

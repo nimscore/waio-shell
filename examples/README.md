@@ -11,9 +11,7 @@ Each example is a standalone crate that can be run from anywhere in the workspac
 cargo run -p simple-bar
 cargo run -p multi-surface
 cargo run -p declarative-config
-
-# Or with logging
-RUST_LOG=info cargo run -p simple-bar
+cargo run -p runtime-surface-config
 
 # Or from the example directory
 cd examples/simple-bar
@@ -28,6 +26,7 @@ cargo run
 2. **multi-surface** - Learn about multiple surfaces and callbacks
 3. **declarative-config** - See the alternative configuration approach
 4. **event-loop** - Explore event loop integration with timers and channels
+5. **runtime-surface-config** - Surface configuration manipulation at runtime
 
 ## Common Patterns
 
@@ -46,7 +45,7 @@ All examples use layer-shika's `Result<()>` type for error handling with the `?`
 ## Coming Soon
 
 Additional examples demonstrating:
-- Event loop integration (timers, channels, custom event sources)
+
 - Multi-output support (multiple monitors) with different surfaces per output
 - Advanced popup patterns
 - Dynamic UI loading

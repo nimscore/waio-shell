@@ -26,6 +26,7 @@ members = [
     "examples/multi-surface",
     "examples/declarative-config",
     "examples/event-loop",
+    "examples/runtime-surface-config",
 ]
 
 [workspace.package]
