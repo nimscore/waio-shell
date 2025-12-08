@@ -1,6 +1,10 @@
 # layer-shika
 
-[Main repo](https://codeberg.org/waydeer/layer-shika) | [Mirror](https://git.dren.dog/waydeer/layer-shika) | [Temp mirror (github)](https://github.com/waydeerwm/layer-shika)
+<div align="center">
+  <h1 style="font-size: 5em;">🦌</h1>
+  <p><i>"A cute layer of abstraction where Slint UIs grow antlers and become cute Wayland shells."</i></p>
+  <p><b><a href="https://codeberg.org/waydeer/layer-shika">Main repo</a> | <a href="https://git.dren.dog/waydeer/layer-shika">Mirror</a> | <a href="https://github.com/waydeerwm/layer-shika">Temp mirror (github)</a></b></p>
+</div>
 
 ## ⚠️ WORK IN PROGRESS ⚠️
 
