@@ -120,10 +120,6 @@ fn setup_toggle_size_callback(
             log::error!("Failed to send UI update: {}", e);
         }
 
-        if let Err(e) = control.request_redraw() {
-            log::error!("Failed to request redraw: {}", e);
-        }
-
         Value::Struct(Struct::from_iter([("expanded".into(), is_expanded.into())]))
     })
 }
@@ -152,10 +148,6 @@ fn setup_anchor_switch_callback(
 
         if let Err(e) = sender_clone.send(UiUpdate::CurrentAnchor(anchor_name.to_string())) {
             log::error!("Failed to send UI update: {}", e);
-        }
-
-        if let Err(e) = control.request_redraw() {
-            log::error!("Failed to request redraw: {}", e);
         }
 
         log::info!("Switched to {} anchor", anchor_name);
