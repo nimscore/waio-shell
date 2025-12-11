@@ -1,9 +1,10 @@
 /// Alignment mode for popup positioning
 ///
 /// Determines how a popup is aligned relative to its placement point.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum PopupPositioningMode {
     /// Align popup's top-left corner to placement point
+    #[default]
     TopLeft,
     /// Center popup horizontally at placement point, top edge aligned
     TopCenter,
@@ -42,11 +43,5 @@ impl PopupPositioningMode {
             (false, true) => Self::CenterLeft,
             (true, true) => Self::Center,
         }
-    }
-}
-
-impl Default for PopupPositioningMode {
-    fn default() -> Self {
-        Self::TopLeft
     }
 }

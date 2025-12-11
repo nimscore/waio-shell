@@ -5,9 +5,10 @@ use std::rc::Rc;
 type OutputFilter = Rc<dyn Fn(&OutputInfo) -> bool>;
 
 /// Determines which outputs (monitors) should display the surface
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum OutputPolicy {
     /// Display surface on all connected outputs (default)
+    #[default]
     AllOutputs,
     /// Display surface only on the primary output
     PrimaryOnly,
@@ -37,12 +38,6 @@ impl OutputPolicy {
         F: Fn(&OutputInfo) -> bool + 'static,
     {
         Self::Custom(Rc::new(filter))
-    }
-}
-
-impl Default for OutputPolicy {
-    fn default() -> Self {
-        Self::AllOutputs
     }
 }
 

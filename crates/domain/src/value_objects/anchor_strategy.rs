@@ -1,7 +1,8 @@
 /// Strategy for calculating popup position relative to an anchor rectangle
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum AnchorStrategy {
     /// Center popup horizontally below the anchor
+    #[default]
     CenterBottom,
     /// Center popup horizontally above the anchor
     CenterTop,
@@ -47,11 +48,5 @@ impl AnchorStrategy {
             Self::RightTop => (anchor_x + anchor_w - popup_w, anchor_y - popup_h),
             Self::Cursor => (anchor_x, anchor_y),
         }
-    }
-}
-
-impl Default for AnchorStrategy {
-    fn default() -> Self {
-        Self::CenterBottom
     }
 }
