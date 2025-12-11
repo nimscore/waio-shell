@@ -1,3 +1,13 @@
+/// Represents which edges of the output a layer surface should be anchored to.
+///
+/// Use predefined helpers like `top_bar()`, `bottom_bar()`, or build custom configurations
+/// with `empty()` combined with `with_top()`, `with_bottom()`, `with_left()`, `with_right()`.
+///
+/// # Examples
+/// ```
+/// let top_bar = AnchorEdges::top_bar();
+/// let custom = AnchorEdges::empty().with_top().with_left();
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AnchorEdges(u8);
 
