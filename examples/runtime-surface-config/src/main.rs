@@ -96,17 +96,15 @@ fn setup_toggle_size_callback(
                     }
                 };
 
-                let bar = control.surface("Bar");
-                if let Err(e) = bar.resize(width, height) {
-                    log::error!("Failed to resize bar: {}", e);
-                }
-
-                if let Err(e) = bar.set_exclusive_zone(new_size.try_into().unwrap_or(32)) {
-                    log::error!("Failed to set exclusive zone: {}", e);
-                }
-
-                if let Err(e) = control.surface("Bar").set_margins((0, 0, 0, 0)) {
-                    log::error!("Failed to set margins: {}", e);
+                if let Err(e) = control
+                    .surface("Bar")
+                    .configure()
+                    .size(width, height)
+                    .exclusive_zone(new_size.try_into().unwrap_or(32))
+                    .margins((0, 0, 0, 0))
+                    .apply()
+                {
+                    log::error!("Failed to apply configuration: {}", e);
                 }
 
                 log::info!(

@@ -13,7 +13,7 @@ use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::prelude::{
     AnchorEdges, KeyboardInteractivity, Layer, Margins, OutputPolicy, ScaleFactor,
 };
-use layer_shika_domain::value_objects::dimensions::PopupDimensions;
+use layer_shika_domain::value_objects::dimensions::{PopupDimensions, SurfaceDimension};
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
@@ -306,6 +306,90 @@ impl SurfaceControlHandle {
                         .to_string(),
                 })
             })
+    }
+
+    pub fn configure(self) -> RuntimeSurfaceConfigBuilder {
+        RuntimeSurfaceConfigBuilder {
+            handle: self,
+            config: SurfaceConfig::new(),
+        }
+    }
+}
+
+pub struct RuntimeSurfaceConfigBuilder {
+    handle: SurfaceControlHandle,
+    config: SurfaceConfig,
+}
+
+impl RuntimeSurfaceConfigBuilder {
+    #[must_use]
+    pub fn size(mut self, width: u32, height: u32) -> Self {
+        self.config.dimensions = SurfaceDimension::from_raw(width, height);
+        self
+    }
+
+    #[must_use]
+    pub fn width(mut self, width: u32) -> Self {
+        self.config.dimensions = SurfaceDimension::from_raw(width, self.config.dimensions.height());
+        self
+    }
+
+    #[must_use]
+    pub fn height(mut self, height: u32) -> Self {
+        self.config.dimensions = SurfaceDimension::from_raw(self.config.dimensions.width(), height);
+        self
+    }
+
+    #[must_use]
+    pub const fn layer(mut self, layer: Layer) -> Self {
+        self.config.layer = layer;
+        self
+    }
+
+    #[must_use]
+    pub fn margins(mut self, margins: impl Into<Margins>) -> Self {
+        self.config.margin = margins.into();
+        self
+    }
+
+    #[must_use]
+    pub const fn anchor(mut self, anchor: AnchorEdges) -> Self {
+        self.config.anchor = anchor;
+        self
+    }
+
+    #[must_use]
+    pub const fn exclusive_zone(mut self, zone: i32) -> Self {
+        self.config.exclusive_zone = zone;
+        self
+    }
+
+    #[must_use]
+    pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.config.namespace = namespace.into();
+        self
+    }
+
+    #[must_use]
+    pub const fn keyboard_interactivity(mut self, mode: KeyboardInteractivity) -> Self {
+        self.config.keyboard_interactivity = mode;
+        self
+    }
+
+    #[must_use]
+    pub fn output_policy(mut self, policy: OutputPolicy) -> Self {
+        self.config.output_policy = policy;
+        self
+    }
+
+    #[must_use]
+    pub fn scale_factor(mut self, sf: impl TryInto<ScaleFactor, Error = DomainError>) -> Self {
+        self.config.scale_factor = sf.try_into().unwrap_or_default();
+        self
+    }
+
+    pub fn apply(self) -> Result<()> {
+        self.handle.apply_config(self.config)
     }
 }
 

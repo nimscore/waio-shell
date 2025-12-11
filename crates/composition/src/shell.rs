@@ -622,7 +622,7 @@ impl Shell {
             }
             SurfaceCommand::ApplyConfig { name, config } => {
                 log::debug!("Surface command: ApplyConfig '{}'", name);
-                for surface in ctx.surfaces_by_name(&name) {
+                for surface in ctx.surfaces_by_name_mut(&name) {
                     let handle = LayerSurfaceHandle::from_window_state(surface);
 
                     handle.set_size(config.dimensions.width(), config.dimensions.height());
@@ -632,6 +632,11 @@ impl Shell {
                     handle.set_layer(config.layer);
                     handle.set_keyboard_interactivity(config.keyboard_interactivity);
                     handle.commit();
+
+                    surface.update_size_with_compositor_logic(
+                        config.dimensions.width(),
+                        config.dimensions.height(),
+                    );
                 }
             }
         }

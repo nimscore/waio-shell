@@ -28,9 +28,13 @@ cargo run -p runtime-surface-config
 
 ```rust
 shell.on("Bar", "toggle-size", move |control| {
-    let bar = control.surface("Bar");
-    bar.resize(width, height)?;
-    bar.set_exclusive_zone(new_size)?;
+    control.surface("Bar")
+        .configure()
+        .size(0, new_size)
+        .exclusive_zone(new_size as i32)
+        .margins(0, 0, 0, 0)
+        .apply()?;
+
     Value::Struct(Struct::from_iter([("expanded".into(), is_expanded.into())]))
 })?;
 ```

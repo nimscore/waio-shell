@@ -49,6 +49,10 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for AppState {
                 width,
                 height,
             } => {
+                info!(
+                    "Layer surface configured with compositor size: {}x{}",
+                    width, height
+                );
                 let layer_surface_id = layer_surface.id();
                 let Some(surface) = state.get_output_by_layer_surface_mut(&layer_surface_id) else {
                     info!(
@@ -198,8 +202,6 @@ impl Dispatch<WlPointer, ()> for AppState {
                 surface_x,
                 surface_y,
             } => {
-                info!("Pointer entered surface {:?}", surface.id());
-
                 let surface_id = surface.id();
 
                 if let Some(key) = state.get_key_by_surface(&surface_id).cloned() {

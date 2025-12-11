@@ -3,8 +3,8 @@
 mod event_loop;
 mod layer_surface;
 mod popup_builder;
-mod selector;
 mod selection;
+mod selector;
 mod shell;
 mod shell_config;
 mod shell_runtime;
@@ -34,10 +34,12 @@ pub use layer_shika_domain::value_objects::popup_request::{
 };
 pub use layer_surface::{LayerSurfaceHandle, ShellSurfaceConfigHandler};
 pub use popup_builder::PopupBuilder;
-pub use selector::{Output, Selector, Surface, SurfaceInfo};
 pub use selection::Selection;
+pub use selector::{Output, Selector, Surface, SurfaceInfo};
 pub use shell_runtime::{DEFAULT_SURFACE_NAME, ShellRuntime};
-pub use system::{EventDispatchContext, ShellControl, SurfaceControlHandle};
+pub use system::{
+    EventDispatchContext, RuntimeSurfaceConfigBuilder, ShellControl, SurfaceControlHandle,
+};
 pub use value_conversion::IntoValue;
 
 pub use shell::{

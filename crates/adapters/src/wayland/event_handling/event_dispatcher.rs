@@ -96,7 +96,6 @@ impl SurfaceState {
         surface_x: f64,
         surface_y: f64,
     ) {
-        info!("Pointer entered surface {:?}", surface.id());
         self.set_last_pointer_serial(serial);
         self.set_current_pointer_position(surface_x, surface_y);
 
