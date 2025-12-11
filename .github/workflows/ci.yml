@@ -26,7 +26,7 @@ jobs:
                     libegl1-mesa-dev \
                     libgles2-mesa-dev \
                     libfontconfig1-dev \
-                    weston
+                    sway
 
             - name: Install Rust toolchain
               uses: dtolnay/rust-toolchain@stable
@@ -78,15 +78,17 @@ jobs:
               run: |
                   export XDG_RUNTIME_DIR=/tmp
                   export WAYLAND_DISPLAY=wayland-ci-test
+                  export WLR_BACKENDS=headless
+                  export WLR_LIBINPUT_NO_DEVICES=1
 
-                  weston --backend=headless-backend.so --no-config --socket=$WAYLAND_DISPLAY &
-                  WESTON_PID=$!
+                  sway --unsupported-gpu &
+                  SWAY_PID=$!
 
                   until test -S "/tmp/$WAYLAND_DISPLAY"; do
-                    echo "Waiting for weston..."
+                    echo "Waiting for sway..."
                     sleep 0.5
                   done
-                  echo "Weston started successfully"
+                  echo "Sway started successfully"
 
                   timeout 5 cargo run -p simple-bar || echo "simple-bar timed out (expected)"
                   timeout 5 cargo run -p multi-surface || echo "multi-surface timed out (expected)"
@@ -96,5 +98,5 @@ jobs:
                   timeout 5 cargo run -p event-loop-examples --bin custom-source || echo "custom-source timed out (expected)"
                   timeout 5 cargo run -p runtime-surface-config || echo "runtime-surface-config timed out (expected)"
 
-                  kill $WESTON_PID || true
-                  wait $WESTON_PID 2>/dev/null || true
+                  kill $SWAY_PID || true
+                  wait $SWAY_PID 2>/dev/null || true
