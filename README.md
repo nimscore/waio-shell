@@ -6,11 +6,13 @@
   <p><b><a href="https://codeberg.org/waydeer/layer-shika">Main repo</a> | <a href="https://git.dren.dog/waydeer/layer-shika">Mirror</a> | <a href="https://github.com/waydeerwm/layer-shika">Temp mirror (github)</a></b></p>
 </div>
 
-## ⚠️ WORK IN PROGRESS ⚠️
-
 Oh deer! 🦌 You've stumbled upon `layer-shika`, a Rust library providing Wayland layer shell integration with Slint UI. Create overlay windows, status bars, panels, popups, and more, that integrate seamlessly with Wayland compositors.
 
-Please note that this library is currently in early development and is not yet ready for production use.
+> [!CAUTION]
+> This library is currently in early development and is not yet ready for production use. API may change before 1.0.
+
+> [!NOTE]
+> **Coming soon:** A complete Wayland shell built on top of layer-shika! Stay tuned for updates.
 
 ## Features
 
@@ -46,13 +48,14 @@ This clean-like architecture enables flexibility, and clear dependency boundarie
 - Custom event loop integration (timers, channels, file descriptors)
 - HiDPI scale factor support
 
-**Known Limitations:**
-
-- API may change before 1.0
-- Documentation is work in progress
-- Some edge cases may not be fully tested
-
-It's recommended to wait for a stable release before using this library in production projects, but if you want you can experiment with the current version. Development is trying to be as fast as a running skippy deer!
+> [!WARNING]
+> **Known Limitations:**
+>
+> - Documentation is work in progress
+> - Some edge cases may not be fully tested
+> - It's recommended to wait for a stable release before using this library in production projects
+>
+> However, if you want to experiment with the current version, feel free to do so! Development is trying to be as fast as a running skippy deer!
 
 ## Quick Start
 
@@ -71,7 +74,8 @@ See the [examples README](examples/README.md) for detailed usage instructions an
 
 ## Usage
 
-If you want to use it now, use this repo as dependency instead of crates.io outdated versions.
+> [!IMPORTANT]
+> If you want to use it now, use this repo as a dependency instead of crates.io versions.
 
 ## First Stable Release
 
@@ -81,4 +85,5 @@ Stay tuned!
 
 ## Contributing
 
-As the library is in a very early stage, it's recommended to open an issue to discuss ideas or proposed changes before submitting contributions. The project doesn't bite, it's not that kind of deer!
+> [!TIP]
+> As the library is in a very early stage, it's recommended to open an issue to discuss ideas or proposed changes before submitting contributions. The project doesn't bite, it's not that kind of deer!
