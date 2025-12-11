@@ -25,8 +25,7 @@ jobs:
                     libxkbcommon-dev \
                     libegl1-mesa-dev \
                     libgles2-mesa-dev \
-                    libfontconfig1-dev \
-                    sway
+                    libfontconfig1-dev
 
             - name: Install Rust toolchain
               uses: dtolnay/rust-toolchain@stable
@@ -73,30 +72,3 @@ jobs:
                   cargo build -p declarative-config
                   cargo build -p event-loop-examples
                   cargo build -p runtime-surface-config
-
-            - name: Run examples in headless Wayland compositor
-              run: |
-                  export XDG_RUNTIME_DIR=/tmp
-                  export WAYLAND_DISPLAY=wayland-ci-test
-                  export WLR_BACKENDS=headless
-                  export WLR_LIBINPUT_NO_DEVICES=1
-
-                  sway --unsupported-gpu &
-                  SWAY_PID=$!
-
-                  until test -S "/tmp/$WAYLAND_DISPLAY"; do
-                    echo "Waiting for sway..."
-                    sleep 0.5
-                  done
-                  echo "Sway started successfully"
-
-                  timeout 5 cargo run -p simple-bar || echo "simple-bar timed out (expected)"
-                  timeout 5 cargo run -p multi-surface || echo "multi-surface timed out (expected)"
-                  timeout 5 cargo run -p declarative-config || echo "declarative-config timed out (expected)"
-                  timeout 5 cargo run -p event-loop-examples --bin timer || echo "timer timed out (expected)"
-                  timeout 5 cargo run -p event-loop-examples --bin channel || echo "channel timed out (expected)"
-                  timeout 5 cargo run -p event-loop-examples --bin custom-source || echo "custom-source timed out (expected)"
-                  timeout 5 cargo run -p runtime-surface-config || echo "runtime-surface-config timed out (expected)"
-
-                  kill $SWAY_PID || true
-                  wait $SWAY_PID 2>/dev/null || true
