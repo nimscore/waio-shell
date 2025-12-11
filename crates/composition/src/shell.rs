@@ -828,167 +828,6 @@ impl Shell {
         PopupBuilder::new(self, component_name.into())
     }
 
-    pub fn on<F, R>(&self, surface_name: &str, callback_name: &str, handler: F) -> Result<()>
-    where
-        F: Fn(ShellControl) -> R + 'static,
-        R: IntoValue,
-    {
-        if !self.registry.contains_name(surface_name) {
-            return Err(Error::Domain(DomainError::Configuration {
-                message: format!("Window '{}' not found", surface_name),
-            }));
-        }
-
-        let control = self.control();
-        let handler = Rc::new(handler);
-        let system = self.inner.borrow();
-
-        for surface in system.app_state().surfaces_by_name(surface_name) {
-            let handler_rc = Rc::clone(&handler);
-            let control_clone = control.clone();
-            if let Err(e) = surface
-                .component_instance()
-                .set_callback(callback_name, move |_args| {
-                    handler_rc(control_clone.clone()).into_value()
-                })
-            {
-                log::error!(
-                    "Failed to register callback '{}' on surface '{}': {}",
-                    callback_name,
-                    surface_name,
-                    e
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn on_with_args<F, R>(
-        &self,
-        surface_name: &str,
-        callback_name: &str,
-        handler: F,
-    ) -> Result<()>
-    where
-        F: Fn(&[Value], ShellControl) -> R + 'static,
-        R: IntoValue,
-    {
-        if !self.registry.contains_name(surface_name) {
-            return Err(Error::Domain(DomainError::Configuration {
-                message: format!("Window '{}' not found", surface_name),
-            }));
-        }
-
-        let control = self.control();
-        let handler = Rc::new(handler);
-        let system = self.inner.borrow();
-
-        for surface in system.app_state().surfaces_by_name(surface_name) {
-            let handler_rc = Rc::clone(&handler);
-            let control_clone = control.clone();
-            if let Err(e) = surface
-                .component_instance()
-                .set_callback(callback_name, move |args| {
-                    handler_rc(args, control_clone.clone()).into_value()
-                })
-            {
-                log::error!(
-                    "Failed to register callback '{}' on surface '{}': {}",
-                    callback_name,
-                    surface_name,
-                    e
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn on_global<F, R>(&self, callback_name: &str, handler: F) -> Result<()>
-    where
-        F: Fn(ShellControl) -> R + 'static,
-        R: IntoValue,
-    {
-        let control = self.control();
-        let handler = Rc::new(handler);
-        let system = self.inner.borrow();
-
-        for surface in system.app_state().all_outputs() {
-            let handler_rc = Rc::clone(&handler);
-            let control_clone = control.clone();
-            if let Err(e) = surface
-                .component_instance()
-                .set_callback(callback_name, move |_args| {
-                    handler_rc(control_clone.clone()).into_value()
-                })
-            {
-                log::error!(
-                    "Failed to register global callback '{}': {}",
-                    callback_name,
-                    e
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn on_global_with_args<F, R>(&self, callback_name: &str, handler: F) -> Result<()>
-    where
-        F: Fn(&[Value], ShellControl) -> R + 'static,
-        R: IntoValue,
-    {
-        let control = self.control();
-        let handler = Rc::new(handler);
-        let system = self.inner.borrow();
-
-        for surface in system.app_state().all_outputs() {
-            let handler_rc = Rc::clone(&handler);
-            let control_clone = control.clone();
-            if let Err(e) = surface
-                .component_instance()
-                .set_callback(callback_name, move |args| {
-                    handler_rc(args, control_clone.clone()).into_value()
-                })
-            {
-                log::error!(
-                    "Failed to register global callback '{}': {}",
-                    callback_name,
-                    e
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn apply_surface_config<F>(&self, surface_name: &str, f: F)
-    where
-        F: Fn(&ComponentInstance, LayerSurfaceHandle<'_>),
-    {
-        let system = self.inner.borrow();
-
-        if self.registry.contains_name(surface_name) {
-            for surface in system.app_state().surfaces_by_name(surface_name) {
-                let surface_handle = LayerSurfaceHandle::from_window_state(surface);
-                f(surface.component_instance(), surface_handle);
-            }
-        }
-    }
-
-    pub fn apply_global_config<F>(&self, f: F)
-    where
-        F: Fn(&ComponentInstance, LayerSurfaceHandle<'_>),
-    {
-        let system = self.inner.borrow();
-
-        for surface in system.app_state().all_outputs() {
-            let surface_handle = LayerSurfaceHandle::from_window_state(surface);
-            f(surface.component_instance(), surface_handle);
-        }
-    }
-
     pub fn output_registry(&self) -> OutputRegistry {
         let system = self.inner.borrow();
         system.app_state().output_registry().clone()
@@ -1002,6 +841,186 @@ impl Shell {
     pub fn all_output_info(&self) -> Vec<OutputInfo> {
         let system = self.inner.borrow();
         system.app_state().all_output_info().cloned().collect()
+    }
+
+    pub fn select(&self, selector: impl Into<crate::Selector>) -> crate::Selection<'_> {
+        crate::Selection::new(self, selector.into())
+    }
+
+    fn get_output_handles(&self) -> (Option<OutputHandle>, Option<OutputHandle>) {
+        let registry = &self.output_registry();
+        (registry.primary_handle(), registry.active_handle())
+    }
+
+    pub(crate) fn on_internal<F, R>(
+        &self,
+        selector: &crate::Selector,
+        callback_name: &str,
+        handler: F,
+    ) where
+        F: Fn(ShellControl) -> R + Clone + 'static,
+        R: IntoValue,
+    {
+        let control = self.control();
+        let handler = Rc::new(handler);
+        let system = self.inner.borrow();
+        let (primary, active) = self.get_output_handles();
+
+        for (key, surface) in system.app_state().surfaces_with_keys() {
+            let surface_info = crate::SurfaceInfo {
+                name: key.surface_name.clone(),
+                output: key.output_handle,
+            };
+
+            let output_info = system.app_state().get_output_info(key.output_handle);
+
+            if selector.matches(&surface_info, output_info, primary, active) {
+                let handler_rc = Rc::clone(&handler);
+                let control_clone = control.clone();
+                if let Err(e) = surface
+                    .component_instance()
+                    .set_callback(callback_name, move |_args| {
+                        handler_rc(control_clone.clone()).into_value()
+                    })
+                {
+                    log::error!(
+                        "Failed to register callback '{}' on surface '{}': {}",
+                        callback_name,
+                        key.surface_name,
+                        e
+                    );
+                }
+            }
+        }
+    }
+
+    pub(crate) fn on_with_args_internal<F, R>(
+        &self,
+        selector: &crate::Selector,
+        callback_name: &str,
+        handler: F,
+    ) where
+        F: Fn(&[Value], ShellControl) -> R + Clone + 'static,
+        R: IntoValue,
+    {
+        let control = self.control();
+        let handler = Rc::new(handler);
+        let system = self.inner.borrow();
+        let (primary, active) = self.get_output_handles();
+
+        for (key, surface) in system.app_state().surfaces_with_keys() {
+            let surface_info = crate::SurfaceInfo {
+                name: key.surface_name.clone(),
+                output: key.output_handle,
+            };
+
+            let output_info = system.app_state().get_output_info(key.output_handle);
+
+            if selector.matches(&surface_info, output_info, primary, active) {
+                let handler_rc = Rc::clone(&handler);
+                let control_clone = control.clone();
+                if let Err(e) = surface
+                    .component_instance()
+                    .set_callback(callback_name, move |args| {
+                        handler_rc(args, control_clone.clone()).into_value()
+                    })
+                {
+                    log::error!(
+                        "Failed to register callback '{}' on surface '{}': {}",
+                        callback_name,
+                        key.surface_name,
+                        e
+                    );
+                }
+            }
+        }
+    }
+
+    pub(crate) fn with_selected<F>(&self, selector: &crate::Selector, mut f: F)
+    where
+        F: FnMut(&str, &ComponentInstance),
+    {
+        let system = self.inner.borrow();
+        let (primary, active) = self.get_output_handles();
+
+        for (key, surface) in system.app_state().surfaces_with_keys() {
+            let surface_info = crate::SurfaceInfo {
+                name: key.surface_name.clone(),
+                output: key.output_handle,
+            };
+
+            let output_info = system.app_state().get_output_info(key.output_handle);
+
+            if selector.matches(&surface_info, output_info, primary, active) {
+                f(&key.surface_name, surface.component_instance());
+            }
+        }
+    }
+
+    pub(crate) fn configure_selected<F>(&self, selector: &crate::Selector, mut f: F)
+    where
+        F: FnMut(&ComponentInstance, LayerSurfaceHandle<'_>),
+    {
+        let system = self.inner.borrow();
+        let (primary, active) = self.get_output_handles();
+
+        for (key, surface) in system.app_state().surfaces_with_keys() {
+            let surface_info = crate::SurfaceInfo {
+                name: key.surface_name.clone(),
+                output: key.output_handle,
+            };
+
+            let output_info = system.app_state().get_output_info(key.output_handle);
+
+            if selector.matches(&surface_info, output_info, primary, active) {
+                let surface_handle = LayerSurfaceHandle::from_window_state(surface);
+                f(surface.component_instance(), surface_handle);
+            }
+        }
+    }
+
+    pub(crate) fn count_selected(&self, selector: &crate::Selector) -> usize {
+        let system = self.inner.borrow();
+        let (primary, active) = self.get_output_handles();
+
+        system
+            .app_state()
+            .surfaces_with_keys()
+            .filter(|(key, _)| {
+                let surface_info = crate::SurfaceInfo {
+                    name: key.surface_name.clone(),
+                    output: key.output_handle,
+                };
+
+                let output_info = system.app_state().get_output_info(key.output_handle);
+
+                selector.matches(&surface_info, output_info, primary, active)
+            })
+            .count()
+    }
+
+    pub(crate) fn get_selected_info(&self, selector: &crate::Selector) -> Vec<crate::SurfaceInfo> {
+        let system = self.inner.borrow();
+        let (primary, active) = self.get_output_handles();
+
+        system
+            .app_state()
+            .surfaces_with_keys()
+            .filter_map(|(key, _)| {
+                let surface_info = crate::SurfaceInfo {
+                    name: key.surface_name.clone(),
+                    output: key.output_handle,
+                };
+
+                let output_info = system.app_state().get_output_info(key.output_handle);
+
+                if selector.matches(&surface_info, output_info, primary, active) {
+                    Some(surface_info)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 

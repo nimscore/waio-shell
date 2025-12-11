@@ -9,9 +9,10 @@
 #![allow(clippy::pub_use)]
 
 pub use crate::shell::{
-    CompiledUiSource, DEFAULT_COMPONENT_NAME, DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Shell,
-    ShellBuilder, ShellConfig, ShellControl, ShellEventContext, ShellRuntime,
-    ShellSurfaceConfigHandler, SurfaceComponentConfig, SurfaceConfigBuilder, SurfaceDefinition,
+    CompiledUiSource, Output, Selection, Selector, Surface, SurfaceInfo, DEFAULT_COMPONENT_NAME,
+    DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Shell, ShellBuilder, ShellConfig, ShellControl,
+    ShellEventContext, ShellRuntime, ShellSurfaceConfigHandler, SurfaceComponentConfig,
+    SurfaceConfigBuilder, SurfaceDefinition,
 };
 
 pub use crate::window::{

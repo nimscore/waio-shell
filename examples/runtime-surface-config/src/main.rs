@@ -77,121 +77,127 @@ fn setup_toggle_size_callback(
     sender: &Rc<Sender<UiUpdate>>,
     shell: &Shell,
     state: &Rc<RefCell<BarState>>,
-) -> Result<()> {
+) {
     let state_clone = Rc::clone(state);
     let sender_clone = Rc::clone(sender);
-    shell.on("Bar", "toggle-size", move |control| {
-        let is_expanded = {
-            let mut st = state_clone.borrow_mut();
-            st.is_expanded = !st.is_expanded;
+    shell
+        .select(Surface::named("Bar"))
+        .on_callback("toggle-size", move |control| {
+            let is_expanded = {
+                let mut st = state_clone.borrow_mut();
+                st.is_expanded = !st.is_expanded;
 
-            let new_size = if st.is_expanded { 64 } else { 32 };
+                let new_size = if st.is_expanded { 64 } else { 32 };
 
-            let (width, height) = match st.current_anchor {
-                AnchorPosition::Top | AnchorPosition::Bottom => {
-                    log::info!("Resizing horizontal bar to {}px", new_size);
-                    (0, new_size)
+                let (width, height) = match st.current_anchor {
+                    AnchorPosition::Top | AnchorPosition::Bottom => {
+                        log::info!("Resizing horizontal bar to {}px", new_size);
+                        (0, new_size)
+                    }
+                };
+
+                let bar = control.surface("Bar");
+                if let Err(e) = bar.resize(width, height) {
+                    log::error!("Failed to resize bar: {}", e);
                 }
+
+                if let Err(e) = bar.set_exclusive_zone(new_size.try_into().unwrap_or(32)) {
+                    log::error!("Failed to set exclusive zone: {}", e);
+                }
+
+                if let Err(e) = control.surface("Bar").set_margins((0, 0, 0, 0)) {
+                    log::error!("Failed to set margins: {}", e);
+                }
+
+                log::info!(
+                    "Updated bar state: size={}, is_expanded={}",
+                    new_size,
+                    st.is_expanded
+                );
+
+                st.is_expanded
             };
 
-            let bar = control.surface("Bar");
-            if let Err(e) = bar.resize(width, height) {
-                log::error!("Failed to resize bar: {}", e);
+            if let Err(e) = sender_clone.send(UiUpdate::IsExpanded(is_expanded)) {
+                log::error!("Failed to send UI update: {}", e);
             }
 
-            if let Err(e) = bar.set_exclusive_zone(new_size.try_into().unwrap_or(32)) {
-                log::error!("Failed to set exclusive zone: {}", e);
-            }
-
-            if let Err(e) = control.surface("Bar").set_margins((0, 0, 0, 0)) {
-                log::error!("Failed to set margins: {}", e);
-            }
-
-            log::info!(
-                "Updated bar state: size={}, is_expanded={}",
-                new_size,
-                st.is_expanded
-            );
-
-            st.is_expanded
-        };
-
-        if let Err(e) = sender_clone.send(UiUpdate::IsExpanded(is_expanded)) {
-            log::error!("Failed to send UI update: {}", e);
-        }
-
-        Value::Struct(Struct::from_iter([("expanded".into(), is_expanded.into())]))
-    })
+            Value::Struct(Struct::from_iter([("expanded".into(), is_expanded.into())]))
+        });
 }
 
 fn setup_anchor_switch_callback(
     sender: &Rc<Sender<UiUpdate>>,
     shell: &Shell,
     state: &Rc<RefCell<BarState>>,
-) -> Result<()> {
+) {
     let state_clone = Rc::clone(state);
     let sender_clone = Rc::clone(sender);
-    shell.on("Bar", "switch-anchor", move |control| {
-        let anchor_name = {
-            let mut st = state_clone.borrow_mut();
-            st.next_anchor();
+    shell
+        .select(Surface::named("Bar"))
+        .on_callback("switch-anchor", move |control| {
+            let anchor_name = {
+                let mut st = state_clone.borrow_mut();
+                st.next_anchor();
 
-            log::info!("Switching to anchor: {}", st.anchor_name());
+                log::info!("Switching to anchor: {}", st.anchor_name());
 
-            let bar = control.surface("Bar");
-            if let Err(e) = bar.set_anchor(st.get_anchor_edges()) {
-                log::error!("Failed to apply config: {}", e);
+                let bar = control.surface("Bar");
+                if let Err(e) = bar.set_anchor(st.get_anchor_edges()) {
+                    log::error!("Failed to apply config: {}", e);
+                }
+
+                st.anchor_name()
+            };
+
+            if let Err(e) = sender_clone.send(UiUpdate::CurrentAnchor(anchor_name.to_string())) {
+                log::error!("Failed to send UI update: {}", e);
             }
 
-            st.anchor_name()
-        };
+            log::info!("Switched to {} anchor", anchor_name);
 
-        if let Err(e) = sender_clone.send(UiUpdate::CurrentAnchor(anchor_name.to_string())) {
-            log::error!("Failed to send UI update: {}", e);
-        }
-
-        log::info!("Switched to {} anchor", anchor_name);
-
-        Value::Struct(Struct::from_iter([(
-            "anchor".into(),
-            SharedString::from(anchor_name).into(),
-        )]))
-    })
+            Value::Struct(Struct::from_iter([(
+                "anchor".into(),
+                SharedString::from(anchor_name).into(),
+            )]))
+        });
 }
 
 fn setup_layer_switch_callback(
     sender: &Rc<Sender<UiUpdate>>,
     shell: &Shell,
     state: &Rc<RefCell<BarState>>,
-) -> Result<()> {
+) {
     let state_clone = Rc::clone(state);
     let sender_clone = Rc::clone(sender);
-    shell.on("Bar", "switch-layer", move |control| {
-        let layer_name = {
-            let mut st = state_clone.borrow_mut();
-            let new_layer = st.next_layer();
+    shell
+        .select(Surface::named("Bar"))
+        .on_callback("switch-layer", move |control| {
+            let layer_name = {
+                let mut st = state_clone.borrow_mut();
+                let new_layer = st.next_layer();
 
-            log::info!("Switching to layer: {:?}", new_layer);
+                log::info!("Switching to layer: {:?}", new_layer);
 
-            let bar = control.surface("Bar");
-            if let Err(e) = bar.set_layer(new_layer) {
-                log::error!("Failed to set layer: {}", e);
+                let bar = control.surface("Bar");
+                if let Err(e) = bar.set_layer(new_layer) {
+                    log::error!("Failed to set layer: {}", e);
+                }
+
+                st.layer_name()
+            };
+
+            if let Err(e) = sender_clone.send(UiUpdate::CurrentLayer(layer_name.to_string())) {
+                log::error!("Failed to send UI update: {}", e);
             }
 
-            st.layer_name()
-        };
+            log::info!("Switched to {} layer", layer_name);
 
-        if let Err(e) = sender_clone.send(UiUpdate::CurrentLayer(layer_name.to_string())) {
-            log::error!("Failed to send UI update: {}", e);
-        }
-
-        log::info!("Switched to {} layer", layer_name);
-
-        Value::Struct(Struct::from_iter([(
-            "layer".into(),
-            SharedString::from(layer_name).into(),
-        )]))
-    })
+            Value::Struct(Struct::from_iter([(
+                "layer".into(),
+                SharedString::from(layer_name).into(),
+            )]))
+        });
 }
 
 fn main() -> Result<()> {
@@ -214,7 +220,7 @@ fn main() -> Result<()> {
         .namespace("runtime-control-example")
         .build()?;
 
-    shell.with_all_surfaces(|_name, component| {
+    shell.select(Surface::all()).with_component(|component| {
         log::info!("Initializing properties for Bar surface");
         let state_ref = state.borrow();
 
@@ -270,9 +276,9 @@ fn main() -> Result<()> {
 
     let sender_rc = Rc::new(sender);
 
-    setup_toggle_size_callback(&sender_rc, &shell, &state)?;
-    setup_anchor_switch_callback(&sender_rc, &shell, &state)?;
-    setup_layer_switch_callback(&sender_rc, &shell, &state)?;
+    setup_toggle_size_callback(&sender_rc, &shell, &state);
+    setup_anchor_switch_callback(&sender_rc, &shell, &state);
+    setup_layer_switch_callback(&sender_rc, &shell, &state);
     shell.run()?;
 
     Ok(())

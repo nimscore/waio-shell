@@ -24,17 +24,21 @@ fn main() -> Result<()> {
         .namespace("multi-surface-dock")
         .build()?;
 
-    shell.on("TopBar", "workspace_clicked", |_control| {
-        log::info!("Workspace button clicked in TopBar");
-        Value::Void
-    })?;
+    shell
+        .select(Surface::named("TopBar"))
+        .on_callback("workspace_clicked", |_control| {
+            log::info!("Workspace button clicked in TopBar");
+            Value::Void
+        });
 
-    shell.on_with_args("Dock", "app_clicked", |args, _control| {
-        if let Some(Value::String(app_name)) = args.first() {
-            log::info!("App clicked in Dock: {}", app_name.as_str());
-        }
-        Value::Void
-    })?;
+    shell
+        .select(Surface::named("Dock"))
+        .on_callback_with_args("app_clicked", |args, _control| {
+            if let Some(Value::String(app_name)) = args.first() {
+                log::info!("App clicked in Dock: {}", app_name.as_str());
+            }
+            Value::Void
+        });
 
     log::info!("Running shell with surfaces: {:?}", shell.surface_names());
 

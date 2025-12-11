@@ -19,10 +19,12 @@ fn main() -> Result<()> {
     log::info!("Shell has surfaces: {:?}", shell.surface_names());
     log::info!("Has StatusBar surface: {}", shell.has_surface("StatusBar"));
 
-    shell.on("StatusBar", "settings-clicked", |_control| {
-        log::info!("Settings button clicked");
-        Value::Void
-    })?;
+    shell
+        .select(Surface::named("StatusBar"))
+        .on_callback("settings-clicked", |_control| {
+            log::info!("Settings button clicked");
+            Value::Void
+        });
 
     log::info!("Registered callback for settings-clicked");
 
