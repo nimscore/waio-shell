@@ -1,6 +1,6 @@
 //! layer-shika: A Wayland layer shell library with Slint UI integration
 //!
-//! This crate provides a high-level API for creating Wayland layer shell surfaces
+//! This crate provides a high-level API for creating Wayland widget components
 //! with Slint-based user interfaces. It's built on a clean architecture with three
 //! internal layers (domain, adapters, composition), but users should only depend on
 //! this root crate.
@@ -45,6 +45,8 @@
 //! # Ok::<(), layer_shika::Error>(())
 //! ```
 //!
+//! **See the [simple-bar example](https://codeberg.org/waydeer/layer-shika/src/examples/simple-bar) for a complete working implementation.**
+//!
 //! # Declarative Configuration
 //!
 //! For reusable, programmatically generated, or externally sourced configurations:
@@ -53,7 +55,7 @@
 //! use layer_shika::prelude::*;
 //!
 //! let config = ShellConfig {
-//!     ui_source: UiSource::file("ui/bar.slint"),
+//!     ui_source: CompiledUiSource::file("ui/bar.slint"),
 //!     surfaces: vec![
 //!         SurfaceComponentConfig::with_config("Bar", SurfaceConfig {
 //!             dimensions: SurfaceDimension::new(0, 42),
@@ -67,6 +69,8 @@
 //! Shell::from_config(config)?.run()?;
 //! # Ok::<(), layer_shika::Error>(())
 //! ```
+//!
+//! **See the [declarative-config example](https://codeberg.org/waydeer/layer-shika/src/examples/declarative-config) for a complete working implementation.**
 //!
 //! # Multi-Surface Shell
 //!
@@ -86,6 +90,8 @@
 //!     .run()?;
 //! # Ok::<(), layer_shika::Error>(())
 //! ```
+//!
+//! **See the [multi-surface example](https://codeberg.org/waydeer/layer-shika/src/examples/multi-surface) for a complete working implementation.**
 //!
 //! # Pre-compiled Slint
 //!
@@ -107,6 +113,13 @@
 //!     .run()?;
 //! # Ok::<(), layer_shika::Error>(())
 //! ```
+//!
+//! # Examples
+//!
+//! Comprehensive examples demonstrating all features are available in the
+//! [examples directory](https://codeberg.org/waydeer/layer-shika/src/examples).
+//!
+//! Run any example with: `cargo run -p <example-name>`
 
 #![allow(clippy::pub_use)]
 
@@ -121,10 +134,10 @@ pub mod window;
 pub use layer_shika_composition::{Error, Handle, Result, SurfaceHandle};
 
 pub use shell::{
-    CompiledUiSource, Output, Selection, Selector, Surface, SurfaceInfo, DEFAULT_COMPONENT_NAME,
-    DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Shell, ShellBuilder, ShellConfig, ShellControl,
-    ShellEventContext, ShellRuntime, ShellSurfaceConfigHandler, SurfaceComponentConfig,
-    SurfaceConfigBuilder, SurfaceDefinition,
+    CompiledUiSource, DEFAULT_COMPONENT_NAME, DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Output,
+    Selection, Selector, Shell, ShellBuilder, ShellConfig, ShellControl, ShellEventContext,
+    ShellRuntime, ShellSurfaceConfigHandler, Surface, SurfaceComponentConfig, SurfaceConfigBuilder,
+    SurfaceDefinition, SurfaceInfo,
 };
 
 pub use window::{
