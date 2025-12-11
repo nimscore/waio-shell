@@ -58,9 +58,9 @@ thiserror = "2.0.17"
 wayland-client = "0.31.11"
 wayland-protocols = { version = "0.32.9", features = ["client", "staging"] }
 
-layer-shika-domain = { version = "0.1.0", path = "crates/domain" }
-layer-shika-adapters = { version = "0.1.0", path = "crates/adapters" }
-layer-shika-composition = { version = "0.1.0", path = "crates/composition" }
+layer-shika-domain = { path = "crates/domain" }
+layer-shika-adapters = { path = "crates/adapters" }
+layer-shika-composition = { path = "crates/composition" }
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }

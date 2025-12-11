@@ -9,6 +9,7 @@ keywords.workspace = true
 categories.workspace = true
 description = "A layer shell library crate with Slint UI"
 readme = "../../README.md"
+publish = false
 
 [lints]
 workspace = true
