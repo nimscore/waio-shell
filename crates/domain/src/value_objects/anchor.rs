@@ -5,6 +5,8 @@
 ///
 /// # Examples
 /// ```
+/// use layer_shika_domain::value_objects::anchor::AnchorEdges;
+///
 /// let top_bar = AnchorEdges::top_bar();
 /// let custom = AnchorEdges::empty().with_top().with_left();
 /// ```
