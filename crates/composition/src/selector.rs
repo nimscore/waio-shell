@@ -14,6 +14,8 @@ pub enum Surface {
     Named(String),
     Any(Vec<String>),
     Filter(Arc<dyn Fn(&SurfaceInfo) -> bool + Send + Sync>),
+    Not(Box<Surface>),
+    Or(Vec<Surface>),
 }
 
 impl Surface {
@@ -43,12 +45,30 @@ impl Surface {
         }
     }
 
+    #[must_use]
+    pub fn except(self, other: impl Into<Surface>) -> Self {
+        Self::Not(Box::new(other.into()))
+    }
+
+    #[must_use]
+    pub fn or(self, other: impl Into<Surface>) -> Self {
+        match self {
+            Self::Or(mut selectors) => {
+                selectors.push(other.into());
+                Self::Or(selectors)
+            }
+            _ => Self::Or(vec![self, other.into()]),
+        }
+    }
+
     pub(crate) fn matches(&self, info: &SurfaceInfo) -> bool {
         match self {
             Self::All => true,
             Self::Named(name) => &info.name == name,
             Self::Any(names) => names.iter().any(|name| name == &info.name),
             Self::Filter(predicate) => predicate(info),
+            Self::Not(selector) => !selector.matches(info),
+            Self::Or(selectors) => selectors.iter().any(|s| s.matches(info)),
         }
     }
 }
@@ -60,6 +80,8 @@ impl Debug for Surface {
             Self::Named(name) => write!(f, "Surface::Named({:?})", name),
             Self::Any(names) => write!(f, "Surface::Any({:?})", names),
             Self::Filter(_) => write!(f, "Surface::Filter(<fn>)"),
+            Self::Not(selector) => write!(f, "Surface::Not({:?})", selector),
+            Self::Or(selectors) => write!(f, "Surface::Or({:?})", selectors),
         }
     }
 }
@@ -72,6 +94,8 @@ pub enum Output {
     Handle(OutputHandle),
     Named(String),
     Filter(Arc<dyn Fn(&OutputInfo) -> bool + Send + Sync>),
+    Not(Box<Output>),
+    Or(Vec<Output>),
 }
 
 impl Output {
@@ -102,6 +126,22 @@ impl Output {
         Self::Filter(Arc::new(predicate))
     }
 
+    #[must_use]
+    pub fn except(self, other: impl Into<Output>) -> Self {
+        Self::Not(Box::new(other.into()))
+    }
+
+    #[must_use]
+    pub fn or(self, other: impl Into<Output>) -> Self {
+        match self {
+            Self::Or(mut selectors) => {
+                selectors.push(other.into());
+                Self::Or(selectors)
+            }
+            _ => Self::Or(vec![self, other.into()]),
+        }
+    }
+
     pub(crate) fn matches(
         &self,
         handle: OutputHandle,
@@ -116,6 +156,10 @@ impl Output {
             Self::Handle(h) => *h == handle,
             Self::Named(name) => info.is_some_and(|i| i.name() == Some(name.as_str())),
             Self::Filter(predicate) => info.is_some_and(|i| predicate(i)),
+            Self::Not(selector) => !selector.matches(handle, info, primary, active),
+            Self::Or(selectors) => selectors
+                .iter()
+                .any(|s| s.matches(handle, info, primary, active)),
         }
     }
 }
@@ -129,6 +173,8 @@ impl Debug for Output {
             Self::Handle(h) => write!(f, "Output::Handle({:?})", h),
             Self::Named(name) => write!(f, "Output::Named({:?})", name),
             Self::Filter(_) => write!(f, "Output::Filter(<fn>)"),
+            Self::Not(selector) => write!(f, "Output::Not({:?})", selector),
+            Self::Or(selectors) => write!(f, "Output::Or({:?})", selectors),
         }
     }
 }
