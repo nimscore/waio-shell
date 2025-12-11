@@ -25,7 +25,8 @@ jobs:
                     libxkbcommon-dev \
                     libegl1-mesa-dev \
                     libgles2-mesa-dev \
-                    libfontconfig1-dev
+                    libfontconfig1-dev \
+                    weston
 
             - name: Install Rust toolchain
               uses: dtolnay/rust-toolchain@stable
@@ -73,12 +74,27 @@ jobs:
                   cargo build -p event-loop-examples
                   cargo build -p runtime-surface-config
 
-            - name: Run examples with timeout
+            - name: Run examples in headless Wayland compositor
               run: |
-                  timeout 5 cargo run -p simple-bar || true
-                  timeout 5 cargo run -p multi-surface || true
-                  timeout 5 cargo run -p declarative-config || true
-                  timeout 5 cargo run -p event-loop-examples --bin timer || true
-                  timeout 5 cargo run -p event-loop-examples --bin channel || true
-                  timeout 5 cargo run -p event-loop-examples --bin custom-source || true
-                  timeout 5 cargo run -p runtime-surface-config || true
+                  export XDG_RUNTIME_DIR=/tmp
+                  export WAYLAND_DISPLAY=wayland-ci-test
+
+                  weston --backend=headless-backend.so --no-config --socket=$WAYLAND_DISPLAY &
+                  WESTON_PID=$!
+
+                  until test -S "/tmp/$WAYLAND_DISPLAY"; do
+                    echo "Waiting for weston..."
+                    sleep 0.5
+                  done
+                  echo "Weston started successfully"
+
+                  timeout 5 cargo run -p simple-bar || echo "simple-bar timed out (expected)"
+                  timeout 5 cargo run -p multi-surface || echo "multi-surface timed out (expected)"
+                  timeout 5 cargo run -p declarative-config || echo "declarative-config timed out (expected)"
+                  timeout 5 cargo run -p event-loop-examples --bin timer || echo "timer timed out (expected)"
+                  timeout 5 cargo run -p event-loop-examples --bin channel || echo "channel timed out (expected)"
+                  timeout 5 cargo run -p event-loop-examples --bin custom-source || echo "custom-source timed out (expected)"
+                  timeout 5 cargo run -p runtime-surface-config || echo "runtime-surface-config timed out (expected)"
+
+                  kill $WESTON_PID || true
+                  wait $WESTON_PID 2>/dev/null || true
