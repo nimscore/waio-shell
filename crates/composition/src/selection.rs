@@ -5,6 +5,11 @@ use crate::{
 };
 use layer_shika_domain::errors::DomainError;
 
+/// A selection of surfaces matching a selector
+///
+/// Provides methods to interact with all matching surfaces at once, such as
+/// setting up callbacks, modifying properties, or accessing component instances.
+/// Created via `Shell::select()`.
 pub struct Selection<'a> {
     shell: &'a Shell,
     selector: Selector,

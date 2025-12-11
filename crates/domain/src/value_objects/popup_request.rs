@@ -3,6 +3,9 @@
 pub use super::handle::PopupHandle;
 use super::popup_positioning_mode::PopupPositioningMode;
 
+/// Configuration for showing a popup window
+///
+/// Use `PopupRequest::builder()` to construct with fluent API.
 #[derive(Debug, Clone)]
 pub struct PopupRequest {
     pub component: String,
@@ -39,10 +42,14 @@ impl PopupRequest {
     }
 }
 
+/// Where to position a popup relative to the surface
 #[derive(Debug, Clone, Copy)]
 pub enum PopupPlacement {
+    /// At absolute logical position
     AtPosition { x: f32, y: f32 },
+    /// At current cursor position
     AtCursor,
+    /// Relative to a logical rectangle
     AtRect { x: f32, y: f32, w: f32, h: f32 },
 }
 
@@ -71,9 +78,12 @@ impl PopupPlacement {
     }
 }
 
+/// How to size a popup window
 #[derive(Debug, Clone, Copy)]
 pub enum PopupSize {
+    /// Fixed width and height in logical pixels
     Fixed { w: f32, h: f32 },
+    /// Size automatically based on content
     Content,
 }
 

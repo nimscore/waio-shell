@@ -1,8 +1,13 @@
 use std::path::PathBuf;
 
+/// Source for UI definition at domain level
+///
+/// Lower-level alternative to `CompiledUiSource`. Typically used internally.
 #[derive(Debug, Clone)]
 pub enum UiSource {
+    /// Load from a file path
     File(PathBuf),
+    /// Parse from source code string
     Source(String),
 }
 

@@ -1,5 +1,6 @@
 use crate::errors::DomainError;
 
+/// Size in logical pixels, independent of display scaling
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LogicalSize {
     width: f32,
@@ -65,6 +66,7 @@ impl Default for LogicalSize {
     }
 }
 
+/// Size in physical device pixels
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PhysicalSize {
     width: u32,
@@ -109,6 +111,7 @@ impl Default for PhysicalSize {
     }
 }
 
+/// Display scaling factor for converting between logical and physical pixels
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ScaleFactor(f32);
 
@@ -182,6 +185,7 @@ impl TryFrom<f32> for ScaleFactor {
     }
 }
 
+/// Position in logical pixels, independent of display scaling
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LogicalPosition {
     x: f32,

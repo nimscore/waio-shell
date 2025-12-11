@@ -6,6 +6,10 @@ use crate::value_objects::layer::Layer;
 use crate::value_objects::margins::Margins;
 use crate::value_objects::output_policy::OutputPolicy;
 
+/// Complete configuration for a layer-shell surface
+///
+/// Contains all positioning, sizing, and behavioral properties for a surface.
+/// Use with `ShellConfig` for declarative configuration or build via `ShellBuilder`.
 #[derive(Debug, Clone)]
 pub struct SurfaceConfig {
     pub dimensions: SurfaceDimension,

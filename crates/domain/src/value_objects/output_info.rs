@@ -1,5 +1,6 @@
 use crate::value_objects::output_handle::OutputHandle;
 
+/// Runtime information about a connected output (monitor)
 #[derive(Debug, Clone, PartialEq)]
 pub struct OutputInfo {
     handle: OutputHandle,
@@ -10,6 +11,7 @@ pub struct OutputInfo {
     is_primary: bool,
 }
 
+/// Physical geometry and properties of an output
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OutputGeometry {
     pub x: i32,

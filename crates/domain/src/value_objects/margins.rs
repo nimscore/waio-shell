@@ -1,3 +1,4 @@
+/// Spacing margins around a surface in pixels
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Margins {
     pub top: i32,

@@ -31,6 +31,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+/// Default Slint component name used when none is specified
 pub const DEFAULT_COMPONENT_NAME: &str = "Main";
 
 enum CompilationSource {
@@ -39,6 +40,10 @@ enum CompilationSource {
     Compiled(Rc<CompilationResult>),
 }
 
+/// Builder for configuring and creating a Shell with one or more surfaces
+///
+/// Created via `Shell::from_file()`, `Shell::from_source()`, or `Shell::from_compilation()`.
+/// Chain `.surface()` calls to configure multiple surfaces, then call `.build()` or `.run()`.
 pub struct ShellBuilder {
     compilation: CompilationSource,
     surfaces: Vec<SurfaceDefinition>,
@@ -118,6 +123,11 @@ impl ShellBuilder {
     }
 }
 
+/// Builder for configuring a single surface within a Shell
+///
+/// Created by calling `.surface()` on `ShellBuilder`. Chain configuration methods
+/// like `.height()`, `.anchor()`, `.exclusive_zone()`, then either start a new surface
+/// with `.surface()` or finalize with `.build()` or `.run()`.
 pub struct SurfaceConfigBuilder {
     shell_builder: ShellBuilder,
     component: String,
@@ -218,6 +228,10 @@ impl SurfaceConfigBuilder {
 type OutputConnectedHandler = Box<dyn Fn(&OutputInfo)>;
 type OutputDisconnectedHandler = Box<dyn Fn(OutputHandle)>;
 
+/// Main runtime for managing Wayland layer-shell surfaces with Slint UI
+///
+/// Manages the lifecycle of one or more layer surfaces, event loop integration,
+/// and Slint component instantiation. Create via builder methods or `from_config()`.
 pub struct Shell {
     inner: Rc<RefCell<dyn WaylandSystemOps>>,
     registry: SurfaceRegistry,
@@ -1069,6 +1083,9 @@ impl ShellRuntime for Shell {
     }
 }
 
+/// Context providing access to shell state within custom event source callbacks
+///
+/// Obtained via event source callbacks registered through `EventLoopHandle`.
 pub struct ShellEventContext<'a> {
     app_state: &'a mut AppState,
 }

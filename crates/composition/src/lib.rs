@@ -54,8 +54,10 @@ pub mod calloop {
     pub use layer_shika_adapters::platform::calloop::*;
 }
 
+/// Result type alias using layer-shika's Error
 pub type Result<T> = StdResult<T, Error>;
 
+/// Error types for layer-shika operations
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Adapter error: {0}")]

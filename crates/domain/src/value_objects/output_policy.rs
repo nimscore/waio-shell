@@ -4,10 +4,14 @@ use std::rc::Rc;
 
 type OutputFilter = Rc<dyn Fn(&OutputInfo) -> bool>;
 
+/// Determines which outputs (monitors) should display the surface
 #[derive(Clone)]
 pub enum OutputPolicy {
+    /// Display surface on all connected outputs (default)
     AllOutputs,
+    /// Display surface only on the primary output
     PrimaryOnly,
+    /// Custom filter function to determine output eligibility
     Custom(OutputFilter),
 }
 

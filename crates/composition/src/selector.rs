@@ -2,19 +2,31 @@ use crate::{OutputHandle, OutputInfo};
 use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::sync::Arc;
 
+/// Runtime information about a surface instance
 #[derive(Debug, Clone)]
 pub struct SurfaceInfo {
+    /// Surface component name
     pub name: String,
+    /// Handle to the output displaying this surface
     pub output: OutputHandle,
 }
 
+/// Selector for targeting surfaces when setting up callbacks or runtime configuration
+///
+/// Use `Surface::named()` to target a specific surface, or combine selectors for complex targeting.
 #[derive(Clone)]
 pub enum Surface {
+    /// Select all surfaces
     All,
+    /// Select surface by exact name
     Named(String),
+    /// Select any surface matching one of the given names
     Any(Vec<String>),
+    /// Select surfaces matching a custom predicate
     Filter(Arc<dyn Fn(&SurfaceInfo) -> bool + Send + Sync>),
+    /// Invert selection
     Not(Box<Surface>),
+    /// Union of multiple selectors
     Or(Vec<Surface>),
 }
 
@@ -86,15 +98,24 @@ impl Debug for Surface {
     }
 }
 
+/// Selector for targeting outputs (monitors) in runtime operations
 #[derive(Clone)]
 pub enum Output {
+    /// Select all outputs
     All,
+    /// Select the primary output
     Primary,
+    /// Select the currently active output
     Active,
+    /// Select output by handle
     Handle(OutputHandle),
+    /// Select output by name
     Named(String),
+    /// Select outputs matching a custom predicate
     Filter(Arc<dyn Fn(&OutputInfo) -> bool + Send + Sync>),
+    /// Invert selection
     Not(Box<Output>),
+    /// Union of multiple selectors
     Or(Vec<Output>),
 }
 
@@ -179,6 +200,10 @@ impl Debug for Output {
     }
 }
 
+/// Combined surface and output selector for precise targeting
+///
+/// Combines a surface selector with an output selector to target specific
+/// surface instances on specific outputs.
 #[derive(Clone, Debug)]
 pub struct Selector {
     pub surface: Surface,

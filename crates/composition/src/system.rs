@@ -79,6 +79,10 @@ pub enum ShellCommand {
     Render,
 }
 
+/// Handle for runtime control of shell operations
+///
+/// Provides methods to manipulate surfaces, show popups, and request redraws.
+/// Obtained from callbacks via the control parameter.
 #[derive(Clone)]
 pub struct ShellControl {
     sender: channel::Sender<ShellCommand>,
@@ -166,6 +170,10 @@ impl ShellControl {
     }
 }
 
+/// Handle for runtime control of a specific surface
+///
+/// Allows modifying surface properties like size, anchor, layer, and margins at runtime.
+/// Obtained via `ShellControl::surface()`.
 pub struct SurfaceControlHandle {
     name: String,
     sender: channel::Sender<ShellCommand>,
@@ -316,6 +324,10 @@ impl SurfaceControlHandle {
     }
 }
 
+/// Builder for applying multiple configuration changes to a surface at once
+///
+/// Created via `SurfaceControlHandle::configure()`. Chain configuration methods
+/// and call `.apply()` to commit all changes atomically.
 pub struct RuntimeSurfaceConfigBuilder {
     handle: SurfaceControlHandle,
     config: SurfaceConfig,

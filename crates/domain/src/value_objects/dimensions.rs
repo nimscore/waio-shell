@@ -1,3 +1,6 @@
+/// Width and height of a layer surface in pixels
+///
+/// Use 0 for either dimension to let the surface stretch along that axis based on anchor edges.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SurfaceDimension {
     width: u32,

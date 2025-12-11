@@ -1,11 +1,19 @@
+/// Strategy for calculating popup position relative to an anchor rectangle
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AnchorStrategy {
+    /// Center popup horizontally below the anchor
     CenterBottom,
+    /// Center popup horizontally above the anchor
     CenterTop,
+    /// Position popup at anchor's bottom-left
     LeftBottom,
+    /// Position popup at anchor's bottom-right
     RightBottom,
+    /// Position popup at anchor's top-left
     LeftTop,
+    /// Position popup at anchor's top-right
     RightTop,
+    /// Position popup at cursor coordinates
     Cursor,
 }
 

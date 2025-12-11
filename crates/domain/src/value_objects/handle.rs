@@ -38,6 +38,10 @@ pub struct Popup;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Surface;
 
+/// Type-safe unique identifier for runtime resources
+///
+/// Used as `OutputHandle`, `PopupHandle`, or `SurfaceHandle` to identify
+/// specific instances of those resources.
 pub struct Handle<T> {
     id: HandleId,
     _marker: PhantomData<T>,
@@ -111,6 +115,9 @@ impl Handle<Popup> {
     }
 }
 
+/// Unique identifier for an output (monitor)
 pub type OutputHandle = Handle<Output>;
+/// Unique identifier for a popup window
 pub type PopupHandle = Handle<Popup>;
+/// Unique identifier for a layer surface
 pub type SurfaceHandle = Handle<Surface>;

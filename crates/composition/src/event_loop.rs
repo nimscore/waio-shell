@@ -14,6 +14,10 @@ pub trait FromAppState<'a> {
     fn from_app_state(app_state: &'a mut AppState) -> Self;
 }
 
+/// Main event loop for the shell runtime
+///
+/// Manages the Wayland event loop and custom event sources.
+/// Created internally by `Shell` and started via `Shell::run()`.
 pub struct ShellEventLoop {
     inner: Rc<RefCell<dyn WaylandSystemOps>>,
 }
@@ -33,6 +37,10 @@ impl ShellEventLoop {
     }
 }
 
+/// Handle for registering custom event sources with the event loop
+///
+/// Allows adding timers, channels, and file descriptors to the event loop.
+/// Obtained via `Shell::event_loop_handle()`.
 pub struct EventLoopHandle {
     system: Weak<RefCell<dyn WaylandSystemOps>>,
 }
@@ -42,6 +50,9 @@ impl EventLoopHandle {
         Self { system }
     }
 
+    /// Register a custom event source with the event loop
+    ///
+    /// Returns a registration token that can be used to remove the source later.
     pub fn insert_source<S, F, R>(&self, source: S, callback: F) -> Result<RegistrationToken>
     where
         S: EventSource<Ret = R> + 'static,
@@ -60,6 +71,9 @@ impl EventLoopHandle {
         })
     }
 
+    /// Add a timer that fires after the specified duration
+    ///
+    /// Callback receives the deadline and can return `TimeoutAction::ToInstant` to reschedule.
     pub fn add_timer<F>(&self, duration: Duration, mut callback: F) -> Result<RegistrationToken>
     where
         F: FnMut(Instant, &mut AppState) -> TimeoutAction + 'static,
@@ -70,6 +84,9 @@ impl EventLoopHandle {
         })
     }
 
+    /// Add a timer that fires at a specific instant
+    ///
+    /// Callback receives the deadline and can return `TimeoutAction::ToInstant` to reschedule.
     pub fn add_timer_at<F>(&self, deadline: Instant, mut callback: F) -> Result<RegistrationToken>
     where
         F: FnMut(Instant, &mut AppState) -> TimeoutAction + 'static,
@@ -80,6 +97,9 @@ impl EventLoopHandle {
         })
     }
 
+    /// Add a channel for sending messages to the event loop from any thread
+    ///
+    /// Returns a registration token and sender. Messages sent via the sender trigger the callback.
     pub fn add_channel<T, F>(
         &self,
         mut callback: F,
@@ -97,6 +117,9 @@ impl EventLoopHandle {
         Ok((token, sender))
     }
 
+    /// Add a file descriptor to be monitored for readability or writability
+    ///
+    /// Callback is invoked when the file descriptor becomes ready according to the interest.
     pub fn add_fd<F, T>(
         &self,
         fd: T,

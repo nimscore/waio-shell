@@ -3,9 +3,15 @@ use layer_shika_domain::prelude::{SurfaceConfig, UiSource};
 use std::path::PathBuf;
 use std::rc::Rc;
 
+/// Source for Slint UI definition
+///
+/// Specifies where to load the UI from: a `.slint` file, inline source code, or pre-compiled result.
 pub enum CompiledUiSource {
+    /// Load UI from a `.slint` file path
     File(PathBuf),
+    /// Parse UI from source code string
     Source(String),
+    /// Use pre-compiled Slint result
     Compiled(Rc<CompilationResult>),
 }
 
@@ -56,14 +62,21 @@ impl From<PathBuf> for CompiledUiSource {
     }
 }
 
+/// Declarative configuration for creating a shell with multiple surfaces
+///
+/// Use this for programmatic or externally-driven configuration.
+/// For fluent builder API, use `Shell::from_file()` instead.
 pub struct ShellConfig {
     pub ui_source: CompiledUiSource,
     pub surfaces: Vec<SurfaceComponentConfig>,
 }
 
+/// Associates a Slint component name with its surface configuration
 #[derive(Debug, Clone)]
 pub struct SurfaceComponentConfig {
+    /// Name of the Slint component to instantiate
     pub component: String,
+    /// Surface configuration for this component
     pub config: SurfaceConfig,
 }
 
