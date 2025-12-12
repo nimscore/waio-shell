@@ -131,7 +131,9 @@ pub mod shell;
 pub mod slint_integration;
 pub mod window;
 
-pub use layer_shika_composition::{CallbackContext, Error, Handle, Result, SurfaceHandle, SurfaceInstanceId, SurfaceTarget};
+pub use layer_shika_composition::{
+    CallbackContext, Error, Handle, Result, SurfaceHandle, SurfaceInstanceId, SurfaceTarget,
+};
 
 pub use shell::{
     CompiledUiSource, DEFAULT_COMPONENT_NAME, DEFAULT_SURFACE_NAME, LayerSurfaceHandle, Output,
