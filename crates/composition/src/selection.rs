@@ -20,22 +20,24 @@ impl<'a> Selection<'a> {
         Self { shell, selector }
     }
 
-    pub fn on_callback<F, R>(&self, callback_name: &str, handler: F)
+    pub fn on_callback<F, R>(&mut self, callback_name: &str, handler: F) -> &mut Self
     where
         F: Fn(crate::ShellControl) -> R + Clone + 'static,
         R: crate::IntoValue,
     {
         self.shell
             .on_internal(&self.selector, callback_name, handler);
+        self
     }
 
-    pub fn on_callback_with_args<F, R>(&self, callback_name: &str, handler: F)
+    pub fn on_callback_with_args<F, R>(&mut self, callback_name: &str, handler: F) -> &mut Self
     where
         F: Fn(&[Value], crate::ShellControl) -> R + Clone + 'static,
         R: crate::IntoValue,
     {
         self.shell
             .on_with_args_internal(&self.selector, callback_name, handler);
+        self
     }
 
     pub fn with_component<F>(&self, mut f: F)
