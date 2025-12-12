@@ -14,12 +14,14 @@ use layer_shika_domain::prelude::{
     AnchorEdges, KeyboardInteractivity, Layer, Margins, OutputPolicy, ScaleFactor,
 };
 use layer_shika_domain::value_objects::dimensions::{PopupDimensions, SurfaceDimension};
+use layer_shika_domain::value_objects::handle::SurfaceHandle;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use layer_shika_domain::value_objects::popup_request::{
     PopupHandle, PopupPlacement, PopupRequest, PopupSize,
 };
+use layer_shika_domain::value_objects::surface_instance_id::SurfaceInstanceId;
 use std::cell::Cell;
 use std::rc::Rc;
 
@@ -33,42 +35,50 @@ pub enum PopupCommand {
     },
 }
 
+#[derive(Debug, Clone)]
+pub enum SurfaceTarget {
+    ByInstance(SurfaceInstanceId),
+    ByHandle(SurfaceHandle),
+    ByName(String),
+    ByNameAndOutput { name: String, output: OutputHandle },
+}
+
 pub enum SurfaceCommand {
     Resize {
-        name: String,
+        target: SurfaceTarget,
         width: u32,
         height: u32,
     },
     SetAnchor {
-        name: String,
+        target: SurfaceTarget,
         anchor: AnchorEdges,
     },
     SetExclusiveZone {
-        name: String,
+        target: SurfaceTarget,
         zone: i32,
     },
     SetMargins {
-        name: String,
+        target: SurfaceTarget,
         margins: Margins,
     },
     SetLayer {
-        name: String,
+        target: SurfaceTarget,
         layer: Layer,
     },
     SetOutputPolicy {
-        name: String,
+        target: SurfaceTarget,
         policy: OutputPolicy,
     },
     SetScaleFactor {
-        name: String,
+        target: SurfaceTarget,
         factor: ScaleFactor,
     },
     SetKeyboardInteractivity {
-        name: String,
+        target: SurfaceTarget,
         mode: KeyboardInteractivity,
     },
     ApplyConfig {
-        name: String,
+        target: SurfaceTarget,
         config: SurfaceConfig,
     },
 }
@@ -77,6 +87,63 @@ pub enum ShellCommand {
     Popup(PopupCommand),
     Surface(SurfaceCommand),
     Render,
+}
+
+pub struct CallbackContext {
+    instance_id: SurfaceInstanceId,
+    surface_name: String,
+    control: ShellControl,
+}
+
+impl CallbackContext {
+    pub fn new(
+        instance_id: SurfaceInstanceId,
+        surface_name: String,
+        control: ShellControl,
+    ) -> Self {
+        Self {
+            instance_id,
+            surface_name,
+            control,
+        }
+    }
+
+    pub const fn instance_id(&self) -> &SurfaceInstanceId {
+        &self.instance_id
+    }
+
+    pub const fn surface_handle(&self) -> SurfaceHandle {
+        self.instance_id.surface()
+    }
+
+    pub const fn output_handle(&self) -> OutputHandle {
+        self.instance_id.output()
+    }
+
+    pub fn surface_name(&self) -> &str {
+        &self.surface_name
+    }
+
+    pub const fn control(&self) -> &ShellControl {
+        &self.control
+    }
+
+    pub fn this_instance(&self) -> SurfaceControlHandle {
+        self.control.surface_instance(&self.instance_id)
+    }
+
+    pub fn all_surface_instances(&self) -> SurfaceControlHandle {
+        self.control.surface_by_handle(self.surface_handle())
+    }
+
+    pub fn all_named(&self) -> SurfaceControlHandle {
+        self.control.surface_by_name(&self.surface_name)
+    }
+
+    pub fn all_named_on_this_output(&self) -> SurfaceControlHandle {
+        self.control
+            .surface_by_name_and_output(&self.surface_name, self.output_handle())
+    }
 }
 
 /// Handle for runtime control of shell operations
@@ -162,11 +229,43 @@ impl ShellControl {
         })
     }
 
-    pub fn surface(&self, name: impl Into<String>) -> SurfaceControlHandle {
+    pub fn surface_instance(&self, id: &SurfaceInstanceId) -> SurfaceControlHandle {
         SurfaceControlHandle {
-            name: name.into(),
+            target: SurfaceTarget::ByInstance(*id),
             sender: self.sender.clone(),
         }
+    }
+
+    pub fn surface_by_handle(&self, handle: SurfaceHandle) -> SurfaceControlHandle {
+        SurfaceControlHandle {
+            target: SurfaceTarget::ByHandle(handle),
+            sender: self.sender.clone(),
+        }
+    }
+
+    pub fn surface_by_name(&self, name: impl Into<String>) -> SurfaceControlHandle {
+        SurfaceControlHandle {
+            target: SurfaceTarget::ByName(name.into()),
+            sender: self.sender.clone(),
+        }
+    }
+
+    pub fn surface_by_name_and_output(
+        &self,
+        name: impl Into<String>,
+        output: OutputHandle,
+    ) -> SurfaceControlHandle {
+        SurfaceControlHandle {
+            target: SurfaceTarget::ByNameAndOutput {
+                name: name.into(),
+                output,
+            },
+            sender: self.sender.clone(),
+        }
+    }
+
+    pub fn surface(&self, name: impl Into<String>) -> SurfaceControlHandle {
+        self.surface_by_name(name)
     }
 }
 
@@ -175,7 +274,7 @@ impl ShellControl {
 /// Allows modifying surface properties like size, anchor, layer, and margins at runtime.
 /// Obtained via `ShellControl::surface()`.
 pub struct SurfaceControlHandle {
-    name: String,
+    target: SurfaceTarget,
     sender: channel::Sender<ShellCommand>,
 }
 
@@ -183,7 +282,7 @@ impl SurfaceControlHandle {
     pub fn resize(&self, width: u32, height: u32) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::Resize {
-                name: self.name.clone(),
+                target: self.target.clone(),
                 width,
                 height,
             }))
@@ -205,7 +304,7 @@ impl SurfaceControlHandle {
     pub fn set_anchor(&self, anchor: AnchorEdges) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::SetAnchor {
-                name: self.name.clone(),
+                target: self.target.clone(),
                 anchor,
             }))
             .map_err(|_| {
@@ -219,7 +318,7 @@ impl SurfaceControlHandle {
     pub fn set_exclusive_zone(&self, zone: i32) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::SetExclusiveZone {
-                name: self.name.clone(),
+                target: self.target.clone(),
                 zone,
             }))
             .map_err(|_| {
@@ -233,7 +332,7 @@ impl SurfaceControlHandle {
     pub fn set_margins(&self, margins: impl Into<Margins>) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::SetMargins {
-                name: self.name.clone(),
+                target: self.target.clone(),
                 margins: margins.into(),
             }))
             .map_err(|_| {
@@ -247,7 +346,7 @@ impl SurfaceControlHandle {
     pub fn set_layer(&self, layer: Layer) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::SetLayer {
-                name: self.name.clone(),
+                target: self.target.clone(),
                 layer,
             }))
             .map_err(|_| {
@@ -260,7 +359,7 @@ impl SurfaceControlHandle {
     pub fn set_output_policy(&self, policy: OutputPolicy) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::SetOutputPolicy {
-                name: self.name.clone(),
+                target: self.target.clone(),
                 policy,
             }))
             .map_err(|_| {
@@ -274,7 +373,7 @@ impl SurfaceControlHandle {
     pub fn set_scale_factor(&self, factor: ScaleFactor) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::SetScaleFactor {
-                name: self.name.clone(),
+                target: self.target.clone(),
                 factor,
             }))
             .map_err(|_| {
@@ -289,7 +388,7 @@ impl SurfaceControlHandle {
         self.sender
             .send(ShellCommand::Surface(
                 SurfaceCommand::SetKeyboardInteractivity {
-                    name: self.name.clone(),
+                    target: self.target.clone(),
                     mode,
                 },
             ))
@@ -305,7 +404,7 @@ impl SurfaceControlHandle {
     pub fn apply_config(&self, config: SurfaceConfig) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::ApplyConfig {
-                name: self.name.clone(),
+                target: self.target.clone(),
                 config,
             }))
             .map_err(|_| {
@@ -428,15 +527,32 @@ fn extract_dimensions_from_callback(args: &[Value]) -> PopupDimensions {
 }
 
 impl EventDispatchContext<'_> {
-    pub(crate) fn surfaces_by_name(&self, name: &str) -> impl Iterator<Item = &SurfaceState> {
-        self.app_state.surfaces_by_name(name)
+    pub(crate) fn surface_by_instance_mut(
+        &mut self,
+        surface_handle: SurfaceHandle,
+        output_handle: OutputHandle,
+    ) -> Option<&mut SurfaceState> {
+        self.app_state
+            .get_surface_by_instance_mut(surface_handle, output_handle)
     }
 
-    pub(crate) fn surfaces_by_name_mut(
+    pub(crate) fn surfaces_by_handle_mut(
+        &mut self,
+        handle: SurfaceHandle,
+    ) -> Vec<&mut SurfaceState> {
+        self.app_state.surfaces_by_handle_mut(handle)
+    }
+
+    pub(crate) fn surfaces_by_name_mut(&mut self, name: &str) -> Vec<&mut SurfaceState> {
+        self.app_state.surfaces_by_name_mut(name)
+    }
+
+    pub(crate) fn surfaces_by_name_and_output_mut(
         &mut self,
         name: &str,
-    ) -> impl Iterator<Item = &mut SurfaceState> {
-        self.app_state.surfaces_by_name_mut(name)
+        output: OutputHandle,
+    ) -> Vec<&mut SurfaceState> {
+        self.app_state.surfaces_by_name_and_output_mut(name, output)
     }
 
     pub fn with_surface<F, R>(&self, name: &str, f: F) -> Result<R>
@@ -466,8 +582,8 @@ impl EventDispatchContext<'_> {
     fn get_surface_component(&self, name: &str) -> Option<&ComponentInstance> {
         self.app_state
             .surfaces_by_name(name)
-            .next()
-            .map(SurfaceState::component_instance)
+            .first()
+            .map(|s| s.component_instance())
     }
 
     #[must_use]
@@ -895,15 +1011,12 @@ impl EventDispatchContext<'_> {
     where
         F: FnOnce(&ComponentInstance, LayerSurfaceHandle<'_>),
     {
-        let surface = self
-            .app_state
-            .surfaces_by_name(name)
-            .next()
-            .ok_or_else(|| {
-                Error::Domain(DomainError::Configuration {
-                    message: format!("Surface '{}' not found", name),
-                })
-            })?;
+        let surfaces = self.app_state.surfaces_by_name(name);
+        let surface = surfaces.first().ok_or_else(|| {
+            Error::Domain(DomainError::Configuration {
+                message: format!("Surface '{}' not found", name),
+            })
+        })?;
 
         let handle = LayerSurfaceHandle::from_window_state(surface);
         let component = surface.component_instance();

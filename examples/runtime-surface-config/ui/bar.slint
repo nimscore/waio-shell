@@ -6,9 +6,29 @@ export component Bar inherits Window {
     in-out property <string> current-anchor: "Top";
     in-out property <string> current-layer: "Top";
 
-    callback toggle-size() -> {expanded: bool};
-    callback switch-anchor() -> {anchor: string};
-    callback switch-layer() -> {layer: string};
+    callback toggle-size(bool);
+    callback switch-anchor(string);
+    callback switch-layer(string);
+
+    function next-anchor(current: string) -> string {
+        if (current == "Top") {
+            return "Bottom";
+        } else {
+            return "Top";
+        }
+    }
+
+    function next-layer(current: string) -> string {
+        if (current == "Top") {
+            return "Overlay";
+        } else if (current == "Overlay") {
+            return "Bottom";
+        } else if (current == "Bottom") {
+            return "Background";
+        } else {
+            return "Top";
+        }
+    }
 
     HorizontalLayout {
         spacing: 12px;
@@ -37,21 +57,24 @@ export component Bar inherits Window {
         Button {
             text: is-expanded ? "Collapse" : "Expand";
             clicked => {
-                root.is-expanded = toggle-size().expanded;
+                root.is-expanded = !root.is-expanded;
+                toggle-size(root.is-expanded);
             }
         }
 
         Button {
             text: "Switch Anchor";
             clicked => {
-                root.current-anchor = switch-anchor().anchor;
+                root.current-anchor = next-anchor(root.current-anchor);
+                switch-anchor(root.current-anchor);
             }
         }
 
         Button {
             text: "Switch Layer";
             clicked => {
-                root.current-layer = switch-layer().layer;
+                root.current-layer = next-layer(root.current-layer);
+                switch-layer(root.current-layer);
             }
         }
     }

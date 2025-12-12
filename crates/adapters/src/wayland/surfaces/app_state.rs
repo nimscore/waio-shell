@@ -3,6 +3,7 @@ use super::surface_state::SurfaceState;
 use crate::wayland::managed_proxies::ManagedWlPointer;
 use crate::wayland::outputs::{OutputManager, OutputMapping};
 use layer_shika_domain::entities::output_registry::OutputRegistry;
+use layer_shika_domain::value_objects::handle::SurfaceHandle;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
 use std::cell::RefCell;
@@ -16,14 +17,14 @@ pub type PerOutputSurface = SurfaceState;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ShellSurfaceKey {
     pub output_handle: OutputHandle,
-    pub surface_name: String,
+    pub surface_handle: SurfaceHandle,
 }
 
 impl ShellSurfaceKey {
-    pub fn new(output_handle: OutputHandle, surface_name: impl Into<String>) -> Self {
+    pub const fn new(output_handle: OutputHandle, surface_handle: SurfaceHandle) -> Self {
         Self {
             output_handle,
-            surface_name: surface_name.into(),
+            surface_handle,
         }
     }
 }
@@ -33,6 +34,7 @@ pub struct AppState {
     output_mapping: OutputMapping,
     surfaces: HashMap<ShellSurfaceKey, PerOutputSurface>,
     surface_to_key: HashMap<ObjectId, ShellSurfaceKey>,
+    surface_handle_to_name: HashMap<SurfaceHandle, String>,
     _pointer: ManagedWlPointer,
     shared_pointer_serial: Rc<SharedPointerSerial>,
     output_manager: Option<Rc<RefCell<OutputManager>>>,
@@ -47,6 +49,7 @@ impl AppState {
             output_mapping: OutputMapping::new(),
             surfaces: HashMap::new(),
             surface_to_key: HashMap::new(),
+            surface_handle_to_name: HashMap::new(),
             _pointer: pointer,
             shared_pointer_serial: shared_serial,
             output_manager: None,
@@ -78,6 +81,7 @@ impl AppState {
     pub fn add_shell_surface(
         &mut self,
         output_id: &ObjectId,
+        surface_handle: SurfaceHandle,
         surface_name: &str,
         main_surface_id: ObjectId,
         surface_state: PerOutputSurface,
@@ -91,19 +95,28 @@ impl AppState {
             h
         });
 
-        let key = ShellSurfaceKey::new(handle, surface_name);
+        let key = ShellSurfaceKey::new(handle, surface_handle);
         self.surface_to_key.insert(main_surface_id, key.clone());
         self.surfaces.insert(key, surface_state);
+        self.surface_handle_to_name
+            .insert(surface_handle, surface_name.to_string());
     }
 
     pub fn add_output(
         &mut self,
         output_id: &ObjectId,
+        surface_handle: SurfaceHandle,
         surface_name: &str,
         main_surface_id: ObjectId,
         surface_state: PerOutputSurface,
     ) {
-        self.add_shell_surface(output_id, surface_name, main_surface_id, surface_state);
+        self.add_shell_surface(
+            output_id,
+            surface_handle,
+            surface_name,
+            main_surface_id,
+            surface_state,
+        );
     }
 
     pub fn remove_output(&mut self, handle: OutputHandle) -> Vec<PerOutputSurface> {
@@ -139,21 +152,21 @@ impl AppState {
         self.surfaces.get_mut(key)
     }
 
-    pub fn get_surface_by_name(
+    pub fn get_surface_by_instance(
         &self,
+        surface_handle: SurfaceHandle,
         output_handle: OutputHandle,
-        shell_window_name: &str,
     ) -> Option<&PerOutputSurface> {
-        let key = ShellSurfaceKey::new(output_handle, shell_window_name);
+        let key = ShellSurfaceKey::new(output_handle, surface_handle);
         self.surfaces.get(&key)
     }
 
-    pub fn get_surface_by_name_mut(
+    pub fn get_surface_by_instance_mut(
         &mut self,
+        surface_handle: SurfaceHandle,
         output_handle: OutputHandle,
-        shell_window_name: &str,
     ) -> Option<&mut PerOutputSurface> {
-        let key = ShellSurfaceKey::new(output_handle, shell_window_name);
+        let key = ShellSurfaceKey::new(output_handle, surface_handle);
         self.surfaces.get_mut(&key)
     }
 
@@ -211,6 +224,12 @@ impl AppState {
         self.surfaces
             .values_mut()
             .find(|surface| surface.layer_surface().as_ref().id() == *layer_surface_id)
+    }
+
+    pub fn get_surface_name(&self, surface_handle: SurfaceHandle) -> Option<&str> {
+        self.surface_handle_to_name
+            .get(&surface_handle)
+            .map(String::as_str)
     }
 
     pub fn get_key_by_surface(&self, surface_id: &ObjectId) -> Option<&ShellSurfaceKey> {
@@ -280,11 +299,17 @@ impl AppState {
     pub fn surfaces_for_output(
         &self,
         handle: OutputHandle,
-    ) -> impl Iterator<Item = (&str, &PerOutputSurface)> {
+    ) -> impl Iterator<Item = (&str, &PerOutputSurface)> + '_ {
         self.surfaces
             .iter()
             .filter(move |(k, _)| k.output_handle == handle)
-            .map(|(k, v)| (k.surface_name.as_str(), v))
+            .map(|(k, v)| {
+                let name = self
+                    .surface_handle_to_name
+                    .get(&k.surface_handle)
+                    .map_or("unknown", String::as_str);
+                (name, v)
+            })
     }
 
     pub fn surfaces_with_keys(
@@ -360,30 +385,101 @@ impl AppState {
 
     pub fn shell_surface_names(&self) -> Vec<&str> {
         let mut names: Vec<_> = self
-            .surfaces
-            .keys()
-            .map(|k| k.surface_name.as_str())
+            .surface_handle_to_name
+            .values()
+            .map(String::as_str)
             .collect();
         names.sort_unstable();
         names.dedup();
         names
     }
 
-    pub fn surfaces_by_name(&self, surface_name: &str) -> impl Iterator<Item = &PerOutputSurface> {
+    pub fn surfaces_by_name(&self, surface_name: &str) -> Vec<&PerOutputSurface> {
+        let matching_handles: Vec<SurfaceHandle> = self
+            .surface_handle_to_name
+            .iter()
+            .filter(|(_, n)| n.as_str() == surface_name)
+            .map(|(h, _)| *h)
+            .collect();
+
         self.surfaces
             .iter()
-            .filter(move |(k, _)| k.surface_name == surface_name)
+            .filter(|(k, _)| matching_handles.contains(&k.surface_handle))
             .map(|(_, v)| v)
+            .collect()
     }
 
-    pub fn surfaces_by_name_mut(
-        &mut self,
-        surface_name: &str,
-    ) -> impl Iterator<Item = &mut PerOutputSurface> {
+    pub fn surfaces_by_name_mut(&mut self, surface_name: &str) -> Vec<&mut PerOutputSurface> {
+        let matching_handles: Vec<SurfaceHandle> = self
+            .surface_handle_to_name
+            .iter()
+            .filter(|(_, n)| n.as_str() == surface_name)
+            .map(|(h, _)| *h)
+            .collect();
+
         self.surfaces
             .iter_mut()
-            .filter(move |(k, _)| k.surface_name == surface_name)
+            .filter(|(k, _)| matching_handles.contains(&k.surface_handle))
             .map(|(_, v)| v)
+            .collect()
+    }
+
+    pub fn surfaces_by_handle(&self, handle: SurfaceHandle) -> Vec<&PerOutputSurface> {
+        self.surfaces
+            .iter()
+            .filter(|(k, _)| k.surface_handle == handle)
+            .map(|(_, v)| v)
+            .collect()
+    }
+
+    pub fn surfaces_by_handle_mut(&mut self, handle: SurfaceHandle) -> Vec<&mut PerOutputSurface> {
+        self.surfaces
+            .iter_mut()
+            .filter(|(k, _)| k.surface_handle == handle)
+            .map(|(_, v)| v)
+            .collect()
+    }
+
+    pub fn surfaces_by_name_and_output(
+        &self,
+        name: &str,
+        output: OutputHandle,
+    ) -> Vec<&PerOutputSurface> {
+        let matching_handles: Vec<SurfaceHandle> = self
+            .surface_handle_to_name
+            .iter()
+            .filter(|(_, n)| n.as_str() == name)
+            .map(|(h, _)| *h)
+            .collect();
+
+        self.surfaces
+            .iter()
+            .filter(|(k, _)| {
+                k.output_handle == output && matching_handles.contains(&k.surface_handle)
+            })
+            .map(|(_, v)| v)
+            .collect()
+    }
+
+    pub fn surfaces_by_name_and_output_mut(
+        &mut self,
+        name: &str,
+        output: OutputHandle,
+    ) -> Vec<&mut PerOutputSurface> {
+        let matching_handles: Vec<SurfaceHandle> = self
+            .surface_handle_to_name
+            .iter()
+            .filter(|(_, n)| n.as_str() == name)
+            .map(|(h, _)| *h)
+            .collect();
+
+        self.surfaces
+            .iter_mut()
+            .filter(|(k, _)| {
+                k.output_handle == output && matching_handles.contains(&k.surface_handle)
+            })
+            .map(|(_, v)| v)
+            .collect()
     }
 
     pub fn get_output_by_handle(&self, handle: OutputHandle) -> Option<&PerOutputSurface> {
@@ -420,10 +516,17 @@ impl AppState {
     }
 
     pub fn remove_surfaces_by_name(&mut self, surface_name: &str) -> Vec<PerOutputSurface> {
+        let matching_handles: Vec<SurfaceHandle> = self
+            .surface_handle_to_name
+            .iter()
+            .filter(|(_, n)| n.as_str() == surface_name)
+            .map(|(h, _)| *h)
+            .collect();
+
         let keys_to_remove: Vec<_> = self
             .surfaces
             .keys()
-            .filter(|k| k.surface_name == surface_name)
+            .filter(|k| matching_handles.contains(&k.surface_handle))
             .cloned()
             .collect();
 
@@ -435,7 +538,7 @@ impl AppState {
         }
 
         self.surface_to_key
-            .retain(|_, k| k.surface_name != surface_name);
+            .retain(|_, k| !matching_handles.contains(&k.surface_handle));
 
         removed
     }

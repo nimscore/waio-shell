@@ -5,7 +5,8 @@ use crate::shell_config::{CompiledUiSource, ShellConfig};
 use crate::shell_runtime::ShellRuntime;
 use crate::surface_registry::{SurfaceDefinition, SurfaceEntry, SurfaceRegistry};
 use crate::system::{
-    EventDispatchContext, PopupCommand, ShellCommand, ShellControl, SurfaceCommand,
+    CallbackContext, EventDispatchContext, PopupCommand, ShellCommand, ShellControl,
+    SurfaceCommand, SurfaceTarget,
 };
 use crate::value_conversion::IntoValue;
 use crate::{Error, Result};
@@ -26,6 +27,7 @@ use layer_shika_domain::prelude::{
 use layer_shika_domain::value_objects::handle::SurfaceHandle;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
+use layer_shika_domain::value_objects::surface_instance_id::SurfaceInstanceId;
 use spin_on::spin_on;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -379,7 +381,7 @@ impl Shell {
             })?;
             Self::new_single_window(compilation_result, definition)
         } else {
-            Self::new_multi_window(compilation_result, definitions)
+            Self::new_multi_window(compilation_result, &definitions)
         }
     }
 
@@ -398,7 +400,9 @@ impl Shell {
                 })
             })?;
 
+        let handle = SurfaceHandle::new();
         let wayland_config = WaylandSurfaceConfig::from_domain_config(
+            handle,
             &definition.component,
             component_definition,
             Some(Rc::clone(&compilation_result)),
@@ -411,7 +415,6 @@ impl Shell {
         let (sender, receiver) = channel::channel();
 
         let mut registry = SurfaceRegistry::new();
-        let handle = SurfaceHandle::new();
         let entry = SurfaceEntry::new(handle, definition.component.clone(), definition);
         registry.insert(entry)?;
 
@@ -433,9 +436,9 @@ impl Shell {
 
     fn new_multi_window(
         compilation_result: Rc<CompilationResult>,
-        definitions: Vec<SurfaceDefinition>,
+        definitions: &[SurfaceDefinition],
     ) -> Result<Self> {
-        let shell_configs: Vec<ShellSurfaceConfig> = definitions
+        let shell_configs_with_handles: Vec<(SurfaceHandle, ShellSurfaceConfig)> = definitions
             .iter()
             .map(|def| {
                 let component_definition = compilation_result
@@ -449,19 +452,29 @@ impl Shell {
                         })
                     })?;
 
+                let handle = SurfaceHandle::new();
                 let wayland_config = WaylandSurfaceConfig::from_domain_config(
+                    handle,
                     &def.component,
                     component_definition,
                     Some(Rc::clone(&compilation_result)),
                     def.config.clone(),
                 );
 
-                Ok(ShellSurfaceConfig {
-                    name: def.component.clone(),
-                    config: wayland_config,
-                })
+                Ok((
+                    handle,
+                    ShellSurfaceConfig {
+                        name: def.component.clone(),
+                        config: wayland_config,
+                    },
+                ))
             })
             .collect::<Result<Vec<_>>>()?;
+
+        let shell_configs: Vec<ShellSurfaceConfig> = shell_configs_with_handles
+            .iter()
+            .map(|(_, cfg)| cfg.clone())
+            .collect();
 
         let inner = layer_shika_adapters::WaylandShellSystem::new_multi(&shell_configs)?;
         let inner_rc: Rc<RefCell<dyn WaylandSystemOps>> = Rc::new(RefCell::new(inner));
@@ -469,9 +482,9 @@ impl Shell {
         let (sender, receiver) = channel::channel();
 
         let mut registry = SurfaceRegistry::new();
-        for definition in definitions {
-            let handle = SurfaceHandle::new();
-            let entry = SurfaceEntry::new(handle, definition.component.clone(), definition);
+        for ((handle, _), definition) in shell_configs_with_handles.iter().zip(definitions.iter()) {
+            let entry =
+                SurfaceEntry::new(*handle, definition.component.clone(), definition.clone());
             registry.insert(entry)?;
         }
 
@@ -558,100 +571,152 @@ impl Shell {
         }
     }
 
+    fn resolve_surface_target<'a>(
+        ctx: &'a mut EventDispatchContext<'_>,
+        target: &SurfaceTarget,
+    ) -> Vec<&'a mut SurfaceState> {
+        match target {
+            SurfaceTarget::ByInstance(id) => {
+                if let Some(surface) = ctx.surface_by_instance_mut(id.surface(), id.output()) {
+                    vec![surface]
+                } else {
+                    log::warn!(
+                        "Surface instance not found: handle {:?} on output {:?}",
+                        id.surface(),
+                        id.output()
+                    );
+                    vec![]
+                }
+            }
+            SurfaceTarget::ByHandle(handle) => ctx.surfaces_by_handle_mut(*handle),
+            SurfaceTarget::ByName(name) => ctx.surfaces_by_name_mut(name),
+            SurfaceTarget::ByNameAndOutput { name, output } => {
+                ctx.surfaces_by_name_and_output_mut(name, *output)
+            }
+        }
+    }
+
+    fn apply_surface_resize(
+        ctx: &mut EventDispatchContext<'_>,
+        target: &SurfaceTarget,
+        width: u32,
+        height: u32,
+    ) {
+        log::debug!(
+            "Surface command: Resize {:?} to {}x{}",
+            target,
+            width,
+            height
+        );
+        for surface in Self::resolve_surface_target(ctx, target) {
+            let handle = LayerSurfaceHandle::from_window_state(surface);
+            handle.set_size(width, height);
+            handle.commit();
+            surface.update_size_with_compositor_logic(width, height);
+        }
+    }
+
+    fn apply_surface_config_change<F>(
+        ctx: &mut EventDispatchContext<'_>,
+        target: &SurfaceTarget,
+        operation: &str,
+        apply: F,
+    ) where
+        F: Fn(&LayerSurfaceHandle<'_>),
+    {
+        log::debug!("Surface command: {} {:?}", operation, target);
+        for surface in Self::resolve_surface_target(ctx, target) {
+            let handle = LayerSurfaceHandle::from_window_state(surface);
+            apply(&handle);
+            handle.commit();
+        }
+    }
+
+    fn apply_full_config(
+        ctx: &mut EventDispatchContext<'_>,
+        target: &SurfaceTarget,
+        config: &SurfaceConfig,
+    ) {
+        log::debug!("Surface command: ApplyConfig {:?}", target);
+        for surface in Self::resolve_surface_target(ctx, target) {
+            let handle = LayerSurfaceHandle::from_window_state(surface);
+
+            handle.set_size(config.dimensions.width(), config.dimensions.height());
+            handle.set_anchor_edges(config.anchor);
+            handle.set_exclusive_zone(config.exclusive_zone);
+            handle.set_margins(config.margin);
+            handle.set_layer(config.layer);
+            handle.set_keyboard_interactivity(config.keyboard_interactivity);
+            handle.commit();
+
+            surface.update_size_with_compositor_logic(
+                config.dimensions.width(),
+                config.dimensions.height(),
+            );
+        }
+    }
+
     fn handle_surface_command(command: SurfaceCommand, ctx: &mut EventDispatchContext<'_>) {
         match command {
             SurfaceCommand::Resize {
-                name,
+                target,
                 width,
                 height,
             } => {
-                log::debug!("Surface command: Resize '{}' to {}x{}", name, width, height);
-                for surface in ctx.surfaces_by_name_mut(&name) {
-                    let handle = LayerSurfaceHandle::from_window_state(surface);
-                    handle.set_size(width, height);
-                    handle.commit();
-
-                    surface.update_size_with_compositor_logic(width, height);
-                }
+                Self::apply_surface_resize(ctx, &target, width, height);
             }
-            SurfaceCommand::SetAnchor { name, anchor } => {
-                log::debug!("Surface command: SetAnchor '{}' to {:?}", name, anchor);
-                for surface in ctx.surfaces_by_name(&name) {
-                    let handle = LayerSurfaceHandle::from_window_state(surface);
+            SurfaceCommand::SetAnchor { target, anchor } => {
+                Self::apply_surface_config_change(ctx, &target, "SetAnchor", |handle| {
                     handle.set_anchor_edges(anchor);
-                    handle.commit();
-                }
+                });
             }
-            SurfaceCommand::SetExclusiveZone { name, zone } => {
-                log::debug!("Surface command: SetExclusiveZone '{}' to {}", name, zone);
-                for surface in ctx.surfaces_by_name(&name) {
-                    let handle = LayerSurfaceHandle::from_window_state(surface);
+            SurfaceCommand::SetExclusiveZone { target, zone } => {
+                Self::apply_surface_config_change(ctx, &target, "SetExclusiveZone", |handle| {
                     handle.set_exclusive_zone(zone);
-                    handle.commit();
-                }
+                });
             }
-            SurfaceCommand::SetMargins { name, margins } => {
-                log::debug!("Surface command: SetMargins '{}' to {:?}", name, margins);
-                for surface in ctx.surfaces_by_name(&name) {
-                    let handle = LayerSurfaceHandle::from_window_state(surface);
+            SurfaceCommand::SetMargins { target, margins } => {
+                Self::apply_surface_config_change(ctx, &target, "SetMargins", |handle| {
                     handle.set_margins(margins);
-                    handle.commit();
-                }
+                });
             }
-            SurfaceCommand::SetLayer { name, layer } => {
-                log::debug!("Surface command: SetLayer '{}' to {:?}", name, layer);
-                for surface in ctx.surfaces_by_name(&name) {
-                    let handle = LayerSurfaceHandle::from_window_state(surface);
+            SurfaceCommand::SetLayer { target, layer } => {
+                Self::apply_surface_config_change(ctx, &target, "SetLayer", |handle| {
                     handle.set_layer(layer);
-                    handle.commit();
-                }
+                });
             }
-            SurfaceCommand::SetKeyboardInteractivity { name, mode } => {
-                log::debug!(
-                    "Surface command: SetKeyboardInteractivity '{}' to {:?}",
-                    name,
-                    mode
+            SurfaceCommand::SetKeyboardInteractivity { target, mode } => {
+                Self::apply_surface_config_change(
+                    ctx,
+                    &target,
+                    "SetKeyboardInteractivity",
+                    |handle| {
+                        handle.set_keyboard_interactivity(mode);
+                    },
                 );
-                for surface in ctx.surfaces_by_name(&name) {
-                    let handle = LayerSurfaceHandle::from_window_state(surface);
-                    handle.set_keyboard_interactivity(mode);
-                    handle.commit();
-                }
             }
-            SurfaceCommand::SetOutputPolicy { name, policy } => {
+            SurfaceCommand::SetOutputPolicy { target, policy } => {
                 log::debug!(
-                    "Surface command: SetOutputPolicy '{}' to {:?}",
-                    name,
+                    "Surface command: SetOutputPolicy {:?} to {:?}",
+                    target,
                     policy
                 );
                 log::warn!(
                     "SetOutputPolicy is not yet implemented - requires runtime surface spawning"
                 );
             }
-            SurfaceCommand::SetScaleFactor { name, factor } => {
-                log::debug!("Surface command: SetScaleFactor '{}' to {:?}", name, factor);
+            SurfaceCommand::SetScaleFactor { target, factor } => {
+                log::debug!(
+                    "Surface command: SetScaleFactor {:?} to {:?}",
+                    target,
+                    factor
+                );
                 log::warn!(
                     "SetScaleFactor is not yet implemented - requires runtime surface property updates"
                 );
             }
-            SurfaceCommand::ApplyConfig { name, config } => {
-                log::debug!("Surface command: ApplyConfig '{}'", name);
-                for surface in ctx.surfaces_by_name_mut(&name) {
-                    let handle = LayerSurfaceHandle::from_window_state(surface);
-
-                    handle.set_size(config.dimensions.width(), config.dimensions.height());
-                    handle.set_anchor_edges(config.anchor);
-                    handle.set_exclusive_zone(config.exclusive_zone);
-                    handle.set_margins(config.margin);
-                    handle.set_layer(config.layer);
-                    handle.set_keyboard_interactivity(config.keyboard_interactivity);
-                    handle.commit();
-
-                    surface.update_size_with_compositor_logic(
-                        config.dimensions.width(),
-                        config.dimensions.height(),
-                    );
-                }
+            SurfaceCommand::ApplyConfig { target, config } => {
+                Self::apply_full_config(ctx, &target, &config);
             }
         }
 
@@ -699,7 +764,9 @@ impl Shell {
                 })
             })?;
 
+        let handle = SurfaceHandle::new();
         let wayland_config = WaylandSurfaceConfig::from_domain_config(
+            handle,
             &definition.component,
             component_definition,
             Some(Rc::clone(&self.compilation_result)),
@@ -789,7 +856,7 @@ impl Shell {
         system
             .app_state()
             .surfaces_by_name(name)
-            .next()
+            .first()
             .map(|surface| f(surface.component_instance()))
             .ok_or_else(|| {
                 Error::Domain(DomainError::Configuration {
@@ -877,7 +944,7 @@ impl Shell {
         callback_name: &str,
         handler: F,
     ) where
-        F: Fn(ShellControl) -> R + Clone + 'static,
+        F: Fn(CallbackContext) -> R + Clone + 'static,
         R: IntoValue,
     {
         let control = self.control();
@@ -886,26 +953,44 @@ impl Shell {
         let (primary, active) = self.get_output_handles();
 
         for (key, surface) in system.app_state().surfaces_with_keys() {
+            let surface_handle = key.surface_handle;
+            let output_handle = key.output_handle;
+
+            let surface_name = self.registry.by_handle(surface_handle).map_or_else(
+                || format!("Unknown-{}", surface_handle.id()),
+                |entry| entry.name.clone(),
+            );
+
             let surface_info = crate::SurfaceInfo {
-                name: key.surface_name.clone(),
-                output: key.output_handle,
+                name: surface_name.clone(),
+                output: output_handle,
             };
 
-            let output_info = system.app_state().get_output_info(key.output_handle);
+            let output_info = system.app_state().get_output_info(output_handle);
 
             if selector.matches(&surface_info, output_info, primary, active) {
+                let instance_id = SurfaceInstanceId::new(surface_handle, output_handle);
+
                 let handler_rc = Rc::clone(&handler);
                 let control_clone = control.clone();
-                if let Err(e) = surface
-                    .component_instance()
-                    .set_callback(callback_name, move |_args| {
-                        handler_rc(control_clone.clone()).into_value()
-                    })
+                let surface_name_clone = surface_name.clone();
+
+                if let Err(e) =
+                    surface
+                        .component_instance()
+                        .set_callback(callback_name, move |_args| {
+                            let ctx = CallbackContext::new(
+                                instance_id,
+                                surface_name_clone.clone(),
+                                control_clone.clone(),
+                            );
+                            handler_rc(ctx).into_value()
+                        })
                 {
                     log::error!(
                         "Failed to register callback '{}' on surface '{}': {}",
                         callback_name,
-                        key.surface_name,
+                        surface_name,
                         e
                     );
                 }
@@ -919,7 +1004,7 @@ impl Shell {
         callback_name: &str,
         handler: F,
     ) where
-        F: Fn(&[Value], ShellControl) -> R + Clone + 'static,
+        F: Fn(&[Value], CallbackContext) -> R + Clone + 'static,
         R: IntoValue,
     {
         let control = self.control();
@@ -928,26 +1013,44 @@ impl Shell {
         let (primary, active) = self.get_output_handles();
 
         for (key, surface) in system.app_state().surfaces_with_keys() {
+            let surface_handle = key.surface_handle;
+            let output_handle = key.output_handle;
+
+            let surface_name = self.registry.by_handle(surface_handle).map_or_else(
+                || format!("Unknown-{}", surface_handle.id()),
+                |entry| entry.name.clone(),
+            );
+
             let surface_info = crate::SurfaceInfo {
-                name: key.surface_name.clone(),
-                output: key.output_handle,
+                name: surface_name.clone(),
+                output: output_handle,
             };
 
-            let output_info = system.app_state().get_output_info(key.output_handle);
+            let output_info = system.app_state().get_output_info(output_handle);
 
             if selector.matches(&surface_info, output_info, primary, active) {
+                let instance_id = SurfaceInstanceId::new(surface_handle, output_handle);
+
                 let handler_rc = Rc::clone(&handler);
                 let control_clone = control.clone();
-                if let Err(e) = surface
-                    .component_instance()
-                    .set_callback(callback_name, move |args| {
-                        handler_rc(args, control_clone.clone()).into_value()
-                    })
+                let surface_name_clone = surface_name.clone();
+
+                if let Err(e) =
+                    surface
+                        .component_instance()
+                        .set_callback(callback_name, move |args| {
+                            let ctx = CallbackContext::new(
+                                instance_id,
+                                surface_name_clone.clone(),
+                                control_clone.clone(),
+                            );
+                            handler_rc(args, ctx).into_value()
+                        })
                 {
                     log::error!(
                         "Failed to register callback '{}' on surface '{}': {}",
                         callback_name,
-                        key.surface_name,
+                        surface_name,
                         e
                     );
                 }
@@ -963,15 +1066,19 @@ impl Shell {
         let (primary, active) = self.get_output_handles();
 
         for (key, surface) in system.app_state().surfaces_with_keys() {
+            let surface_name = system
+                .app_state()
+                .get_surface_name(key.surface_handle)
+                .unwrap_or("unknown");
             let surface_info = crate::SurfaceInfo {
-                name: key.surface_name.clone(),
+                name: surface_name.to_string(),
                 output: key.output_handle,
             };
 
             let output_info = system.app_state().get_output_info(key.output_handle);
 
             if selector.matches(&surface_info, output_info, primary, active) {
-                f(&key.surface_name, surface.component_instance());
+                f(surface_name, surface.component_instance());
             }
         }
     }
@@ -984,8 +1091,12 @@ impl Shell {
         let (primary, active) = self.get_output_handles();
 
         for (key, surface) in system.app_state().surfaces_with_keys() {
+            let surface_name = system
+                .app_state()
+                .get_surface_name(key.surface_handle)
+                .unwrap_or("unknown");
             let surface_info = crate::SurfaceInfo {
-                name: key.surface_name.clone(),
+                name: surface_name.to_string(),
                 output: key.output_handle,
             };
 
@@ -1006,8 +1117,12 @@ impl Shell {
             .app_state()
             .surfaces_with_keys()
             .filter(|(key, _)| {
+                let surface_name = system
+                    .app_state()
+                    .get_surface_name(key.surface_handle)
+                    .unwrap_or("unknown");
                 let surface_info = crate::SurfaceInfo {
-                    name: key.surface_name.clone(),
+                    name: surface_name.to_string(),
                     output: key.output_handle,
                 };
 
@@ -1026,8 +1141,12 @@ impl Shell {
             .app_state()
             .surfaces_with_keys()
             .filter_map(|(key, _)| {
+                let surface_name = system
+                    .app_state()
+                    .get_surface_name(key.surface_handle)
+                    .unwrap_or("unknown");
                 let surface_info = crate::SurfaceInfo {
-                    name: key.surface_name.clone(),
+                    name: surface_name.to_string(),
                     output: key.output_handle,
                 };
 
@@ -1100,8 +1219,8 @@ impl ShellEventContext<'_> {
     pub fn get_surface_component(&self, name: &str) -> Option<&ComponentInstance> {
         self.app_state
             .surfaces_by_name(name)
-            .next()
-            .map(SurfaceState::component_instance)
+            .first()
+            .map(|s| s.component_instance())
     }
 
     pub fn all_surface_components(&self) -> impl Iterator<Item = &ComponentInstance> {

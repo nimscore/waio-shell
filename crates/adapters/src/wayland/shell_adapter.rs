@@ -13,6 +13,7 @@ use crate::wayland::{
         surface_state::SurfaceState,
     },
 };
+use layer_shika_domain::value_objects::handle::SurfaceHandle;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use crate::{
     errors::{EventLoopError, LayerShikaError, RenderingError, Result},
@@ -51,6 +52,7 @@ struct OutputSetup {
     main_surface_id: ObjectId,
     window: Rc<FemtoVGWindow>,
     builder: SurfaceStateBuilder,
+    surface_handle: SurfaceHandle,
     shell_surface_name: String,
 }
 
@@ -199,6 +201,7 @@ impl WaylandShellSystem {
                 main_surface_id,
                 window,
                 builder,
+                surface_handle: config.surface_handle,
                 shell_surface_name: config.surface_name.clone(),
             });
         }
@@ -254,6 +257,7 @@ impl WaylandShellSystem {
 
             app_state.add_shell_surface(
                 &setup.output_id,
+                setup.surface_handle,
                 &setup.shell_surface_name,
                 setup.main_surface_id,
                 per_output_surface,
@@ -479,6 +483,7 @@ impl WaylandShellSystem {
                     main_surface_id,
                     window,
                     builder,
+                    surface_handle: shell_config.config.surface_handle,
                     shell_surface_name: shell_config.name.clone(),
                 });
             }

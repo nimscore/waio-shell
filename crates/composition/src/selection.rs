@@ -22,7 +22,7 @@ impl<'a> Selection<'a> {
 
     pub fn on_callback<F, R>(&mut self, callback_name: &str, handler: F) -> &mut Self
     where
-        F: Fn(crate::ShellControl) -> R + Clone + 'static,
+        F: Fn(crate::CallbackContext) -> R + Clone + 'static,
         R: crate::IntoValue,
     {
         self.shell
@@ -32,7 +32,7 @@ impl<'a> Selection<'a> {
 
     pub fn on_callback_with_args<F, R>(&mut self, callback_name: &str, handler: F) -> &mut Self
     where
-        F: Fn(&[Value], crate::ShellControl) -> R + Clone + 'static,
+        F: Fn(&[Value], crate::CallbackContext) -> R + Clone + 'static,
         R: crate::IntoValue,
     {
         self.shell

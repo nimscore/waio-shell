@@ -1,7 +1,6 @@
-use crate::{Error, Result};
+use crate::Result;
 use layer_shika_adapters::platform::slint_interpreter::ComponentInstance;
 use layer_shika_domain::config::SurfaceConfig;
-use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::value_objects::handle::SurfaceHandle;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use std::collections::HashMap;
@@ -63,7 +62,7 @@ impl SurfaceEntry {
 
 pub struct SurfaceRegistry {
     entries: HashMap<SurfaceHandle, SurfaceEntry>,
-    by_name: HashMap<String, SurfaceHandle>,
+    by_name: HashMap<String, Vec<SurfaceHandle>>,
     by_component: HashMap<String, Vec<SurfaceHandle>>,
     next_spawn_order: usize,
 }
@@ -79,12 +78,6 @@ impl SurfaceRegistry {
     }
 
     pub fn insert(&mut self, mut entry: SurfaceEntry) -> Result<()> {
-        if self.by_name.contains_key(&entry.name) {
-            return Err(Error::Domain(DomainError::Configuration {
-                message: format!("Surface with name '{}' already exists", entry.name),
-            }));
-        }
-
         entry.metadata.spawn_order = self.next_spawn_order;
         self.next_spawn_order += 1;
 
@@ -92,7 +85,7 @@ impl SurfaceRegistry {
         let name = entry.name.clone();
         let component = entry.component.clone();
 
-        self.by_name.insert(name, handle);
+        self.by_name.entry(name).or_default().push(handle);
 
         self.by_component.entry(component).or_default().push(handle);
 
@@ -104,7 +97,12 @@ impl SurfaceRegistry {
     pub fn remove(&mut self, handle: SurfaceHandle) -> Option<SurfaceEntry> {
         let entry = self.entries.remove(&handle)?;
 
-        self.by_name.remove(&entry.name);
+        if let Some(handles) = self.by_name.get_mut(&entry.name) {
+            handles.retain(|&h| h != handle);
+            if handles.is_empty() {
+                self.by_name.remove(&entry.name);
+            }
+        }
 
         if let Some(handles) = self.by_component.get_mut(&entry.component) {
             handles.retain(|&h| h != handle);
@@ -120,20 +118,44 @@ impl SurfaceRegistry {
         self.entries.get(&handle)
     }
 
+    pub fn by_handle(&self, handle: SurfaceHandle) -> Option<&SurfaceEntry> {
+        self.entries.get(&handle)
+    }
+
     pub fn get_mut(&mut self, handle: SurfaceHandle) -> Option<&mut SurfaceEntry> {
         self.entries.get_mut(&handle)
     }
 
-    pub fn by_name(&self, name: &str) -> Option<&SurfaceEntry> {
-        self.by_name.get(name).and_then(|h| self.entries.get(h))
+    pub fn by_handle_mut(&mut self, handle: SurfaceHandle) -> Option<&mut SurfaceEntry> {
+        self.entries.get_mut(&handle)
     }
 
-    pub fn by_name_mut(&mut self, name: &str) -> Option<&mut SurfaceEntry> {
-        self.by_name.get(name).and_then(|h| self.entries.get_mut(h))
+    pub fn by_name(&self, name: &str) -> Vec<&SurfaceEntry> {
+        self.by_name
+            .get(name)
+            .map(|handles| handles.iter().filter_map(|h| self.entries.get(h)).collect())
+            .unwrap_or_default()
+    }
+
+    pub fn by_name_mut(&mut self, name: &str) -> Vec<&mut SurfaceEntry> {
+        let handles: Vec<SurfaceHandle> = self.by_name.get(name).cloned().unwrap_or_default();
+
+        let entries_ptr = std::ptr::addr_of_mut!(self.entries);
+
+        handles
+            .iter()
+            .filter_map(|h| unsafe { (*entries_ptr).get_mut(h) })
+            .collect()
     }
 
     pub fn handle_by_name(&self, name: &str) -> Option<SurfaceHandle> {
-        self.by_name.get(name).copied()
+        self.by_name
+            .get(name)
+            .and_then(|handles| handles.first().copied())
+    }
+
+    pub fn handles_by_name(&self, name: &str) -> Vec<SurfaceHandle> {
+        self.by_name.get(name).cloned().unwrap_or_default()
     }
 
     pub fn name_by_handle(&self, handle: SurfaceHandle) -> Option<&str> {

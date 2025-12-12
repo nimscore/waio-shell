@@ -26,7 +26,7 @@ pub use crate::event::{EventDispatchContext, EventLoopHandle, ShellEventLoop};
 
 pub use crate::slint_integration::{PopupWindow, slint, slint_interpreter};
 
-pub use crate::{Error, Handle, Result, SurfaceHandle};
+pub use crate::{CallbackContext, Error, Handle, Result, SurfaceHandle, SurfaceInstanceId, SurfaceTarget};
 
 pub use layer_shika_composition::prelude::{
     Anchor, LogicalSize, Margins, PhysicalSize, ScaleFactor, SurfaceConfig, SurfaceDimension,

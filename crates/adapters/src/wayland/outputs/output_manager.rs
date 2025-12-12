@@ -146,6 +146,7 @@ impl OutputManager {
 
         app_state.add_output(
             output_id,
+            self.config.surface_handle,
             &self.config.surface_name,
             main_surface_id,
             surface,

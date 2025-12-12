@@ -1,201 +1,115 @@
 use layer_shika::calloop::channel::Sender;
 use layer_shika::prelude::*;
 use layer_shika::slint::SharedString;
-use layer_shika::slint_interpreter::{Struct, Value};
-use std::cell::RefCell;
+use layer_shika::slint_interpreter::Value;
 use std::path::PathBuf;
 use std::rc::Rc;
 
 #[derive(Debug)]
 enum UiUpdate {
-    IsExpanded(bool),
-    CurrentAnchor(String),
-    CurrentLayer(String),
-}
-enum AnchorPosition {
-    Top,
-    Bottom,
+    ToggleSize,
+    SwitchAnchor,
+    SwitchLayer,
 }
 
-struct BarState {
-    is_expanded: bool,
-    current_anchor: AnchorPosition,
-    current_layer: Layer,
-}
-
-impl BarState {
-    fn new() -> Self {
-        Self {
-            is_expanded: false,
-            current_anchor: AnchorPosition::Top,
-            current_layer: Layer::Top,
-        }
-    }
-
-    fn anchor_name(&self) -> &'static str {
-        match self.current_anchor {
-            AnchorPosition::Top => "Top",
-            AnchorPosition::Bottom => "Bottom",
-        }
-    }
-
-    fn next_anchor(&mut self) {
-        self.current_anchor = match self.current_anchor {
-            AnchorPosition::Top => AnchorPosition::Bottom,
-            AnchorPosition::Bottom => AnchorPosition::Top,
-        };
-    }
-
-    fn get_anchor_edges(&self) -> AnchorEdges {
-        match self.current_anchor {
-            AnchorPosition::Top => AnchorEdges::top_bar(),
-            AnchorPosition::Bottom => AnchorEdges::bottom_bar(),
-        }
-    }
-
-    fn layer_name(&self) -> &'static str {
-        match self.current_layer {
-            Layer::Background => "Background",
-            Layer::Bottom => "Bottom",
-            Layer::Top => "Top",
-            Layer::Overlay => "Overlay",
-        }
-    }
-
-    fn next_layer(&mut self) -> Layer {
-        self.current_layer = match self.current_layer {
-            Layer::Background => Layer::Bottom,
-            Layer::Bottom => Layer::Top,
-            Layer::Top => Layer::Overlay,
-            Layer::Overlay => Layer::Background,
-        };
-        self.current_layer
-    }
-}
-
-fn setup_toggle_size_callback(
-    sender: &Rc<Sender<UiUpdate>>,
-    shell: &Shell,
-    state: &Rc<RefCell<BarState>>,
-) {
-    let state_clone = Rc::clone(state);
+fn setup_toggle_size_callback(sender: &Rc<Sender<UiUpdate>>, shell: &Shell) {
     let sender_clone = Rc::clone(sender);
-    shell
-        .select(Surface::named("Bar"))
-        .on_callback("toggle-size", move |control| {
-            let is_expanded = {
-                let mut st = state_clone.borrow_mut();
-                st.is_expanded = !st.is_expanded;
+    shell.select(Surface::named("Bar")).on_callback_with_args(
+        "toggle-size",
+        move |args, control| {
+            let is_expanded = args
+                .first()
+                .and_then(|v| v.clone().try_into().ok())
+                .unwrap_or(false);
 
-                let new_size = if st.is_expanded { 64 } else { 32 };
+            let new_size = if is_expanded { 64 } else { 32 };
+            let (width, height) = (0, new_size);
 
-                let (width, height) = match st.current_anchor {
-                    AnchorPosition::Top | AnchorPosition::Bottom => {
-                        log::info!("Resizing horizontal bar to {}px", new_size);
-                        (0, new_size)
-                    }
-                };
+            log::info!(
+                "Toggling bar size to {}px (expanded: {})",
+                new_size,
+                is_expanded
+            );
 
-                if let Err(e) = control
-                    .surface("Bar")
-                    .configure()
-                    .size(width, height)
-                    .exclusive_zone(new_size.try_into().unwrap_or(32))
-                    .margins((0, 0, 0, 0))
-                    .apply()
-                {
-                    log::error!("Failed to apply configuration: {}", e);
-                }
-
-                log::info!(
-                    "Updated bar state: size={}, is_expanded={}",
-                    new_size,
-                    st.is_expanded
-                );
-
-                st.is_expanded
-            };
-
-            if let Err(e) = sender_clone.send(UiUpdate::IsExpanded(is_expanded)) {
-                log::error!("Failed to send UI update: {}", e);
+            if let Err(e) = control
+                .this_instance()
+                .configure()
+                .size(width, height)
+                .exclusive_zone(new_size.try_into().unwrap_or(32))
+                .apply()
+            {
+                log::error!("Failed to apply configuration: {}", e);
             }
 
-            Value::Struct(Struct::from_iter([("expanded".into(), is_expanded.into())]))
-        });
-}
-
-fn setup_anchor_switch_callback(
-    sender: &Rc<Sender<UiUpdate>>,
-    shell: &Shell,
-    state: &Rc<RefCell<BarState>>,
-) {
-    let state_clone = Rc::clone(state);
-    let sender_clone = Rc::clone(sender);
-    shell
-        .select(Surface::named("Bar"))
-        .on_callback("switch-anchor", move |control| {
-            let anchor_name = {
-                let mut st = state_clone.borrow_mut();
-                st.next_anchor();
-
-                log::info!("Switching to anchor: {}", st.anchor_name());
-
-                let bar = control.surface("Bar");
-                if let Err(e) = bar.set_anchor(st.get_anchor_edges()) {
-                    log::error!("Failed to apply config: {}", e);
-                }
-
-                st.anchor_name()
-            };
-
-            if let Err(e) = sender_clone.send(UiUpdate::CurrentAnchor(anchor_name.to_string())) {
+            if let Err(e) = sender_clone.send(UiUpdate::ToggleSize) {
                 log::error!("Failed to send UI update: {}", e);
             }
-
-            log::info!("Switched to {} anchor", anchor_name);
-
-            Value::Struct(Struct::from_iter([(
-                "anchor".into(),
-                SharedString::from(anchor_name).into(),
-            )]))
-        });
+        },
+    );
 }
 
-fn setup_layer_switch_callback(
-    sender: &Rc<Sender<UiUpdate>>,
-    shell: &Shell,
-    state: &Rc<RefCell<BarState>>,
-) {
-    let state_clone = Rc::clone(state);
+fn setup_anchor_switch_callback(sender: &Rc<Sender<UiUpdate>>, shell: &Shell) {
     let sender_clone = Rc::clone(sender);
-    shell
-        .select(Surface::named("Bar"))
-        .on_callback("switch-layer", move |control| {
-            let layer_name = {
-                let mut st = state_clone.borrow_mut();
-                let new_layer = st.next_layer();
+    shell.select(Surface::named("Bar")).on_callback_with_args(
+        "switch-anchor",
+        move |args, control| {
+            let new_anchor = args
+                .first()
+                .and_then(|v| match v {
+                    Value::String(s) => Some(s.as_str()),
+                    _ => None,
+                })
+                .unwrap_or("Top");
 
-                log::info!("Switching to layer: {:?}", new_layer);
-
-                let bar = control.surface("Bar");
-                if let Err(e) = bar.set_layer(new_layer) {
-                    log::error!("Failed to set layer: {}", e);
-                }
-
-                st.layer_name()
+            let anchor_edges = match new_anchor {
+                "Bottom" => AnchorEdges::bottom_bar(),
+                _ => AnchorEdges::top_bar(),
             };
 
-            if let Err(e) = sender_clone.send(UiUpdate::CurrentLayer(layer_name.to_string())) {
-                log::error!("Failed to send UI update: {}", e);
+            log::info!("Switching anchor to: {}", new_anchor);
+
+            if let Err(e) = control.this_instance().set_anchor(anchor_edges) {
+                log::error!("Failed to apply anchor config: {}", e);
             }
 
-            log::info!("Switched to {} layer", layer_name);
+            if let Err(e) = sender_clone.send(UiUpdate::SwitchAnchor) {
+                log::error!("Failed to send UI update: {}", e);
+            }
+        },
+    );
+}
 
-            Value::Struct(Struct::from_iter([(
-                "layer".into(),
-                SharedString::from(layer_name).into(),
-            )]))
-        });
+fn setup_layer_switch_callback(sender: &Rc<Sender<UiUpdate>>, shell: &Shell) {
+    let sender_clone = Rc::clone(sender);
+    shell.select(Surface::named("Bar")).on_callback_with_args(
+        "switch-layer",
+        move |args, control| {
+            let new_layer_str = args
+                .first()
+                .and_then(|v| match v {
+                    Value::String(s) => Some(s.as_str()),
+                    _ => None,
+                })
+                .unwrap_or("Top");
+
+            let new_layer = match new_layer_str {
+                "Background" => Layer::Background,
+                "Bottom" => Layer::Bottom,
+                "Overlay" => Layer::Overlay,
+                _ => Layer::Top,
+            };
+
+            log::info!("Switching layer to: {:?}", new_layer);
+
+            if let Err(e) = control.this_instance().set_layer(new_layer) {
+                log::error!("Failed to set layer: {}", e);
+            }
+
+            if let Err(e) = sender_clone.send(UiUpdate::SwitchLayer) {
+                log::error!("Failed to send UI update: {}", e);
+            }
+        },
+    );
 }
 
 fn main() -> Result<()> {
@@ -208,8 +122,6 @@ fn main() -> Result<()> {
 
     let ui_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui/bar.slint");
 
-    let state = Rc::new(RefCell::new(BarState::new()));
-
     let mut shell = Shell::from_file(ui_path)
         .surface("Bar")
         .height(32)
@@ -218,65 +130,34 @@ fn main() -> Result<()> {
         .namespace("runtime-control-example")
         .build()?;
 
-    shell.select(Surface::all()).with_component(|component| {
-        log::info!("Initializing properties for Bar surface");
-        let state_ref = state.borrow();
+    shell
+        .select(Surface::named("Bar"))
+        .with_component(|component| {
+            log::info!("Initializing properties for Bar surface");
 
-        let set_property = |name: &str, value: Value| {
-            if let Err(e) = component.set_property(name, value) {
-                log::error!("Failed to set initial {}: {}", name, e);
-            }
-        };
+            let set_property = |name: &str, value: Value| {
+                if let Err(e) = component.set_property(name, value) {
+                    log::error!("Failed to set initial {}: {}", name, e);
+                }
+            };
 
-        set_property("is-expanded", state_ref.is_expanded.into());
-        set_property(
-            "current-anchor",
-            SharedString::from(state_ref.anchor_name()).into(),
-        );
-        set_property(
-            "current-layer",
-            SharedString::from(state_ref.layer_name()).into(),
-        );
+            set_property("is-expanded", false.into());
+            set_property("current-anchor", SharedString::from("Top").into());
+            set_property("current-layer", SharedString::from("Top").into());
 
-        log::info!("Initialized properties for Bar surface");
-    });
+            log::info!("Initialized properties for Bar surface");
+        });
 
     let handle = shell.event_loop_handle();
-    let (_token, sender) = handle.add_channel(|message: UiUpdate, app_state| {
+    let (_token, sender) = handle.add_channel(|message: UiUpdate, _app_state| {
         log::info!("Received UI update: {:?}", message);
-
-        for surface in app_state.all_outputs() {
-            let component = surface.component_instance();
-
-            match &message {
-                UiUpdate::IsExpanded(is_expanded) => {
-                    if let Err(e) = component.set_property("is-expanded", (*is_expanded).into()) {
-                        log::error!("Failed to set is-expanded: {}", e);
-                    }
-                }
-                UiUpdate::CurrentAnchor(anchor) => {
-                    if let Err(e) = component
-                        .set_property("current-anchor", SharedString::from(anchor.as_str()).into())
-                    {
-                        log::error!("Failed to set current-anchor: {}", e);
-                    }
-                }
-                UiUpdate::CurrentLayer(layer) => {
-                    if let Err(e) = component
-                        .set_property("current-layer", SharedString::from(layer.as_str()).into())
-                    {
-                        log::error!("Failed to set current-layer: {}", e);
-                    }
-                }
-            }
-        }
     })?;
 
     let sender_rc = Rc::new(sender);
 
-    setup_toggle_size_callback(&sender_rc, &shell, &state);
-    setup_anchor_switch_callback(&sender_rc, &shell, &state);
-    setup_layer_switch_callback(&sender_rc, &shell, &state);
+    setup_toggle_size_callback(&sender_rc, &shell);
+    setup_anchor_switch_callback(&sender_rc, &shell);
+    setup_layer_switch_callback(&sender_rc, &shell);
     shell.run()?;
 
     Ok(())

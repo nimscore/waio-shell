@@ -32,13 +32,15 @@ pub use layer_shika_domain::value_objects::popup_positioning_mode::PopupPosition
 pub use layer_shika_domain::value_objects::popup_request::{
     PopupHandle, PopupPlacement, PopupRequest, PopupSize,
 };
+pub use layer_shika_domain::value_objects::surface_instance_id::SurfaceInstanceId;
 pub use layer_surface::{LayerSurfaceHandle, ShellSurfaceConfigHandler};
 pub use popup_builder::PopupBuilder;
 pub use selection::Selection;
 pub use selector::{Output, Selector, Surface, SurfaceInfo};
 pub use shell_runtime::{DEFAULT_SURFACE_NAME, ShellRuntime};
 pub use system::{
-    EventDispatchContext, RuntimeSurfaceConfigBuilder, ShellControl, SurfaceControlHandle,
+    CallbackContext, EventDispatchContext, RuntimeSurfaceConfigBuilder, ShellControl,
+    SurfaceControlHandle, SurfaceTarget,
 };
 pub use value_conversion::IntoValue;
 

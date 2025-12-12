@@ -11,4 +11,5 @@ pub mod output_policy;
 pub mod popup_config;
 pub mod popup_positioning_mode;
 pub mod popup_request;
+pub mod surface_instance_id;
 pub mod ui_source;
