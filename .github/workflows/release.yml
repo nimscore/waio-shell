@@ -81,11 +81,22 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Dry-run publish
-        run: cargo publish --dry-run
+      - name: Dry-run publish all crates
+        run: |
+          cargo publish --dry-run -p layer-shika-domain
+          cargo publish --dry-run -p layer-shika-adapters
+          cargo publish --dry-run -p layer-shika-composition
+          cargo publish --dry-run -p layer-shika
 
-      - name: Publish to crates.io
-        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish crates to crates.io (in dependency order)
+        run: |
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} -p layer-shika-domain
+          sleep 10
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} -p layer-shika-adapters
+          sleep 10
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} -p layer-shika-composition
+          sleep 10
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} -p layer-shika
 
   create-release:
     name: Create GitHub Release
