@@ -7,8 +7,7 @@ use layer_shika_domain::errors::DomainError;
 
 /// A selection of surfaces matching a selector
 ///
-/// Provides methods to interact with all matching surfaces at once, such as
-/// setting up callbacks, modifying properties, or accessing component instances.
+/// Provides methods to interact with all matching surfaces at once.
 /// Created via `Shell::select()`.
 pub struct Selection<'a> {
     shell: &'a Shell,
@@ -20,6 +19,9 @@ impl<'a> Selection<'a> {
         Self { shell, selector }
     }
 
+    /// Registers a callback handler for all matching surfaces
+    ///
+    /// Handler receives a `CallbackContext` with surface identity and shell control.
     pub fn on_callback<F, R>(&mut self, callback_name: &str, handler: F) -> &mut Self
     where
         F: Fn(crate::CallbackContext) -> R + Clone + 'static,
@@ -30,6 +32,7 @@ impl<'a> Selection<'a> {
         self
     }
 
+    /// Registers a callback handler that receives arguments for all matching surfaces
     pub fn on_callback_with_args<F, R>(&mut self, callback_name: &str, handler: F) -> &mut Self
     where
         F: Fn(&[Value], crate::CallbackContext) -> R + Clone + 'static,
@@ -40,6 +43,7 @@ impl<'a> Selection<'a> {
         self
     }
 
+    /// Executes a function with each matching component instance
     pub fn with_component<F>(&self, mut f: F)
     where
         F: FnMut(&ComponentInstance),
@@ -49,6 +53,7 @@ impl<'a> Selection<'a> {
         });
     }
 
+    /// Sets a property value on all matching surfaces
     pub fn set_property(&self, name: &str, value: &Value) -> Result<(), Error> {
         let mut result = Ok(());
         self.shell.with_selected(&self.selector, |_, component| {
@@ -62,6 +67,7 @@ impl<'a> Selection<'a> {
         result
     }
 
+    /// Gets property values from all matching surfaces
     pub fn get_property(&self, name: &str) -> Result<Vec<Value>, Error> {
         let mut values = Vec::new();
         let mut result = Ok(());
@@ -79,6 +85,7 @@ impl<'a> Selection<'a> {
         result.map(|()| values)
     }
 
+    /// Executes a configuration function with component and surface handle for matching surfaces
     pub fn configure<F>(&self, mut f: F)
     where
         F: FnMut(&ComponentInstance, LayerSurfaceHandle<'_>),
@@ -89,14 +96,17 @@ impl<'a> Selection<'a> {
             });
     }
 
+    /// Returns the number of surfaces matching the selector
     pub fn count(&self) -> usize {
         self.shell.count_selected(&self.selector)
     }
 
+    /// Checks if no surfaces match the selector
     pub fn is_empty(&self) -> bool {
         self.count() == 0
     }
 
+    /// Returns information about all matching surfaces
     pub fn info(&self) -> Vec<SurfaceInfo> {
         self.shell.get_selected_info(&self.selector)
     }

@@ -39,8 +39,7 @@ impl ShellEventLoop {
 
 /// Handle for registering custom event sources with the event loop
 ///
-/// Allows adding timers, channels, and file descriptors to the event loop.
-/// Obtained via `Shell::event_loop_handle()`.
+/// Supports timers, channels, file descriptors, and custom event sources.
 pub struct EventLoopHandle {
     system: Weak<RefCell<dyn WaylandSystemOps>>,
 }
@@ -73,7 +72,7 @@ impl EventLoopHandle {
 
     /// Add a timer that fires after the specified duration
     ///
-    /// Callback receives the deadline and can return `TimeoutAction::ToInstant` to reschedule.
+    /// Return `TimeoutAction::Drop` for one-shot, `ToDuration(d)` to repeat, or `ToInstant(i)` for next deadline.
     pub fn add_timer<F>(&self, duration: Duration, mut callback: F) -> Result<RegistrationToken>
     where
         F: FnMut(Instant, &mut AppState) -> TimeoutAction + 'static,
@@ -99,7 +98,7 @@ impl EventLoopHandle {
 
     /// Add a channel for sending messages to the event loop from any thread
     ///
-    /// Returns a registration token and sender. Messages sent via the sender trigger the callback.
+    /// The sender can be cloned and sent across threads. Messages are queued and processed on the main thread.
     pub fn add_channel<T, F>(
         &self,
         mut callback: F,

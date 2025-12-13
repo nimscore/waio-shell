@@ -5,6 +5,9 @@ use layer_shika_domain::prelude::AnchorStrategy;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use layer_shika_domain::value_objects::popup_request::{PopupPlacement, PopupRequest, PopupSize};
 
+/// Builder for configuring and displaying popup windows
+///
+/// Useful for context menus, tooltips, dropdowns, and other transient UI.
 pub struct PopupBuilder<'a> {
     shell: &'a Shell,
     component: String,
@@ -30,120 +33,142 @@ impl<'a> PopupBuilder<'a> {
         }
     }
 
+    /// Positions the popup at the current cursor location
     #[must_use]
     pub fn relative_to_cursor(mut self) -> Self {
         self.reference = PopupPlacement::AtCursor;
         self
     }
 
+    /// Positions the popup at the specified coordinates
     #[must_use]
     pub fn relative_to_point(mut self, x: f32, y: f32) -> Self {
         self.reference = PopupPlacement::AtPosition { x, y };
         self
     }
 
+    /// Positions the popup relative to a rectangular area
     #[must_use]
     pub fn relative_to_rect(mut self, x: f32, y: f32, w: f32, h: f32) -> Self {
         self.reference = PopupPlacement::AtRect { x, y, w, h };
         self
     }
 
+    /// Sets the anchor point for positioning the popup
     #[must_use]
     pub const fn anchor(mut self, anchor: PopupPositioningMode) -> Self {
         self.anchor = anchor;
         self
     }
 
+    /// Anchors popup to top-left corner
     #[must_use]
     pub fn anchor_top_left(mut self) -> Self {
         self.anchor = PopupPositioningMode::TopLeft;
         self
     }
 
+    /// Anchors popup to top-center
     #[must_use]
     pub fn anchor_top_center(mut self) -> Self {
         self.anchor = PopupPositioningMode::TopCenter;
         self
     }
 
+    /// Anchors popup to top-right corner
     #[must_use]
     pub fn anchor_top_right(mut self) -> Self {
         self.anchor = PopupPositioningMode::TopRight;
         self
     }
 
+    /// Anchors popup to center-left
     #[must_use]
     pub fn anchor_center_left(mut self) -> Self {
         self.anchor = PopupPositioningMode::CenterLeft;
         self
     }
 
+    /// Anchors popup to center
     #[must_use]
     pub fn anchor_center(mut self) -> Self {
         self.anchor = PopupPositioningMode::Center;
         self
     }
 
+    /// Anchors popup to center-right
     #[must_use]
     pub fn anchor_center_right(mut self) -> Self {
         self.anchor = PopupPositioningMode::CenterRight;
         self
     }
 
+    /// Anchors popup to bottom-left corner
     #[must_use]
     pub fn anchor_bottom_left(mut self) -> Self {
         self.anchor = PopupPositioningMode::BottomLeft;
         self
     }
 
+    /// Anchors popup to bottom-center
     #[must_use]
     pub fn anchor_bottom_center(mut self) -> Self {
         self.anchor = PopupPositioningMode::BottomCenter;
         self
     }
 
+    /// Anchors popup to bottom-right corner
     #[must_use]
     pub fn anchor_bottom_right(mut self) -> Self {
         self.anchor = PopupPositioningMode::BottomRight;
         self
     }
 
+    /// Sets the popup size strategy
+    ///
+    /// Use `PopupSize::Content` for auto-sizing or `PopupSize::Fixed { w, h }` for explicit dimensions.
     #[must_use]
     pub const fn size(mut self, size: PopupSize) -> Self {
         self.size = size;
         self
     }
 
+    /// Sets a fixed size for the popup
     #[must_use]
     pub fn fixed_size(mut self, w: f32, h: f32) -> Self {
         self.size = PopupSize::Fixed { w, h };
         self
     }
 
+    /// Uses content-based sizing for the popup
     #[must_use]
     pub fn content_size(mut self) -> Self {
         self.size = PopupSize::Content;
         self
     }
 
+    /// Enables or disables keyboard/pointer grab for modal behavior
     #[must_use]
     pub const fn grab(mut self, enable: bool) -> Self {
         self.grab = enable;
         self
     }
 
+    /// Registers a callback that will close the popup when invoked
     #[must_use]
     pub fn close_on(mut self, callback_name: impl Into<String>) -> Self {
         self.close_callback = Some(callback_name.into());
         self
     }
 
+    /// Registers a callback that will resize the popup when invoked
     #[must_use]
     pub fn resize_on(mut self, callback_name: impl Into<String>) -> Self {
         self.resize_callback = Some(callback_name.into());
         self
     }
 
+    /// Binds the popup to show when the specified Slint callback is triggered
     pub fn bind(self, trigger_callback: &str) -> Result<()> {
         let request = self.build_request();
         let control = self.shell.control();
@@ -169,6 +194,7 @@ impl<'a> PopupBuilder<'a> {
         Ok(())
     }
 
+    /// Binds the popup to toggle visibility when the specified callback is triggered
     pub fn toggle(self, trigger_callback: &str) -> Result<()> {
         let request = self.build_request();
         let control = self.shell.control();

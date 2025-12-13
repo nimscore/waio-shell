@@ -6,6 +6,9 @@ use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteracti
 use layer_shika_domain::value_objects::layer::Layer;
 use layer_shika_domain::value_objects::margins::Margins;
 
+/// Low-level handle for configuring layer-shell surface properties
+///
+/// Always call `commit()` after changes to apply them to the compositor.
 pub struct LayerSurfaceHandle<'a> {
     window_state: &'a SurfaceState,
 }
@@ -15,10 +18,12 @@ impl<'a> LayerSurfaceHandle<'a> {
         Self { window_state }
     }
 
+    /// Sets the anchor using Wayland anchor flags
     pub fn set_anchor(&self, anchor: Anchor) {
         self.window_state.layer_surface().set_anchor(anchor);
     }
 
+    /// Sets the anchor edges for positioning
     pub fn set_anchor_edges(&self, anchor: AnchorEdges) {
         let wayland_anchor = Self::convert_anchor(anchor);
         self.window_state.layer_surface().set_anchor(wayland_anchor);
@@ -43,14 +48,19 @@ impl<'a> LayerSurfaceHandle<'a> {
         result
     }
 
+    /// Sets the surface size in pixels
     pub fn set_size(&self, width: u32, height: u32) {
         self.window_state.layer_surface().set_size(width, height);
     }
 
+    /// Sets the exclusive zone in pixels
+    ///
+    /// Positive values reserve space, `0` means no reservation, `-1` for auto-calculation.
     pub fn set_exclusive_zone(&self, zone: i32) {
         self.window_state.layer_surface().set_exclusive_zone(zone);
     }
 
+    /// Sets the margins around the surface
     pub fn set_margins(&self, margins: Margins) {
         self.window_state.layer_surface().set_margin(
             margins.top,
@@ -60,6 +70,7 @@ impl<'a> LayerSurfaceHandle<'a> {
         );
     }
 
+    /// Sets the keyboard interactivity mode
     pub fn set_keyboard_interactivity(&self, mode: KeyboardInteractivity) {
         let wayland_mode = match mode {
             KeyboardInteractivity::None => WaylandKeyboardInteractivity::None,
@@ -71,6 +82,9 @@ impl<'a> LayerSurfaceHandle<'a> {
             .set_keyboard_interactivity(wayland_mode);
     }
 
+    /// Sets the layer (stacking order)
+    ///
+    /// From bottom to top: Background, Bottom, Top, Overlay.
     pub fn set_layer(&self, layer: Layer) {
         let wayland_layer = match layer {
             Layer::Background => WaylandLayer::Background,
@@ -81,6 +95,7 @@ impl<'a> LayerSurfaceHandle<'a> {
         self.window_state.layer_surface().set_layer(wayland_layer);
     }
 
+    /// Commits all pending changes to the compositor
     pub fn commit(&self) {
         self.window_state.commit_surface();
     }

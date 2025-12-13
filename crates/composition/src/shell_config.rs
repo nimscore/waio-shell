@@ -64,8 +64,7 @@ impl From<PathBuf> for CompiledUiSource {
 
 /// Declarative configuration for creating a shell with multiple surfaces
 ///
-/// Use this for programmatic or externally-driven configuration.
-/// For fluent builder API, use `Shell::from_file()` instead.
+/// Useful for loading configuration from files or programmatic generation.
 pub struct ShellConfig {
     pub ui_source: CompiledUiSource,
     pub surfaces: Vec<SurfaceComponentConfig>,
@@ -81,6 +80,7 @@ pub struct SurfaceComponentConfig {
 }
 
 impl ShellConfig {
+    /// Creates a new shell configuration from a UI source
     pub fn new(ui_source: impl Into<CompiledUiSource>) -> Self {
         Self {
             ui_source: ui_source.into(),
@@ -88,6 +88,7 @@ impl ShellConfig {
         }
     }
 
+    /// Adds a surface with the given component name
     #[must_use]
     pub fn with_surface(mut self, component: impl Into<String>) -> Self {
         self.surfaces.push(SurfaceComponentConfig {
@@ -97,6 +98,7 @@ impl ShellConfig {
         self
     }
 
+    /// Adds a surface with a complete configuration
     #[must_use]
     pub fn with_surface_config(
         mut self,
@@ -110,6 +112,7 @@ impl ShellConfig {
         self
     }
 
+    /// Adds a surface and returns a mutable reference to it
     pub fn add_surface(&mut self, component: impl Into<String>) -> &mut SurfaceComponentConfig {
         self.surfaces.push(SurfaceComponentConfig {
             component: component.into(),
@@ -120,6 +123,7 @@ impl ShellConfig {
             .unwrap_or_else(|| unreachable!("just pushed"))
     }
 
+    /// Adds a surface with configuration and returns a mutable reference to it
     pub fn add_surface_config(
         &mut self,
         component: impl Into<String>,

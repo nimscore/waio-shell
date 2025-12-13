@@ -44,14 +44,15 @@ enum CompilationSource {
 
 /// Builder for configuring and creating a Shell with one or more surfaces
 ///
-/// Created via `Shell::from_file()`, `Shell::from_source()`, or `Shell::from_compilation()`.
 /// Chain `.surface()` calls to configure multiple surfaces, then call `.build()` or `.run()`.
+/// If no surfaces are configured, a default "Main" surface is created.
 pub struct ShellBuilder {
     compilation: CompilationSource,
     surfaces: Vec<SurfaceDefinition>,
 }
 
 impl ShellBuilder {
+    /// Starts configuration for a new surface with the given component name
     pub fn surface(self, component: impl Into<String>) -> SurfaceConfigBuilder {
         SurfaceConfigBuilder {
             shell_builder: self,
@@ -60,6 +61,7 @@ impl ShellBuilder {
         }
     }
 
+    /// Discovers and registers multiple surfaces by component names
     #[must_use]
     pub fn discover_surfaces(
         mut self,
@@ -74,6 +76,7 @@ impl ShellBuilder {
         self
     }
 
+    /// Builds the shell from the configured surfaces
     pub fn build(self) -> Result<Shell> {
         let surfaces = if self.surfaces.is_empty() {
             vec![SurfaceDefinition {
@@ -127,9 +130,8 @@ impl ShellBuilder {
 
 /// Builder for configuring a single surface within a Shell
 ///
-/// Created by calling `.surface()` on `ShellBuilder`. Chain configuration methods
-/// like `.height()`, `.anchor()`, `.exclusive_zone()`, then either start a new surface
-/// with `.surface()` or finalize with `.build()` or `.run()`.
+/// Chain configuration methods, then either start a new surface with `.surface()`
+/// or finalize with `.build()` or `.run()`.
 pub struct SurfaceConfigBuilder {
     shell_builder: ShellBuilder,
     component: String,
@@ -137,82 +139,101 @@ pub struct SurfaceConfigBuilder {
 }
 
 impl SurfaceConfigBuilder {
+    /// Sets both width and height for the surface
     #[must_use]
     pub fn size(mut self, width: u32, height: u32) -> Self {
         self.config.dimensions = SurfaceDimension::new(width, height);
         self
     }
 
+    /// Sets the height of the surface
     #[must_use]
     pub fn height(mut self, height: u32) -> Self {
         self.config.dimensions = SurfaceDimension::new(self.config.dimensions.width(), height);
         self
     }
 
+    /// Sets the width of the surface
     #[must_use]
     pub fn width(mut self, width: u32) -> Self {
         self.config.dimensions = SurfaceDimension::new(width, self.config.dimensions.height());
         self
     }
 
+    /// Sets the layer (stacking order) for the surface
     #[must_use]
     pub const fn layer(mut self, layer: Layer) -> Self {
         self.config.layer = layer;
         self
     }
 
+    /// Sets the margins around the surface
     #[must_use]
     pub fn margin(mut self, margin: impl Into<Margins>) -> Self {
         self.config.margin = margin.into();
         self
     }
 
+    /// Sets the anchor edges for positioning
     #[must_use]
     pub const fn anchor(mut self, anchor: AnchorEdges) -> Self {
         self.config.anchor = anchor;
         self
     }
 
+    /// Sets the exclusive zone in pixels
+    ///
+    /// Reserves screen space that other windows avoid. Positive values reserve from anchored edge,
+    /// `0` means no reservation, `-1` lets compositor decide.
     #[must_use]
     pub const fn exclusive_zone(mut self, zone: i32) -> Self {
         self.config.exclusive_zone = zone;
         self
     }
 
+    /// Sets the namespace identifier for the surface
     #[must_use]
     pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
         self.config.namespace = namespace.into();
         self
     }
 
+    /// Sets the scale factor for the surface
     #[must_use]
     pub fn scale_factor(mut self, sf: impl TryInto<ScaleFactor, Error = DomainError>) -> Self {
         self.config.scale_factor = sf.try_into().unwrap_or_default();
         self
     }
 
+    /// Sets the keyboard interactivity mode
     #[must_use]
     pub const fn keyboard_interactivity(mut self, mode: KeyboardInteractivity) -> Self {
         self.config.keyboard_interactivity = mode;
         self
     }
 
+    /// Sets the output policy for multi-monitor configuration
+    ///
+    /// Controls which monitors display this surface. Default is `OutputPolicy::All`.
     #[must_use]
     pub fn output_policy(mut self, policy: OutputPolicy) -> Self {
         self.config.output_policy = policy;
         self
     }
 
+    /// Starts configuration for another surface
     #[must_use]
     pub fn surface(self, component: impl Into<String>) -> SurfaceConfigBuilder {
         let shell_builder = self.complete();
         shell_builder.surface(component)
     }
 
+    /// Builds the shell with all configured surfaces
     pub fn build(self) -> Result<Shell> {
         self.complete().build()
     }
 
+    /// Builds and runs the shell
     pub fn run(self) -> Result<()> {
         let mut shell = self.build()?;
         shell.run()
@@ -232,8 +253,10 @@ type OutputDisconnectedHandler = Box<dyn Fn(OutputHandle)>;
 
 /// Main runtime for managing Wayland layer-shell surfaces with Slint UI
 ///
-/// Manages the lifecycle of one or more layer surfaces, event loop integration,
-/// and Slint component instantiation. Create via builder methods or `from_config()`.
+/// Manages surface lifecycle, event loop integration, and component instantiation.
+/// Supports multiple surfaces across monitors, dynamic spawning, and popup windows.
+///
+/// Create via `Shell::from_file()`, `from_source()`, or `from_compilation()`.
 pub struct Shell {
     inner: Rc<RefCell<dyn WaylandSystemOps>>,
     registry: SurfaceRegistry,
@@ -244,6 +267,7 @@ pub struct Shell {
 }
 
 impl Shell {
+    /// Creates a shell builder from a Slint file path
     pub fn from_file(path: impl AsRef<Path>) -> ShellBuilder {
         ShellBuilder {
             compilation: CompilationSource::File {
@@ -254,6 +278,9 @@ impl Shell {
         }
     }
 
+    /// Creates a shell builder from a Slint file path with a custom compiler
+    ///
+    /// Useful for configuring include paths, style overrides, or compilation settings.
     pub fn from_file_with_compiler(path: impl AsRef<Path>, compiler: Compiler) -> ShellBuilder {
         ShellBuilder {
             compilation: CompilationSource::File {
@@ -264,6 +291,7 @@ impl Shell {
         }
     }
 
+    /// Creates a shell builder from Slint source code
     pub fn from_source(code: impl Into<String>) -> ShellBuilder {
         ShellBuilder {
             compilation: CompilationSource::Source {
@@ -274,6 +302,7 @@ impl Shell {
         }
     }
 
+    /// Creates a shell builder from Slint source code with a custom compiler
     pub fn from_source_with_compiler(code: impl Into<String>, compiler: Compiler) -> ShellBuilder {
         ShellBuilder {
             compilation: CompilationSource::Source {
@@ -284,6 +313,7 @@ impl Shell {
         }
     }
 
+    /// Creates a shell builder from a pre-compiled Slint compilation result
     pub fn from_compilation(result: Rc<CompilationResult>) -> ShellBuilder {
         ShellBuilder {
             compilation: CompilationSource::Compiled(result),
@@ -291,6 +321,7 @@ impl Shell {
         }
     }
 
+    /// Creates an empty shell builder for manual configuration
     pub fn builder() -> ShellBuilder {
         ShellBuilder {
             compilation: CompilationSource::Source {
@@ -301,6 +332,7 @@ impl Shell {
         }
     }
 
+    /// Compiles a Slint file and returns the compilation result
     pub fn compile_file(path: impl AsRef<Path>) -> Result<Rc<CompilationResult>> {
         let compiler = Compiler::default();
         let result = spin_on(compiler.build_from_path(path.as_ref()));
@@ -319,6 +351,7 @@ impl Shell {
         Ok(Rc::new(result))
     }
 
+    /// Compiles Slint source code and returns the compilation result
     pub fn compile_source(code: impl Into<String>) -> Result<Rc<CompilationResult>> {
         let compiler = Compiler::default();
         let result = spin_on(compiler.build_from_source(code.into(), PathBuf::default()));
@@ -333,6 +366,7 @@ impl Shell {
         Ok(Rc::new(result))
     }
 
+    /// Creates a shell from a complete configuration object
     pub fn from_config(config: ShellConfig) -> Result<Self> {
         let compilation_result = match config.ui_source {
             CompiledUiSource::File(path) => Self::compile_file(&path)?,
@@ -725,23 +759,28 @@ impl Shell {
         }
     }
 
+    /// Returns a control handle for sending commands to the shell
     #[must_use]
     pub fn control(&self) -> ShellControl {
         ShellControl::new(self.command_sender.clone())
     }
 
+    /// Returns the names of all registered surfaces
     pub fn surface_names(&self) -> Vec<&str> {
         self.registry.surface_names()
     }
 
+    /// Checks if a surface with the given name exists
     pub fn has_surface(&self, name: &str) -> bool {
         self.registry.contains_name(name)
     }
 
+    /// Returns a handle to the event loop for registering custom event sources
     pub fn event_loop_handle(&self) -> EventLoopHandle {
         EventLoopHandle::new(Rc::downgrade(&self.inner))
     }
 
+    /// Starts the event loop and runs the shell until exit
     pub fn run(&mut self) -> Result<()> {
         log::info!(
             "Starting Shell event loop with {} windows",
@@ -751,6 +790,9 @@ impl Shell {
         Ok(())
     }
 
+    /// Spawns a new surface at runtime from the given definition
+    ///
+    /// The surface is instantiated on outputs according to its `OutputPolicy`.
     pub fn spawn_surface(&mut self, definition: SurfaceDefinition) -> Result<Vec<SurfaceHandle>> {
         let component_definition = self
             .compilation_result
@@ -794,6 +836,7 @@ impl Shell {
         Ok(vec![surface_handle])
     }
 
+    /// Removes and destroys a surface by its handle
     pub fn despawn_surface(&mut self, handle: SurfaceHandle) -> Result<()> {
         let entry = self.registry.remove(handle).ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
@@ -813,6 +856,9 @@ impl Shell {
         Ok(())
     }
 
+    /// Registers a handler called when a new output (monitor) is connected
+    ///
+    /// Surfaces with `OutputPolicy::All` spawn automatically on new outputs.
     pub fn on_output_connected<F>(&mut self, handler: F) -> Result<()>
     where
         F: Fn(&OutputInfo) + 'static,
@@ -823,6 +869,7 @@ impl Shell {
         Ok(())
     }
 
+    /// Registers a handler called when an output is disconnected
     pub fn on_output_disconnected<F>(&mut self, handler: F) -> Result<()>
     where
         F: Fn(OutputHandle) + 'static,
@@ -833,14 +880,17 @@ impl Shell {
         Ok(())
     }
 
+    /// Returns the handle for a surface by name
     pub fn get_surface_handle(&self, name: &str) -> Option<SurfaceHandle> {
         self.registry.handle_by_name(name)
     }
 
+    /// Returns the name of a surface by its handle
     pub fn get_surface_name(&self, handle: SurfaceHandle) -> Option<&str> {
         self.registry.name_by_handle(handle)
     }
 
+    /// Executes a function with access to a surface component instance by name
     pub fn with_surface<F, R>(&self, name: &str, f: F) -> Result<R>
     where
         F: FnOnce(&ComponentInstance) -> R,
@@ -865,6 +915,7 @@ impl Shell {
             })
     }
 
+    /// Executes a function with each surface name and component instance
     pub fn with_all_surfaces<F>(&self, mut f: F)
     where
         F: FnMut(&str, &ComponentInstance),
@@ -878,6 +929,7 @@ impl Shell {
         }
     }
 
+    /// Executes a function with access to a surface on a specific output
     pub fn with_output<F, R>(&self, handle: OutputHandle, f: F) -> Result<R>
     where
         F: FnOnce(&ComponentInstance) -> R,
@@ -894,6 +946,7 @@ impl Shell {
         Ok(f(window.component_instance()))
     }
 
+    /// Executes a function with each output handle and component instance
     pub fn with_all_outputs<F>(&self, mut f: F)
     where
         F: FnMut(OutputHandle, &ComponentInstance),
@@ -904,31 +957,37 @@ impl Shell {
         }
     }
 
+    /// Returns the Slint compilation result used by this shell
     #[must_use]
     pub fn compilation_result(&self) -> &Rc<CompilationResult> {
         &self.compilation_result
     }
 
+    /// Creates a popup builder for showing a popup window
     #[must_use]
     pub fn popup(&self, component_name: impl Into<String>) -> PopupBuilder<'_> {
         PopupBuilder::new(self, component_name.into())
     }
 
+    /// Returns the registry of all connected outputs
     pub fn output_registry(&self) -> OutputRegistry {
         let system = self.inner.borrow();
         system.app_state().output_registry().clone()
     }
 
+    /// Returns information about a specific output by handle
     pub fn get_output_info(&self, handle: OutputHandle) -> Option<OutputInfo> {
         let system = self.inner.borrow();
         system.app_state().get_output_info(handle).cloned()
     }
 
+    /// Returns information about all connected outputs
     pub fn all_output_info(&self) -> Vec<OutputInfo> {
         let system = self.inner.borrow();
         system.app_state().all_output_info().cloned().collect()
     }
 
+    /// Creates a selection for targeting specific surfaces by criteria
     pub fn select(&self, selector: impl Into<crate::Selector>) -> crate::Selection<'_> {
         crate::Selection::new(self, selector.into())
     }
@@ -1216,6 +1275,7 @@ impl<'a> FromAppState<'a> for ShellEventContext<'a> {
 }
 
 impl ShellEventContext<'_> {
+    /// Returns the component instance for a surface by name
     pub fn get_surface_component(&self, name: &str) -> Option<&ComponentInstance> {
         self.app_state
             .surfaces_by_name(name)
@@ -1223,12 +1283,14 @@ impl ShellEventContext<'_> {
             .map(|s| s.component_instance())
     }
 
+    /// Returns all surface component instances
     pub fn all_surface_components(&self) -> impl Iterator<Item = &ComponentInstance> {
         self.app_state
             .all_outputs()
             .map(SurfaceState::component_instance)
     }
 
+    /// Renders a new frame for all dirty surfaces
     pub fn render_frame_if_dirty(&mut self) -> Result<()> {
         for surface in self.app_state.all_outputs() {
             surface.render_frame_if_dirty()?;
@@ -1236,46 +1298,55 @@ impl ShellEventContext<'_> {
         Ok(())
     }
 
+    /// Returns the primary output handle
     #[must_use]
     pub fn primary_output_handle(&self) -> Option<OutputHandle> {
         self.app_state.primary_output_handle()
     }
 
+    /// Returns the active output handle
     #[must_use]
     pub fn active_output_handle(&self) -> Option<OutputHandle> {
         self.app_state.active_output_handle()
     }
 
+    /// Returns the output registry
     pub fn output_registry(&self) -> &OutputRegistry {
         self.app_state.output_registry()
     }
 
+    /// Returns all outputs with their handles and component instances
     pub fn outputs(&self) -> impl Iterator<Item = (OutputHandle, &ComponentInstance)> {
         self.app_state
             .outputs_with_handles()
             .map(|(handle, surface)| (handle, surface.component_instance()))
     }
 
+    /// Returns the component instance for a specific output
     pub fn get_output_component(&self, handle: OutputHandle) -> Option<&ComponentInstance> {
         self.app_state
             .get_output_by_handle(handle)
             .map(SurfaceState::component_instance)
     }
 
+    /// Returns information about a specific output
     pub fn get_output_info(&self, handle: OutputHandle) -> Option<&OutputInfo> {
         self.app_state.get_output_info(handle)
     }
 
+    /// Returns information about all outputs
     pub fn all_output_info(&self) -> impl Iterator<Item = &OutputInfo> {
         self.app_state.all_output_info()
     }
 
+    /// Returns all outputs with their info and component instances
     pub fn outputs_with_info(&self) -> impl Iterator<Item = (&OutputInfo, &ComponentInstance)> {
         self.app_state
             .outputs_with_info()
             .map(|(info, surface)| (info, surface.component_instance()))
     }
 
+    /// Returns the compilation result if available
     #[must_use]
     pub fn compilation_result(&self) -> Option<Rc<CompilationResult>> {
         self.app_state

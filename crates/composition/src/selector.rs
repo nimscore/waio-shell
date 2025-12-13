@@ -13,7 +13,7 @@ pub struct SurfaceInfo {
 
 /// Selector for targeting surfaces when setting up callbacks or runtime configuration
 ///
-/// Use `Surface::named()` to target a specific surface, or combine selectors for complex targeting.
+/// Combine with `.or()`, `.except()`, or `.on()` for complex targeting.
 #[derive(Clone)]
 pub enum Surface {
     /// Select all surfaces
@@ -31,18 +31,22 @@ pub enum Surface {
 }
 
 impl Surface {
+    /// Selects all surfaces
     pub fn all() -> Self {
         Self::All
     }
 
+    /// Selects a surface by exact name
     pub fn named(name: impl Into<String>) -> Self {
         Self::Named(name.into())
     }
 
+    /// Selects surfaces matching any of the given names
     pub fn any(names: impl IntoIterator<Item = impl Into<String>>) -> Self {
         Self::Any(names.into_iter().map(Into::into).collect())
     }
 
+    /// Selects surfaces matching a custom predicate
     pub fn matching<F>(predicate: F) -> Self
     where
         F: Fn(&SurfaceInfo) -> bool + Send + Sync + 'static,
@@ -50,6 +54,7 @@ impl Surface {
         Self::Filter(Arc::new(predicate))
     }
 
+    /// Combines this surface selector with an output selector
     pub fn on(self, output: Output) -> Selector {
         Selector {
             surface: self,
@@ -57,11 +62,13 @@ impl Surface {
         }
     }
 
+    /// Inverts the selection to exclude matching surfaces
     #[must_use]
     pub fn except(self, other: impl Into<Surface>) -> Self {
         Self::Not(Box::new(other.into()))
     }
 
+    /// Combines this selector with another using OR logic
     #[must_use]
     pub fn or(self, other: impl Into<Surface>) -> Self {
         match self {
@@ -120,26 +127,32 @@ pub enum Output {
 }
 
 impl Output {
+    /// Selects all outputs
     pub fn all() -> Self {
         Self::All
     }
 
+    /// Selects the primary output
     pub fn primary() -> Self {
         Self::Primary
     }
 
+    /// Selects the currently active output
     pub fn active() -> Self {
         Self::Active
     }
 
+    /// Selects an output by handle
     pub fn handle(handle: OutputHandle) -> Self {
         Self::Handle(handle)
     }
 
+    /// Selects an output by name
     pub fn named(name: impl Into<String>) -> Self {
         Self::Named(name.into())
     }
 
+    /// Selects outputs matching a custom predicate
     pub fn matching<F>(predicate: F) -> Self
     where
         F: Fn(&OutputInfo) -> bool + Send + Sync + 'static,
@@ -147,11 +160,13 @@ impl Output {
         Self::Filter(Arc::new(predicate))
     }
 
+    /// Inverts the selection to exclude matching outputs
     #[must_use]
     pub fn except(self, other: impl Into<Output>) -> Self {
         Self::Not(Box::new(other.into()))
     }
 
+    /// Combines this selector with another using OR logic
     #[must_use]
     pub fn or(self, other: impl Into<Output>) -> Self {
         match self {
@@ -202,8 +217,7 @@ impl Debug for Output {
 
 /// Combined surface and output selector for precise targeting
 ///
-/// Combines a surface selector with an output selector to target specific
-/// surface instances on specific outputs.
+/// Targets specific surface instances on specific outputs.
 #[derive(Clone, Debug)]
 pub struct Selector {
     pub surface: Surface,
@@ -211,6 +225,7 @@ pub struct Selector {
 }
 
 impl Selector {
+    /// Creates a selector matching all surfaces on all outputs
     pub fn all() -> Self {
         Self {
             surface: Surface::All,

@@ -89,6 +89,9 @@ pub enum ShellCommand {
     Render,
 }
 
+/// Context provided to callback handlers with surface and control information
+///
+/// Provides surface identity, output info, and control handle for runtime operations.
 pub struct CallbackContext {
     instance_id: SurfaceInstanceId,
     surface_name: String,
@@ -108,38 +111,47 @@ impl CallbackContext {
         }
     }
 
+    /// Returns the surface instance identifier
     pub const fn instance_id(&self) -> &SurfaceInstanceId {
         &self.instance_id
     }
 
+    /// Returns the surface handle
     pub const fn surface_handle(&self) -> SurfaceHandle {
         self.instance_id.surface()
     }
 
+    /// Returns the output handle
     pub const fn output_handle(&self) -> OutputHandle {
         self.instance_id.output()
     }
 
+    /// Returns the surface name
     pub fn surface_name(&self) -> &str {
         &self.surface_name
     }
 
+    /// Returns a reference to the shell control handle
     pub const fn control(&self) -> &ShellControl {
         &self.control
     }
 
+    /// Returns a control handle for this specific surface instance
     pub fn this_instance(&self) -> SurfaceControlHandle {
         self.control.surface_instance(&self.instance_id)
     }
 
+    /// Returns a control handle for all instances of this surface
     pub fn all_surface_instances(&self) -> SurfaceControlHandle {
         self.control.surface_by_handle(self.surface_handle())
     }
 
+    /// Returns a control handle for all surfaces with this name
     pub fn all_named(&self) -> SurfaceControlHandle {
         self.control.surface_by_name(&self.surface_name)
     }
 
+    /// Returns a control handle for all surfaces with this name on the current output
     pub fn all_named_on_this_output(&self) -> SurfaceControlHandle {
         self.control
             .surface_by_name_and_output(&self.surface_name, self.output_handle())
@@ -148,8 +160,7 @@ impl CallbackContext {
 
 /// Handle for runtime control of shell operations
 ///
-/// Provides methods to manipulate surfaces, show popups, and request redraws.
-/// Obtained from callbacks via the control parameter.
+/// Cloneable and can be sent across threads for triggering shell operations.
 #[derive(Clone)]
 pub struct ShellControl {
     sender: channel::Sender<ShellCommand>,
@@ -160,6 +171,7 @@ impl ShellControl {
         Self { sender }
     }
 
+    /// Shows a popup from a popup request
     pub fn show_popup(&self, request: &PopupRequest) -> Result<()> {
         self.sender
             .send(ShellCommand::Popup(PopupCommand::Show(request.clone())))
@@ -170,6 +182,7 @@ impl ShellControl {
             })
     }
 
+    /// Shows a popup at the current cursor position
     pub fn show_popup_at_cursor(&self, component: impl Into<String>) -> Result<()> {
         let request = PopupRequest::builder(component.into())
             .placement(PopupPlacement::AtCursor)
@@ -177,6 +190,7 @@ impl ShellControl {
         self.show_popup(&request)
     }
 
+    /// Shows a popup centered on screen
     pub fn show_popup_centered(&self, component: impl Into<String>) -> Result<()> {
         let request = PopupRequest::builder(component.into())
             .placement(PopupPlacement::AtCursor)
@@ -185,6 +199,7 @@ impl ShellControl {
         self.show_popup(&request)
     }
 
+    /// Shows a popup at the specified position
     pub fn show_popup_at_position(
         &self,
         component: impl Into<String>,
@@ -197,6 +212,7 @@ impl ShellControl {
         self.show_popup(&request)
     }
 
+    /// Closes a popup by its handle
     pub fn close_popup(&self, handle: PopupHandle) -> Result<()> {
         self.sender
             .send(ShellCommand::Popup(PopupCommand::Close(handle)))
@@ -207,6 +223,7 @@ impl ShellControl {
             })
     }
 
+    /// Resizes a popup to the specified dimensions
     pub fn resize_popup(&self, handle: PopupHandle, width: f32, height: f32) -> Result<()> {
         self.sender
             .send(ShellCommand::Popup(PopupCommand::Resize {
@@ -221,6 +238,7 @@ impl ShellControl {
             })
     }
 
+    /// Requests a redraw of all surfaces
     pub fn request_redraw(&self) -> Result<()> {
         self.sender.send(ShellCommand::Render).map_err(|_| {
             Error::Domain(DomainError::Configuration {
@@ -229,6 +247,7 @@ impl ShellControl {
         })
     }
 
+    /// Returns a control handle for a specific surface instance
     pub fn surface_instance(&self, id: &SurfaceInstanceId) -> SurfaceControlHandle {
         SurfaceControlHandle {
             target: SurfaceTarget::ByInstance(*id),
@@ -236,6 +255,7 @@ impl ShellControl {
         }
     }
 
+    /// Returns a control handle for all instances of a surface by handle
     pub fn surface_by_handle(&self, handle: SurfaceHandle) -> SurfaceControlHandle {
         SurfaceControlHandle {
             target: SurfaceTarget::ByHandle(handle),
@@ -243,6 +263,7 @@ impl ShellControl {
         }
     }
 
+    /// Returns a control handle for all surfaces with the given name
     pub fn surface_by_name(&self, name: impl Into<String>) -> SurfaceControlHandle {
         SurfaceControlHandle {
             target: SurfaceTarget::ByName(name.into()),
@@ -250,6 +271,7 @@ impl ShellControl {
         }
     }
 
+    /// Returns a control handle for surfaces with the given name on a specific output
     pub fn surface_by_name_and_output(
         &self,
         name: impl Into<String>,
@@ -264,6 +286,7 @@ impl ShellControl {
         }
     }
 
+    /// Alias for `surface_by_name`
     pub fn surface(&self, name: impl Into<String>) -> SurfaceControlHandle {
         self.surface_by_name(name)
     }
@@ -271,7 +294,7 @@ impl ShellControl {
 
 /// Handle for runtime control of a specific surface
 ///
-/// Allows modifying surface properties like size, anchor, layer, and margins at runtime.
+/// Operations apply to all matching instances. Changes are queued and applied asynchronously.
 /// Obtained via `ShellControl::surface()`.
 pub struct SurfaceControlHandle {
     target: SurfaceTarget,
@@ -279,6 +302,7 @@ pub struct SurfaceControlHandle {
 }
 
 impl SurfaceControlHandle {
+    /// Resizes the surface to the specified dimensions
     pub fn resize(&self, width: u32, height: u32) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::Resize {
@@ -293,14 +317,17 @@ impl SurfaceControlHandle {
             })
     }
 
+    /// Sets the surface width
     pub fn set_width(&self, width: u32) -> Result<()> {
         self.resize(width, 0)
     }
 
+    /// Sets the surface height
     pub fn set_height(&self, height: u32) -> Result<()> {
         self.resize(0, height)
     }
 
+    /// Sets the anchor edges for the surface
     pub fn set_anchor(&self, anchor: AnchorEdges) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::SetAnchor {
@@ -315,6 +342,7 @@ impl SurfaceControlHandle {
             })
     }
 
+    /// Sets the exclusive zone for the surface
     pub fn set_exclusive_zone(&self, zone: i32) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::SetExclusiveZone {
@@ -329,6 +357,7 @@ impl SurfaceControlHandle {
             })
     }
 
+    /// Sets the margins for the surface
     pub fn set_margins(&self, margins: impl Into<Margins>) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::SetMargins {
@@ -343,6 +372,7 @@ impl SurfaceControlHandle {
             })
     }
 
+    /// Sets the layer for the surface
     pub fn set_layer(&self, layer: Layer) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::SetLayer {
@@ -356,6 +386,7 @@ impl SurfaceControlHandle {
             })
     }
 
+    /// Sets the output policy for the surface
     pub fn set_output_policy(&self, policy: OutputPolicy) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::SetOutputPolicy {
@@ -370,6 +401,7 @@ impl SurfaceControlHandle {
             })
     }
 
+    /// Sets the scale factor for the surface
     pub fn set_scale_factor(&self, factor: ScaleFactor) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::SetScaleFactor {
@@ -384,6 +416,7 @@ impl SurfaceControlHandle {
             })
     }
 
+    /// Sets the keyboard interactivity mode for the surface
     pub fn set_keyboard_interactivity(&self, mode: KeyboardInteractivity) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(
@@ -401,6 +434,7 @@ impl SurfaceControlHandle {
             })
     }
 
+    /// Applies a complete surface configuration
     pub fn apply_config(&self, config: SurfaceConfig) -> Result<()> {
         self.sender
             .send(ShellCommand::Surface(SurfaceCommand::ApplyConfig {
@@ -415,6 +449,7 @@ impl SurfaceControlHandle {
             })
     }
 
+    /// Returns a builder for configuring multiple properties at once
     pub fn configure(self) -> RuntimeSurfaceConfigBuilder {
         RuntimeSurfaceConfigBuilder {
             handle: self,
@@ -427,78 +462,93 @@ impl SurfaceControlHandle {
 ///
 /// Created via `SurfaceControlHandle::configure()`. Chain configuration methods
 /// and call `.apply()` to commit all changes atomically.
+/// Builder for applying multiple configuration changes to a surface at once
+///
+/// All changes are committed together in one compositor round-trip for efficiency.
 pub struct RuntimeSurfaceConfigBuilder {
     handle: SurfaceControlHandle,
     config: SurfaceConfig,
 }
 
 impl RuntimeSurfaceConfigBuilder {
+    /// Sets the surface size
     #[must_use]
     pub fn size(mut self, width: u32, height: u32) -> Self {
         self.config.dimensions = SurfaceDimension::from_raw(width, height);
         self
     }
 
+    /// Sets the surface width
     #[must_use]
     pub fn width(mut self, width: u32) -> Self {
         self.config.dimensions = SurfaceDimension::from_raw(width, self.config.dimensions.height());
         self
     }
 
+    /// Sets the surface height
     #[must_use]
     pub fn height(mut self, height: u32) -> Self {
         self.config.dimensions = SurfaceDimension::from_raw(self.config.dimensions.width(), height);
         self
     }
 
+    /// Sets the layer
     #[must_use]
     pub const fn layer(mut self, layer: Layer) -> Self {
         self.config.layer = layer;
         self
     }
 
+    /// Sets the margins
     #[must_use]
     pub fn margins(mut self, margins: impl Into<Margins>) -> Self {
         self.config.margin = margins.into();
         self
     }
 
+    /// Sets the anchor edges
     #[must_use]
     pub const fn anchor(mut self, anchor: AnchorEdges) -> Self {
         self.config.anchor = anchor;
         self
     }
 
+    /// Sets the exclusive zone
     #[must_use]
     pub const fn exclusive_zone(mut self, zone: i32) -> Self {
         self.config.exclusive_zone = zone;
         self
     }
 
+    /// Sets the namespace
     #[must_use]
     pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
         self.config.namespace = namespace.into();
         self
     }
 
+    /// Sets the keyboard interactivity mode
     #[must_use]
     pub const fn keyboard_interactivity(mut self, mode: KeyboardInteractivity) -> Self {
         self.config.keyboard_interactivity = mode;
         self
     }
 
+    /// Sets the output policy
     #[must_use]
     pub fn output_policy(mut self, policy: OutputPolicy) -> Self {
         self.config.output_policy = policy;
         self
     }
 
+    /// Sets the scale factor
     #[must_use]
     pub fn scale_factor(mut self, sf: impl TryInto<ScaleFactor, Error = DomainError>) -> Self {
         self.config.scale_factor = sf.try_into().unwrap_or_default();
         self
     }
 
+    /// Applies the configured changes to the surface
     pub fn apply(self) -> Result<()> {
         self.handle.apply_config(self.config)
     }
@@ -586,6 +636,7 @@ impl EventDispatchContext<'_> {
             .map(|s| s.component_instance())
     }
 
+    /// Returns the primary component instance
     #[must_use]
     pub fn component_instance(&self) -> Option<&ComponentInstance> {
         self.app_state
@@ -593,46 +644,55 @@ impl EventDispatchContext<'_> {
             .map(SurfaceState::component_instance)
     }
 
+    /// Returns all component instances across all outputs
     pub fn all_component_instances(&self) -> impl Iterator<Item = &ComponentInstance> {
         self.app_state
             .all_outputs()
             .map(SurfaceState::component_instance)
     }
 
+    /// Returns the output registry
     pub const fn output_registry(&self) -> &OutputRegistry {
         self.app_state.output_registry()
     }
 
+    /// Returns the primary output handle
     #[must_use]
     pub fn primary_output_handle(&self) -> Option<OutputHandle> {
         self.app_state.primary_output_handle()
     }
 
+    /// Returns the active output handle
     #[must_use]
     pub fn active_output_handle(&self) -> Option<OutputHandle> {
         self.app_state.active_output_handle()
     }
 
+    /// Returns all outputs with their handles and components
     pub fn outputs(&self) -> impl Iterator<Item = (OutputHandle, &ComponentInstance)> {
         self.app_state
             .outputs_with_handles()
             .map(|(handle, surface)| (handle, surface.component_instance()))
     }
 
+    /// Returns the component for a specific output
     pub fn get_output_component(&self, handle: OutputHandle) -> Option<&ComponentInstance> {
         self.app_state
             .get_output_by_handle(handle)
             .map(SurfaceState::component_instance)
     }
 
+    /// Returns information about a specific output
     pub fn get_output_info(&self, handle: OutputHandle) -> Option<&OutputInfo> {
         self.app_state.get_output_info(handle)
     }
 
+    /// Returns information about all outputs
     pub fn all_output_info(&self) -> impl Iterator<Item = &OutputInfo> {
         self.app_state.all_output_info()
     }
 
+    /// Returns all outputs with their info and components
     pub fn outputs_with_info(&self) -> impl Iterator<Item = (&OutputInfo, &ComponentInstance)> {
         self.app_state
             .outputs_with_info()
@@ -645,6 +705,7 @@ impl EventDispatchContext<'_> {
             .or_else(|| self.app_state.primary_output())
     }
 
+    /// Renders a new frame for all dirty surfaces
     pub fn render_frame_if_dirty(&mut self) -> Result<()> {
         for surface in self.app_state.all_outputs() {
             surface.render_frame_if_dirty()?;
@@ -652,6 +713,7 @@ impl EventDispatchContext<'_> {
         Ok(())
     }
 
+    /// Returns the compilation result if available
     #[must_use]
     pub fn compilation_result(&self) -> Option<Rc<CompilationResult>> {
         self.app_state
@@ -659,6 +721,7 @@ impl EventDispatchContext<'_> {
             .and_then(SurfaceState::compilation_result)
     }
 
+    /// Shows a popup from a popup request
     pub fn show_popup(
         &mut self,
         req: &PopupRequest,
@@ -756,6 +819,7 @@ impl EventDispatchContext<'_> {
         Ok(popup_handle)
     }
 
+    /// Closes a popup by its handle
     pub fn close_popup(&mut self, handle: PopupHandle) -> Result<()> {
         if let Some(active_surface) = self.active_or_primary_output() {
             if let Some(popup_manager) = active_surface.popup_manager() {
@@ -765,6 +829,7 @@ impl EventDispatchContext<'_> {
         Ok(())
     }
 
+    /// Closes the currently active popup
     pub fn close_current_popup(&mut self) -> Result<()> {
         if let Some(active_surface) = self.active_or_primary_output() {
             if let Some(popup_manager) = active_surface.popup_manager() {
@@ -774,6 +839,7 @@ impl EventDispatchContext<'_> {
         Ok(())
     }
 
+    /// Resizes a popup to the specified dimensions
     pub fn resize_popup(&mut self, handle: PopupHandle, width: f32, height: f32) -> Result<()> {
         let active_surface = self.active_or_primary_output().ok_or_else(|| {
             Error::Domain(DomainError::Configuration {
