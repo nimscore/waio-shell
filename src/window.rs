@@ -1,4 +1,5 @@
 pub use layer_shika_composition::{
-    AnchorEdges, AnchorStrategy, KeyboardInteractivity, Layer, PopupBuilder, PopupHandle,
-    PopupPlacement, PopupPositioningMode, PopupRequest, PopupSize,
+    Alignment, AnchorEdges, AnchorPoint, AnchorStrategy, ConstraintAdjustment,
+    KeyboardInteractivity, Layer, Offset, OutputTarget, PopupBehavior, PopupBuilder, PopupConfig,
+    PopupHandle, PopupPosition, PopupShell, PopupSize,
 };

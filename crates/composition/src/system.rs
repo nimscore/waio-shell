@@ -14,19 +14,22 @@ use layer_shika_domain::prelude::{
     AnchorEdges, KeyboardInteractivity, Layer, Margins, OutputPolicy, ScaleFactor,
 };
 use layer_shika_domain::value_objects::dimensions::{PopupDimensions, SurfaceDimension};
+use layer_shika_domain::value_objects::handle::PopupHandle;
 use layer_shika_domain::value_objects::handle::SurfaceHandle;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
-use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
-use layer_shika_domain::value_objects::popup_request::{
-    PopupHandle, PopupPlacement, PopupRequest, PopupSize,
-};
+use layer_shika_domain::value_objects::popup_config::PopupConfig;
+use layer_shika_domain::value_objects::popup_position::PopupPosition;
+use layer_shika_domain::value_objects::popup_size::PopupSize;
 use layer_shika_domain::value_objects::surface_instance_id::SurfaceInstanceId;
 use std::cell::Cell;
 use std::rc::Rc;
 
 pub enum PopupCommand {
-    Show(PopupRequest),
+    Show {
+        handle: PopupHandle,
+        config: PopupConfig,
+    },
     Close(PopupHandle),
     Resize {
         handle: PopupHandle,
@@ -157,41 +160,9 @@ impl CallbackContext {
             .surface_by_name_and_output(&self.surface_name, self.output_handle())
     }
 
-    /// Shows a popup from a popup request
-    ///
-    /// Convenience method that forwards to the underlying `ShellControl`.
-    /// See [`ShellControl::show_popup`] for full documentation.
-    pub fn show_popup(&self, request: &PopupRequest) -> Result<()> {
-        self.control.show_popup(request)
-    }
-
-    /// Shows a popup at the current cursor position
-    ///
-    /// Convenience method that forwards to the underlying `ShellControl`.
-    /// See [`ShellControl::show_popup_at_cursor`] for full documentation.
-    pub fn show_popup_at_cursor(&self, component: impl Into<String>) -> Result<()> {
-        self.control.show_popup_at_cursor(component)
-    }
-
-    /// Shows a popup centered on screen
-    ///
-    /// Convenience method that forwards to the underlying `ShellControl`.
-    /// See [`ShellControl::show_popup_centered`] for full documentation.
-    pub fn show_popup_centered(&self, component: impl Into<String>) -> Result<()> {
-        self.control.show_popup_centered(component)
-    }
-
-    /// Shows a popup at the specified absolute position
-    ///
-    /// Convenience method that forwards to the underlying `ShellControl`.
-    /// See [`ShellControl::show_popup_at_position`] for full documentation.
-    pub fn show_popup_at_position(
-        &self,
-        component: impl Into<String>,
-        x: f32,
-        y: f32,
-    ) -> Result<()> {
-        self.control.show_popup_at_position(component, x, y)
+    #[must_use]
+    pub fn popups(&self) -> crate::PopupShell {
+        self.control.popups()
     }
 
     /// Closes a specific popup by its handle
@@ -224,132 +195,21 @@ impl ShellControl {
         Self { sender }
     }
 
-    /// Shows a popup from a popup request
-    ///
-    /// This is the primary API for showing popups from Slint callbacks. Popups are
-    /// transient windows that appear above the main surface, commonly used for menus,
-    /// tooltips, dropdowns, and other temporary UI elements.
-    ///
-    /// # Content-Based Sizing
-    ///
-    /// When using `PopupSize::Content`, you must configure a resize callback via
-    /// `resize_on()` to enable automatic resizing. The popup component should use a
-    /// `Timer` with `interval: 1ms` to invoke the resize callback after initialization,
-    /// ensuring the component is initialized before callback invocation. This allows the
-    /// popup to reposition itself to fit the content. See the `popup-demo` example.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// shell.on("Main", "open_menu", |control| {
-    ///     let request = PopupRequest::builder("MenuPopup")
-    ///         .placement(PopupPlacement::at_cursor())
-    ///         .grab(true)
-    ///         .close_on("menu_closed")
-    ///         .build();
-    ///
-    ///     control.show_popup(&request)?;
-    ///     Value::Void
-    /// });
-    /// ```
-    ///
-    /// # See Also
-    ///
-    /// - [`show_popup_at_cursor`](Self::show_popup_at_cursor) - Convenience method for cursor-positioned popups
-    /// - [`show_popup_centered`](Self::show_popup_centered) - Convenience method for centered popups
-    /// - [`show_popup_at_position`](Self::show_popup_at_position) - Convenience method for absolute positioning
-    /// - [`PopupRequest`] - Full popup configuration options
-    /// - [`PopupBuilder`] - Fluent API for building popup requests
-    pub fn show_popup(&self, request: &PopupRequest) -> Result<()> {
-        self.sender
-            .send(ShellCommand::Popup(PopupCommand::Show(request.clone())))
-            .map_err(|_| {
-                Error::Domain(DomainError::Configuration {
-                    message: "Failed to send popup show command: channel closed".to_string(),
-                })
-            })
-    }
-
-    /// Shows a popup at the current cursor position
-    ///
-    /// Convenience method for showing a popup at the cursor with default settings.
-    /// For more control over popup positioning, sizing, and behavior, use
-    /// [`show_popup`](Self::show_popup) with a [`PopupRequest`].
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// shell.on("Main", "context_menu", |control| {
-    ///     control.show_popup_at_cursor("ContextMenu")?;
-    ///     Value::Void
-    /// });
-    /// ```
-    pub fn show_popup_at_cursor(&self, component: impl Into<String>) -> Result<()> {
-        let request = PopupRequest::builder(component.into())
-            .placement(PopupPlacement::AtCursor)
-            .build();
-        self.show_popup(&request)
-    }
-
-    /// Shows a popup centered on screen
-    ///
-    /// Convenience method for showing a centered popup. Useful for dialogs
-    /// and modal content that should appear in the middle of the screen.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// shell.on("Main", "show_dialog", |control| {
-    ///     control.show_popup_centered("ConfirmDialog")?;
-    ///     Value::Void
-    /// });
-    /// ```
-    pub fn show_popup_centered(&self, component: impl Into<String>) -> Result<()> {
-        let request = PopupRequest::builder(component.into())
-            .placement(PopupPlacement::AtCursor)
-            .mode(PopupPositioningMode::Center)
-            .build();
-        self.show_popup(&request)
-    }
-
-    /// Shows a popup at the specified absolute position
-    ///
-    /// Convenience method for showing a popup at an exact screen coordinate.
-    /// The position is in logical pixels relative to the surface origin.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// shell.on("Main", "show_tooltip", |control| {
-    ///     control.show_popup_at_position("Tooltip", 100.0, 50.0)?;
-    ///     Value::Void
-    /// });
-    /// ```
-    pub fn show_popup_at_position(
-        &self,
-        component: impl Into<String>,
-        x: f32,
-        y: f32,
-    ) -> Result<()> {
-        let request = PopupRequest::builder(component.into())
-            .placement(PopupPlacement::AtPosition { x, y })
-            .build();
-        self.show_popup(&request)
+    #[must_use]
+    pub fn popups(&self) -> crate::PopupShell {
+        crate::PopupShell::new(self.sender.clone())
     }
 
     /// Closes a specific popup by its handle
     ///
     /// Use this when you need to close a specific popup that you opened previously.
-    /// The handle is returned by [`show_popup`](Self::show_popup) and related methods.
-    ///
-    /// For closing popups from within the popup itself, consider using the
-    /// `close_on` callback configuration in [`PopupRequest`] instead.
+    /// The handle is returned by [`crate::PopupShell::show`].
     ///
     /// # Example
     ///
     /// ```rust,ignore
     /// // Store handle when showing popup
-    /// let handle = context.show_popup(&request)?;
+    /// let handle = context.popups().builder("MenuPopup").show()?;
     ///
     /// // Later, close it
     /// control.close_popup(handle)?;
@@ -370,7 +230,7 @@ impl ShellControl {
     /// in response to content changes or user interaction.
     ///
     /// For automatic content-based sizing, use `PopupSize::Content` with the
-    /// `resize_on` callback configuration in [`PopupRequest`] instead.
+    /// `resize_on` callback configuration in [`PopupConfig`].
     ///
     /// # Example
     ///
@@ -733,6 +593,24 @@ fn extract_dimensions_from_callback(args: &[Value]) -> PopupDimensions {
     )
 }
 
+fn initial_dimensions_from_size(size: &PopupSize) -> (f32, f32) {
+    match *size {
+        PopupSize::Fixed { width, height } | PopupSize::Minimum { width, height } => {
+            (width, height)
+        }
+        PopupSize::Range {
+            min_width,
+            min_height,
+            ..
+        } => (min_width, min_height),
+        PopupSize::Content | PopupSize::Maximum { .. } | PopupSize::MatchParent => {
+            // Start with minimal size. Consumer app should register a callback to
+            // call resize_popup() with the desired dimensions.
+            (2.0, 2.0)
+        }
+    }
+}
+
 impl EventDispatchContext<'_> {
     pub(crate) fn surface_by_instance_mut(
         &mut self,
@@ -883,8 +761,8 @@ impl EventDispatchContext<'_> {
     /// Resize callbacks (if configured via `resize_on()`) will operate directly
     /// on the popup manager for immediate updates.
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn show_popup(&mut self, req: &PopupRequest) -> Result<PopupHandle> {
-        log::info!("show_popup called for component '{}'", req.component);
+    pub fn show_popup(&mut self, handle: PopupHandle, config: &PopupConfig) -> Result<PopupHandle> {
+        log::info!("show_popup called for component '{}'", config.component);
 
         let compilation_result = self.compilation_result().ok_or_else(|| {
             log::error!("No compilation result available");
@@ -895,27 +773,25 @@ impl EventDispatchContext<'_> {
 
         log::debug!(
             "Got compilation result, looking for component '{}'",
-            req.component
+            config.component
         );
 
         let definition = compilation_result
-            .component(&req.component)
+            .component(&config.component)
             .ok_or_else(|| {
                 log::error!(
                     "Component '{}' not found in compilation result",
-                    req.component
+                    config.component
                 );
                 Error::Domain(DomainError::Configuration {
                     message: format!(
                         "{} component not found in compilation result",
-                        req.component
+                        config.component
                     ),
                 })
             })?;
 
-        log::debug!("Found component definition for '{}'", req.component);
-
-        self.close_current_popup()?;
+        log::debug!("Found component definition for '{}'", config.component);
 
         let is_using_active = self.app_state.active_output().is_some();
         let active_surface = self.active_or_primary_output().ok_or_else(|| {
@@ -937,70 +813,49 @@ impl EventDispatchContext<'_> {
         })?;
 
         // For content-based sizing, we need to query the component's preferred size first
-        let initial_dimensions = match req.size {
-            PopupSize::Fixed { w, h } => {
-                log::debug!("Using fixed popup size: {}x{}", w, h);
-                (w, h)
-            }
-            PopupSize::Content => {
-                log::debug!("Using content-based sizing - starting at 2×2");
-                // Start with minimal size. Consumer app should register a callback to
-                // call resize_popup() with the desired dimensions.
-                (2.0, 2.0)
-            }
-        };
-
-        let resolved_placement = match req.placement {
-            PopupPlacement::AtCursor => {
-                let cursor_pos = active_surface.current_pointer_position();
-                log::debug!(
-                    "Resolving AtCursor placement to actual cursor position: ({}, {})",
-                    cursor_pos.x,
-                    cursor_pos.y
-                );
-                PopupPlacement::AtPosition {
-                    x: cursor_pos.x,
-                    y: cursor_pos.y,
-                }
-            }
-            other => other,
-        };
-
-        let (ref_x, ref_y) = resolved_placement.position();
+        let initial_dimensions = initial_dimensions_from_size(&config.size);
+        let mut resolved_position = config.position.clone();
+        if let PopupPosition::Cursor { offset } = config.position {
+            let cursor_pos = active_surface.current_pointer_position();
+            resolved_position = PopupPosition::Absolute {
+                x: cursor_pos.x + offset.x,
+                y: cursor_pos.y + offset.y,
+            };
+        }
 
         log::debug!(
-            "Creating popup for '{}' with dimensions {}x{} at position ({}, {}), mode: {:?}",
-            req.component,
+            "Creating popup for '{}' with dimensions {}x{} at position {:?}",
+            config.component,
             initial_dimensions.0,
             initial_dimensions.1,
-            ref_x,
-            ref_y,
-            req.mode
+            resolved_position
         );
 
-        // Create a new request with resolved placement
-        let resolved_request = PopupRequest {
-            component: req.component.clone(),
-            placement: resolved_placement,
-            size: req.size,
-            mode: req.mode,
-            grab: req.grab,
-            close_callback: req.close_callback.clone(),
-            resize_callback: req.resize_callback.clone(),
+        let resolved_config = PopupConfig {
+            component: config.component.clone(),
+            position: resolved_position,
+            size: config.size.clone(),
+            behavior: config.behavior.clone(),
+            output: config.output.clone(),
+            parent: config.parent,
+            z_index: config.z_index,
+            close_callback: config.close_callback.clone(),
+            resize_callback: config.resize_callback.clone(),
         };
 
-        let popup_handle = popup_manager.request_popup(
-            resolved_request,
+        popup_manager.request_popup(
+            handle,
+            resolved_config,
             initial_dimensions.0,
             initial_dimensions.1,
         );
 
         let (instance, popup_key_cell) =
-            Self::create_popup_instance(&definition, &popup_manager, req)?;
+            Self::create_popup_instance(&definition, &popup_manager, config)?;
 
-        popup_key_cell.set(popup_handle.key());
+        popup_key_cell.set(handle.key());
 
-        if let Some(popup_surface) = popup_manager.get_popup_window(popup_handle.key()) {
+        if let Some(popup_surface) = popup_manager.get_popup_window(handle.key()) {
             popup_surface.set_component_instance(instance);
         } else {
             return Err(Error::Domain(DomainError::Configuration {
@@ -1008,7 +863,7 @@ impl EventDispatchContext<'_> {
             }));
         }
 
-        Ok(popup_handle)
+        Ok(handle)
     }
 
     /// Closes a popup by its handle
@@ -1016,16 +871,6 @@ impl EventDispatchContext<'_> {
         if let Some(active_surface) = self.active_or_primary_output() {
             if let Some(popup_manager) = active_surface.popup_manager() {
                 popup_manager.close(handle)?;
-            }
-        }
-        Ok(())
-    }
-
-    /// Closes the currently active popup
-    pub fn close_current_popup(&mut self) -> Result<()> {
-        if let Some(active_surface) = self.active_or_primary_output() {
-            if let Some(popup_manager) = active_surface.popup_manager() {
-                popup_manager.close_current_popup();
             }
         }
         Ok(())
@@ -1045,39 +890,25 @@ impl EventDispatchContext<'_> {
             })
         })?;
 
-        let Some((request, _serial)) = popup_manager.get_popup_info(handle.key()) else {
+        if let Some(popup_surface) = popup_manager.get_popup_window(handle.key()) {
+            popup_surface.request_resize(width, height);
+
+            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_wrap)]
+            let logical_width = width as i32;
+            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_wrap)]
+            let logical_height = height as i32;
+
+            popup_manager.update_popup_viewport(handle.key(), logical_width, logical_height);
+            popup_manager.commit_popup_surface(handle.key());
             log::debug!(
-                "Ignoring resize request for non-existent popup with handle {:?}",
-                handle
+                "Updated popup viewport to logical size: {}x{} (from resize to {}x{})",
+                logical_width,
+                logical_height,
+                width,
+                height
             );
-            return Ok(());
-        };
-
-        let current_size = request.size.dimensions();
-        let size_changed =
-            current_size.is_none_or(|(w, h)| (w - width).abs() > 0.01 || (h - height).abs() > 0.01);
-
-        if size_changed {
-            if let Some(popup_surface) = popup_manager.get_popup_window(handle.key()) {
-                popup_surface.request_resize(width, height);
-
-                #[allow(clippy::cast_possible_truncation)]
-                #[allow(clippy::cast_possible_wrap)]
-                let logical_width = width as i32;
-                #[allow(clippy::cast_possible_truncation)]
-                #[allow(clippy::cast_possible_wrap)]
-                let logical_height = height as i32;
-
-                popup_manager.update_popup_viewport(handle.key(), logical_width, logical_height);
-                popup_manager.commit_popup_surface(handle.key());
-                log::debug!(
-                    "Updated popup viewport to logical size: {}x{} (from resize to {}x{})",
-                    logical_width,
-                    logical_height,
-                    width,
-                    height
-                );
-            }
         }
 
         Ok(())
@@ -1086,7 +917,7 @@ impl EventDispatchContext<'_> {
     fn create_popup_instance(
         definition: &ComponentDefinition,
         popup_manager: &Rc<PopupManager>,
-        req: &PopupRequest,
+        config: &PopupConfig,
     ) -> Result<(ComponentInstance, Rc<Cell<usize>>)> {
         let instance = definition.create().map_err(|e| {
             Error::Domain(DomainError::Configuration {
@@ -1096,7 +927,7 @@ impl EventDispatchContext<'_> {
 
         let popup_key_cell = Rc::new(Cell::new(0));
 
-        Self::register_popup_callbacks(&instance, popup_manager, &popup_key_cell, req)?;
+        Self::register_popup_callbacks(&instance, popup_manager, &popup_key_cell, config)?;
 
         instance.show().map_err(|e| {
             Error::Domain(DomainError::Configuration {
@@ -1111,13 +942,18 @@ impl EventDispatchContext<'_> {
         instance: &ComponentInstance,
         popup_manager: &Rc<PopupManager>,
         popup_key_cell: &Rc<Cell<usize>>,
-        req: &PopupRequest,
+        config: &PopupConfig,
     ) -> Result<()> {
-        if let Some(close_callback_name) = &req.close_callback {
-            Self::register_close_callback(instance, popup_manager, close_callback_name)?;
+        if let Some(close_callback_name) = &config.close_callback {
+            Self::register_close_callback(
+                instance,
+                popup_manager,
+                popup_key_cell,
+                close_callback_name,
+            )?;
         }
 
-        if let Some(resize_callback_name) = &req.resize_callback {
+        if let Some(resize_callback_name) = &config.resize_callback {
             Self::register_resize_direct(
                 instance,
                 popup_manager,
@@ -1132,13 +968,16 @@ impl EventDispatchContext<'_> {
     fn register_close_callback(
         instance: &ComponentInstance,
         popup_manager: &Rc<PopupManager>,
+        popup_key_cell: &Rc<Cell<usize>>,
         callback_name: &str,
     ) -> Result<()> {
         let popup_manager_weak = Rc::downgrade(popup_manager);
+        let key_cell = Rc::clone(popup_key_cell);
         instance
             .set_callback(callback_name, move |_| {
                 if let Some(popup_manager) = popup_manager_weak.upgrade() {
-                    popup_manager.close_current_popup();
+                    let key = key_cell.get();
+                    popup_manager.close(PopupHandle::from_raw(key)).ok();
                 }
                 Value::Void
             })

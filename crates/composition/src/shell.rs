@@ -582,8 +582,8 @@ impl Shell {
         _control: &ShellControl,
     ) {
         match command {
-            PopupCommand::Show(request) => {
-                if let Err(e) = ctx.show_popup(&request) {
+            PopupCommand::Show { handle, config } => {
+                if let Err(e) = ctx.show_popup(handle, &config) {
                     log::error!("Failed to show popup: {}", e);
                 }
             }
@@ -762,6 +762,12 @@ impl Shell {
     #[must_use]
     pub fn control(&self) -> ShellControl {
         ShellControl::new(self.command_sender.clone())
+    }
+
+    /// Access popup management API
+    #[must_use]
+    pub fn popups(&self) -> crate::PopupShell {
+        self.control().popups()
     }
 
     /// Returns the names of all registered surfaces

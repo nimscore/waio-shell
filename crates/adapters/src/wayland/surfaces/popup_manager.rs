@@ -4,14 +4,15 @@ use crate::rendering::femtovg::{popup_window::PopupWindow, renderable_window::Re
 use crate::wayland::surfaces::display_metrics::{DisplayMetrics, SharedDisplayMetrics};
 use layer_shika_domain::dimensions::LogicalSize as DomainLogicalSize;
 use layer_shika_domain::surface_dimensions::SurfaceDimensions;
+use layer_shika_domain::value_objects::handle::PopupHandle;
+use layer_shika_domain::value_objects::popup_behavior::ConstraintAdjustment;
 use layer_shika_domain::value_objects::popup_config::PopupConfig;
-use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
-use layer_shika_domain::value_objects::popup_request::{PopupHandle, PopupRequest};
+use layer_shika_domain::value_objects::popup_position::PopupPosition;
 use log::info;
 use slint::{platform::femtovg_renderer::FemtoVGRenderer, PhysicalSize, WindowSize};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use wayland_client::{
     backend::ObjectId,
@@ -55,14 +56,13 @@ impl PopupId {
 
 pub type OnCloseCallback = Box<dyn Fn(PopupHandle)>;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct CreatePopupParams {
     pub last_pointer_serial: u32,
-    pub reference_x: f32,
-    pub reference_y: f32,
     pub width: f32,
     pub height: f32,
-    pub positioning_mode: PopupPositioningMode,
+    pub position: PopupPosition,
+    pub constraint_adjustment: ConstraintAdjustment,
     pub grab: bool,
 }
 
@@ -102,8 +102,6 @@ impl PopupContext {
 struct ActivePopup {
     surface: PopupSurface,
     window: Rc<PopupWindow>,
-    request: PopupRequest,
-    last_serial: u32,
 }
 
 impl Drop for ActivePopup {
@@ -116,7 +114,7 @@ impl Drop for ActivePopup {
 
 struct PendingPopup {
     id: PopupId,
-    request: PopupRequest,
+    config: PopupConfig,
     width: f32,
     height: f32,
 }
@@ -124,9 +122,7 @@ struct PendingPopup {
 struct PopupManagerState {
     popups: HashMap<PopupId, ActivePopup>,
     display_metrics: SharedDisplayMetrics,
-    current_popup_id: Option<PopupId>,
-    pending_popup: Option<PendingPopup>,
-    id_generator: usize,
+    pending_popups: VecDeque<PendingPopup>,
 }
 
 impl PopupManagerState {
@@ -134,16 +130,8 @@ impl PopupManagerState {
         Self {
             popups: HashMap::new(),
             display_metrics,
-            current_popup_id: None,
-            pending_popup: None,
-            id_generator: 0,
+            pending_popups: VecDeque::new(),
         }
-    }
-
-    fn allocate_id(&mut self) -> PopupId {
-        let id = PopupId(self.id_generator);
-        self.id_generator += 1;
-        id
     }
 }
 
@@ -164,33 +152,39 @@ impl PopupManager {
         }
     }
 
-    pub fn request_popup(&self, request: PopupRequest, width: f32, height: f32) -> PopupHandle {
+    pub fn request_popup(
+        &self,
+        handle: PopupHandle,
+        config: PopupConfig,
+        width: f32,
+        height: f32,
+    ) -> PopupHandle {
         let mut state = self.state.borrow_mut();
 
-        let id = state.allocate_id();
+        let id = PopupId::from_handle(handle);
 
-        state.pending_popup = Some(PendingPopup {
+        state.pending_popups.push_back(PendingPopup {
             id,
-            request,
+            config,
             width,
             height,
         });
 
-        id.to_handle()
+        handle
     }
 
     #[must_use]
-    pub(crate) fn take_pending_popup_params(&self) -> Option<(PopupId, PopupRequest, f32, f32)> {
+    pub(crate) fn take_pending_popup_params(&self) -> Option<(PopupId, PopupConfig, f32, f32)> {
         self.state
             .borrow_mut()
-            .pending_popup
-            .take()
-            .map(|p| (p.id, p.request, p.width, p.height))
+            .pending_popups
+            .pop_front()
+            .map(|p| (p.id, p.config, p.width, p.height))
     }
 
     #[must_use]
     pub fn has_pending_popup(&self) -> bool {
-        self.state.borrow().pending_popup.is_some()
+        !self.state.borrow().pending_popups.is_empty()
     }
 
     #[must_use]
@@ -220,25 +214,13 @@ impl PopupManager {
             .update_output_size(output_size);
     }
 
-    pub fn close_current_popup(&self) {
-        let id = self.state.borrow_mut().current_popup_id.take();
-        if let Some(id) = id {
-            self.destroy_popup(id);
-        }
-    }
-
-    #[must_use]
-    pub fn current_popup_key(&self) -> Option<usize> {
-        self.state.borrow().current_popup_id.map(PopupId::key)
-    }
-
     pub fn create_pending_popup(
         self: &Rc<Self>,
         queue_handle: &QueueHandle<AppState>,
         parent_layer_surface: &ZwlrLayerSurfaceV1,
         last_pointer_serial: u32,
     ) -> Result<Rc<PopupWindow>> {
-        let (id, request, width, height) = self.take_pending_popup_params().ok_or_else(|| {
+        let (id, config, width, height) = self.take_pending_popup_params().ok_or_else(|| {
             LayerShikaError::WindowConfiguration {
                 message: "No pending popup request available".into(),
             }
@@ -246,23 +228,21 @@ impl PopupManager {
 
         let params = CreatePopupParams {
             last_pointer_serial,
-            reference_x: request.placement.position().0,
-            reference_y: request.placement.position().1,
             width,
             height,
-            positioning_mode: request.mode,
-            grab: request.grab,
+            position: config.position.clone(),
+            constraint_adjustment: config.behavior.constraint_adjustment,
+            grab: config.behavior.grab,
         };
 
-        self.create_popup_internal(queue_handle, parent_layer_surface, params, request, id)
+        self.create_popup_internal(queue_handle, parent_layer_surface, &params, id)
     }
 
     fn create_popup_internal(
         self: &Rc<Self>,
         queue_handle: &QueueHandle<AppState>,
         parent_layer_surface: &ZwlrLayerSurfaceV1,
-        params: CreatePopupParams,
-        request: PopupRequest,
+        params: &CreatePopupParams,
         popup_id: PopupId,
     ) -> Result<Rc<PopupWindow>> {
         let xdg_wm_base = self.context.xdg_wm_base.as_ref().ok_or_else(|| {
@@ -273,12 +253,8 @@ impl PopupManager {
 
         let scale_factor = self.scale_factor();
         info!(
-            "Creating popup window with scale factor {scale_factor}, reference=({}, {}), size=({} x {}), mode={:?}",
-            params.reference_x,
-            params.reference_y,
-            params.width,
-            params.height,
-            params.positioning_mode
+            "Creating popup window with scale factor {scale_factor}, size=({} x {}), position={:?}",
+            params.width, params.height, params.position
         );
 
         let output_size = self.output_size();
@@ -297,14 +273,6 @@ impl PopupManager {
             .scale_factor_typed();
         let popup_dimensions = SurfaceDimensions::from_logical(popup_logical_size, domain_scale);
 
-        let popup_config = PopupConfig::new(
-            params.reference_x,
-            params.reference_y,
-            popup_dimensions,
-            params.positioning_mode,
-            output_logical_size,
-        );
-
         let popup_size = PhysicalSize::new(
             popup_dimensions.physical_width(),
             popup_dimensions.physical_height(),
@@ -320,7 +288,9 @@ impl PopupManager {
                 fractional_scale_manager: self.context.fractional_scale_manager.as_ref(),
                 viewporter: self.context.viewporter.as_ref(),
                 queue_handle,
-                popup_config,
+                position: params.position.clone(),
+                output_bounds: output_logical_size,
+                constraint_adjustment: params.constraint_adjustment,
                 physical_size: popup_size,
                 scale_factor,
             });
@@ -364,11 +334,8 @@ impl PopupManager {
             ActivePopup {
                 surface: wayland_popup_surface,
                 window: Rc::clone(&popup_window),
-                request,
-                last_serial: params.last_pointer_serial,
             },
         );
-        state.current_popup_id = Some(popup_id);
 
         info!("Popup window created successfully with id {:?}", popup_id);
 
@@ -463,24 +430,11 @@ impl PopupManager {
         }
     }
 
-    pub fn get_popup_info(&self, key: usize) -> Option<(PopupRequest, u32)> {
-        let id = PopupId(key);
-        self.state
-            .borrow()
-            .popups
-            .get(&id)
-            .map(|popup| (popup.request.clone(), popup.last_serial))
-    }
-
     pub fn mark_popup_configured(&self, key: usize) {
         let id = PopupId(key);
         if let Some(popup) = self.state.borrow().popups.get(&id) {
             popup.window.mark_configured();
         }
-    }
-
-    pub fn show(&self, request: PopupRequest, width: f32, height: f32) -> PopupHandle {
-        self.request_popup(request, width, height)
     }
 
     pub fn close(&self, handle: PopupHandle) -> Result<()> {

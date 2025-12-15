@@ -16,8 +16,9 @@ pub use crate::shell::{
 };
 
 pub use crate::window::{
-    AnchorEdges, AnchorStrategy, KeyboardInteractivity, Layer, PopupHandle, PopupPlacement,
-    PopupPositioningMode, PopupRequest, PopupSize,
+    Alignment, AnchorEdges, AnchorPoint, AnchorStrategy, ConstraintAdjustment,
+    KeyboardInteractivity, Layer, Offset, OutputTarget, PopupBehavior, PopupBuilder, PopupConfig,
+    PopupHandle, PopupPosition, PopupShell, PopupSize,
 };
 
 pub use crate::output::{OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry};

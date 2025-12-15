@@ -1,10 +1,9 @@
-use layer_shika_domain::dimensions::{LogicalSize as DomainLogicalSize, ScaleFactor};
-use layer_shika_domain::surface_dimensions::SurfaceDimensions;
-use layer_shika_domain::value_objects::popup_config::PopupConfig;
+use layer_shika_domain::dimensions::{LogicalRect, LogicalSize as DomainLogicalSize};
+use layer_shika_domain::value_objects::popup_behavior::ConstraintAdjustment as DomainConstraintAdjustment;
+use layer_shika_domain::value_objects::popup_position::{Alignment, AnchorPoint, PopupPosition};
 use log::info;
 use slint::PhysicalSize;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
-use std::cell::Cell;
 use std::rc::Rc;
 use wayland_client::{
     protocol::{wl_compositor::WlCompositor, wl_seat::WlSeat, wl_surface::WlSurface},
@@ -33,7 +32,9 @@ pub struct PopupSurfaceParams<'a> {
     pub fractional_scale_manager: Option<&'a WpFractionalScaleManagerV1>,
     pub viewporter: Option<&'a WpViewporter>,
     pub queue_handle: &'a QueueHandle<AppState>,
-    pub popup_config: PopupConfig,
+    pub position: PopupPosition,
+    pub output_bounds: DomainLogicalSize,
+    pub constraint_adjustment: DomainConstraintAdjustment,
     pub physical_size: PhysicalSize,
     pub scale_factor: f32,
 }
@@ -44,10 +45,11 @@ pub struct PopupSurface {
     pub xdg_popup: Rc<XdgPopup>,
     pub fractional_scale: Option<Rc<WpFractionalScaleV1>>,
     pub viewport: Option<Rc<WpViewport>>,
-    popup_config: PopupConfig,
+    position: PopupPosition,
+    output_bounds: DomainLogicalSize,
+    constraint_adjustment: DomainConstraintAdjustment,
     xdg_wm_base: Rc<XdgWmBase>,
     queue_handle: QueueHandle<AppState>,
-    scale_factor: Cell<f32>,
 }
 
 impl PopupSurface {
@@ -102,10 +104,11 @@ impl PopupSurface {
             xdg_popup,
             fractional_scale,
             viewport,
-            popup_config: params.popup_config,
+            position: params.position.clone(),
+            output_bounds: params.output_bounds,
+            constraint_adjustment: params.constraint_adjustment,
             xdg_wm_base: Rc::new(params.xdg_wm_base.clone()),
             queue_handle: params.queue_handle.clone(),
-            scale_factor: Cell::new(params.scale_factor),
         }
     }
 
@@ -118,26 +121,29 @@ impl PopupSurface {
             .xdg_wm_base
             .create_positioner(params.queue_handle, ());
 
-        let calculated_x = params.popup_config.calculated_top_left_x() as i32;
-        let calculated_y = params.popup_config.calculated_top_left_y() as i32;
+        let logical_width = params.physical_size.width as f32 / params.scale_factor;
+        let logical_height = params.physical_size.height as f32 / params.scale_factor;
 
-        info!(
-            "Popup positioning: reference=({}, {}), mode={:?}, calculated_top_left=({}, {})",
-            params.popup_config.reference_x(),
-            params.popup_config.reference_y(),
-            params.popup_config.positioning_mode(),
-            calculated_x,
-            calculated_y
+        let (calculated_x, calculated_y) = compute_top_left(
+            &params.position,
+            DomainLogicalSize::from_raw(logical_width, logical_height),
+            params.output_bounds,
         );
 
-        let logical_width = (params.physical_size.width as f32 / params.scale_factor) as i32;
-        let logical_height = (params.physical_size.height as f32 / params.scale_factor) as i32;
+        info!(
+            "Popup positioning: position={:?}, calculated_top_left=({}, {})",
+            params.position, calculated_x, calculated_y
+        );
+
+        let logical_width_i32 = logical_width as i32;
+        let logical_height_i32 = logical_height as i32;
 
         positioner.set_anchor_rect(calculated_x, calculated_y, 1, 1);
-        positioner.set_size(logical_width, logical_height);
+        positioner.set_size(logical_width_i32, logical_height_i32);
         positioner.set_anchor(Anchor::TopLeft);
         positioner.set_gravity(Gravity::BottomRight);
-        positioner.set_constraint_adjustment(ConstraintAdjustment::None);
+        positioner
+            .set_constraint_adjustment(map_constraint_adjustment(params.constraint_adjustment));
 
         positioner
     }
@@ -168,30 +174,15 @@ impl PopupSurface {
     #[allow(clippy::cast_sign_loss)]
     #[allow(clippy::cast_precision_loss)]
     fn reposition_popup(&self, logical_width: i32, logical_height: i32) {
-        let scale_factor = self.scale_factor.get();
-
-        let updated_config = PopupConfig::new(
-            self.popup_config.reference_x(),
-            self.popup_config.reference_y(),
-            SurfaceDimensions::from_logical(
-                DomainLogicalSize::from_raw(logical_width as f32, logical_height as f32),
-                ScaleFactor::from_raw(scale_factor),
-            ),
-            self.popup_config.positioning_mode(),
-            self.popup_config.output_bounds(),
+        let (calculated_x, calculated_y) = compute_top_left(
+            &self.position,
+            DomainLogicalSize::from_raw(logical_width as f32, logical_height as f32),
+            self.output_bounds,
         );
 
-        let calculated_x = updated_config.calculated_top_left_x() as i32;
-        let calculated_y = updated_config.calculated_top_left_y() as i32;
-
         info!(
-            "Repositioning popup: reference=({}, {}), new_size=({}x{}), new_top_left=({}, {})",
-            self.popup_config.reference_x(),
-            self.popup_config.reference_y(),
-            logical_width,
-            logical_height,
-            calculated_x,
-            calculated_y
+            "Repositioning popup: new_size=({}x{}), new_top_left=({}, {})",
+            logical_width, logical_height, calculated_x, calculated_y
         );
 
         let positioner = self.xdg_wm_base.create_positioner(&self.queue_handle, ());
@@ -199,7 +190,7 @@ impl PopupSurface {
         positioner.set_size(logical_width, logical_height);
         positioner.set_anchor(Anchor::TopLeft);
         positioner.set_gravity(Gravity::BottomRight);
-        positioner.set_constraint_adjustment(ConstraintAdjustment::None);
+        positioner.set_constraint_adjustment(map_constraint_adjustment(self.constraint_adjustment));
 
         self.xdg_popup.reposition(&positioner, 0);
     }
@@ -209,5 +200,103 @@ impl PopupSurface {
         self.xdg_popup.destroy();
         self.xdg_surface.destroy();
         self.surface.destroy();
+    }
+}
+
+fn compute_top_left(
+    position: &PopupPosition,
+    popup_size: DomainLogicalSize,
+    output_bounds: DomainLogicalSize,
+) -> (i32, i32) {
+    let (mut x, mut y) = match position {
+        PopupPosition::Absolute { x, y } => (*x, *y),
+        PopupPosition::Centered { offset } => (
+            (output_bounds.width() / 2.0) - (popup_size.width() / 2.0) + offset.x,
+            (output_bounds.height() / 2.0) - (popup_size.height() / 2.0) + offset.y,
+        ),
+        PopupPosition::Element {
+            rect,
+            anchor,
+            alignment,
+        } => {
+            let (anchor_x, anchor_y) = anchor_point_in_rect(*rect, *anchor);
+            let (ax, ay) = alignment_offsets(*alignment, popup_size);
+            (anchor_x - ax, anchor_y - ay)
+        }
+        PopupPosition::Cursor { .. } | PopupPosition::RelativeToParent { .. } => {
+            log::warn!("PopupPosition variant not supported by current backend: {position:?}");
+            (0.0, 0.0)
+        }
+    };
+
+    let max_x = (output_bounds.width() - popup_size.width()).max(0.0);
+    let max_y = (output_bounds.height() - popup_size.height()).max(0.0);
+
+    x = x.clamp(0.0, max_x);
+    y = y.clamp(0.0, max_y);
+
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_wrap)]
+    (x as i32, y as i32)
+}
+
+fn anchor_point_in_rect(rect: LogicalRect, anchor: AnchorPoint) -> (f32, f32) {
+    let x = rect.x();
+    let y = rect.y();
+    let w = rect.width();
+    let h = rect.height();
+
+    match anchor {
+        AnchorPoint::TopLeft => (x, y),
+        AnchorPoint::TopCenter => (x + w / 2.0, y),
+        AnchorPoint::TopRight => (x + w, y),
+        AnchorPoint::CenterLeft => (x, y + h / 2.0),
+        AnchorPoint::Center => (x + w / 2.0, y + h / 2.0),
+        AnchorPoint::CenterRight => (x + w, y + h / 2.0),
+        AnchorPoint::BottomLeft => (x, y + h),
+        AnchorPoint::BottomCenter => (x + w / 2.0, y + h),
+        AnchorPoint::BottomRight => (x + w, y + h),
+    }
+}
+
+fn alignment_offsets(alignment: Alignment, popup_size: DomainLogicalSize) -> (f32, f32) {
+    let x = match alignment {
+        Alignment::Start => 0.0,
+        Alignment::Center => popup_size.width() / 2.0,
+        Alignment::End => popup_size.width(),
+    };
+    let y = match alignment {
+        Alignment::Start => 0.0,
+        Alignment::Center => popup_size.height() / 2.0,
+        Alignment::End => popup_size.height(),
+    };
+    (x, y)
+}
+
+fn map_constraint_adjustment(adjustment: DomainConstraintAdjustment) -> ConstraintAdjustment {
+    match adjustment {
+        DomainConstraintAdjustment::None => ConstraintAdjustment::None,
+        DomainConstraintAdjustment::Slide => {
+            ConstraintAdjustment::SlideX | ConstraintAdjustment::SlideY
+        }
+        DomainConstraintAdjustment::Flip => {
+            ConstraintAdjustment::FlipX | ConstraintAdjustment::FlipY
+        }
+        DomainConstraintAdjustment::Resize => {
+            ConstraintAdjustment::ResizeX | ConstraintAdjustment::ResizeY
+        }
+        DomainConstraintAdjustment::SlideAndResize => {
+            ConstraintAdjustment::SlideX
+                | ConstraintAdjustment::SlideY
+                | ConstraintAdjustment::ResizeX
+                | ConstraintAdjustment::ResizeY
+        }
+        DomainConstraintAdjustment::FlipAndSlide => {
+            ConstraintAdjustment::FlipX
+                | ConstraintAdjustment::FlipY
+                | ConstraintAdjustment::SlideX
+                | ConstraintAdjustment::SlideY
+        }
+        DomainConstraintAdjustment::All => ConstraintAdjustment::all(),
     }
 }

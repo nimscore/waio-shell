@@ -193,7 +193,8 @@ pub struct LogicalPosition {
 }
 
 impl LogicalPosition {
-    pub fn new(x: f32, y: f32) -> Self {
+    #[must_use]
+    pub const fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
 
@@ -221,6 +222,57 @@ impl LogicalPosition {
 impl Default for LogicalPosition {
     fn default() -> Self {
         Self { x: 0.0, y: 0.0 }
+    }
+}
+
+/// Rectangle in logical pixels
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LogicalRect {
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+}
+
+impl LogicalRect {
+    #[must_use]
+    pub const fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+
+    #[must_use]
+    pub const fn x(&self) -> f32 {
+        self.x
+    }
+
+    #[must_use]
+    pub const fn y(&self) -> f32 {
+        self.y
+    }
+
+    #[must_use]
+    pub const fn width(&self) -> f32 {
+        self.width
+    }
+
+    #[must_use]
+    pub const fn height(&self) -> f32 {
+        self.height
+    }
+
+    #[must_use]
+    pub const fn origin(&self) -> LogicalPosition {
+        LogicalPosition::new(self.x, self.y)
+    }
+
+    #[must_use]
+    pub const fn size(&self) -> LogicalSize {
+        LogicalSize::from_raw(self.width, self.height)
     }
 }
 

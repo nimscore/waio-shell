@@ -2,7 +2,7 @@ use super::renderable_window::{RenderState, RenderableWindow};
 use crate::errors::{RenderingError, Result};
 use crate::wayland::surfaces::popup_manager::OnCloseCallback;
 use core::ops::Deref;
-use layer_shika_domain::value_objects::popup_request::PopupHandle;
+use layer_shika_domain::value_objects::handle::PopupHandle;
 use log::info;
 use slint::{
     PhysicalSize, Window, WindowSize,
