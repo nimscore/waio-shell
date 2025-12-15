@@ -156,6 +156,59 @@ impl CallbackContext {
         self.control
             .surface_by_name_and_output(&self.surface_name, self.output_handle())
     }
+
+    /// Shows a popup from a popup request
+    ///
+    /// Convenience method that forwards to the underlying `ShellControl`.
+    /// See [`ShellControl::show_popup`] for full documentation.
+    pub fn show_popup(&self, request: &PopupRequest) -> Result<()> {
+        self.control.show_popup(request)
+    }
+
+    /// Shows a popup at the current cursor position
+    ///
+    /// Convenience method that forwards to the underlying `ShellControl`.
+    /// See [`ShellControl::show_popup_at_cursor`] for full documentation.
+    pub fn show_popup_at_cursor(&self, component: impl Into<String>) -> Result<()> {
+        self.control.show_popup_at_cursor(component)
+    }
+
+    /// Shows a popup centered on screen
+    ///
+    /// Convenience method that forwards to the underlying `ShellControl`.
+    /// See [`ShellControl::show_popup_centered`] for full documentation.
+    pub fn show_popup_centered(&self, component: impl Into<String>) -> Result<()> {
+        self.control.show_popup_centered(component)
+    }
+
+    /// Shows a popup at the specified absolute position
+    ///
+    /// Convenience method that forwards to the underlying `ShellControl`.
+    /// See [`ShellControl::show_popup_at_position`] for full documentation.
+    pub fn show_popup_at_position(
+        &self,
+        component: impl Into<String>,
+        x: f32,
+        y: f32,
+    ) -> Result<()> {
+        self.control.show_popup_at_position(component, x, y)
+    }
+
+    /// Closes a specific popup by its handle
+    ///
+    /// Convenience method that forwards to the underlying `ShellControl`.
+    /// See [`ShellControl::close_popup`] for full documentation.
+    pub fn close_popup(&self, handle: PopupHandle) -> Result<()> {
+        self.control.close_popup(handle)
+    }
+
+    /// Resizes a popup to the specified dimensions
+    ///
+    /// Convenience method that forwards to the underlying `ShellControl`.
+    /// See [`ShellControl::resize_popup`] for full documentation.
+    pub fn resize_popup(&self, handle: PopupHandle, width: f32, height: f32) -> Result<()> {
+        self.control.resize_popup(handle, width, height)
+    }
 }
 
 /// Handle for runtime control of shell operations
@@ -172,6 +225,41 @@ impl ShellControl {
     }
 
     /// Shows a popup from a popup request
+    ///
+    /// This is the primary API for showing popups from Slint callbacks. Popups are
+    /// transient windows that appear above the main surface, commonly used for menus,
+    /// tooltips, dropdowns, and other temporary UI elements.
+    ///
+    /// # Content-Based Sizing
+    ///
+    /// When using `PopupSize::Content`, you must configure a resize callback via
+    /// `resize_on()` to enable automatic resizing. The popup component should use a
+    /// `Timer` with `interval: 1ms` to invoke the resize callback after initialization,
+    /// ensuring the component is initialized before callback invocation. This allows the
+    /// popup to reposition itself to fit the content. See the `popup-demo` example.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// shell.on("Main", "open_menu", |control| {
+    ///     let request = PopupRequest::builder("MenuPopup")
+    ///         .placement(PopupPlacement::at_cursor())
+    ///         .grab(true)
+    ///         .close_on("menu_closed")
+    ///         .build();
+    ///
+    ///     control.show_popup(&request)?;
+    ///     Value::Void
+    /// });
+    /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`show_popup_at_cursor`](Self::show_popup_at_cursor) - Convenience method for cursor-positioned popups
+    /// - [`show_popup_centered`](Self::show_popup_centered) - Convenience method for centered popups
+    /// - [`show_popup_at_position`](Self::show_popup_at_position) - Convenience method for absolute positioning
+    /// - [`PopupRequest`] - Full popup configuration options
+    /// - [`PopupBuilder`] - Fluent API for building popup requests
     pub fn show_popup(&self, request: &PopupRequest) -> Result<()> {
         self.sender
             .send(ShellCommand::Popup(PopupCommand::Show(request.clone())))
@@ -183,6 +271,19 @@ impl ShellControl {
     }
 
     /// Shows a popup at the current cursor position
+    ///
+    /// Convenience method for showing a popup at the cursor with default settings.
+    /// For more control over popup positioning, sizing, and behavior, use
+    /// [`show_popup`](Self::show_popup) with a [`PopupRequest`].
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// shell.on("Main", "context_menu", |control| {
+    ///     control.show_popup_at_cursor("ContextMenu")?;
+    ///     Value::Void
+    /// });
+    /// ```
     pub fn show_popup_at_cursor(&self, component: impl Into<String>) -> Result<()> {
         let request = PopupRequest::builder(component.into())
             .placement(PopupPlacement::AtCursor)
@@ -191,6 +292,18 @@ impl ShellControl {
     }
 
     /// Shows a popup centered on screen
+    ///
+    /// Convenience method for showing a centered popup. Useful for dialogs
+    /// and modal content that should appear in the middle of the screen.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// shell.on("Main", "show_dialog", |control| {
+    ///     control.show_popup_centered("ConfirmDialog")?;
+    ///     Value::Void
+    /// });
+    /// ```
     pub fn show_popup_centered(&self, component: impl Into<String>) -> Result<()> {
         let request = PopupRequest::builder(component.into())
             .placement(PopupPlacement::AtCursor)
@@ -199,7 +312,19 @@ impl ShellControl {
         self.show_popup(&request)
     }
 
-    /// Shows a popup at the specified position
+    /// Shows a popup at the specified absolute position
+    ///
+    /// Convenience method for showing a popup at an exact screen coordinate.
+    /// The position is in logical pixels relative to the surface origin.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// shell.on("Main", "show_tooltip", |control| {
+    ///     control.show_popup_at_position("Tooltip", 100.0, 50.0)?;
+    ///     Value::Void
+    /// });
+    /// ```
     pub fn show_popup_at_position(
         &self,
         component: impl Into<String>,
@@ -212,7 +337,23 @@ impl ShellControl {
         self.show_popup(&request)
     }
 
-    /// Closes a popup by its handle
+    /// Closes a specific popup by its handle
+    ///
+    /// Use this when you need to close a specific popup that you opened previously.
+    /// The handle is returned by [`show_popup`](Self::show_popup) and related methods.
+    ///
+    /// For closing popups from within the popup itself, consider using the
+    /// `close_on` callback configuration in [`PopupRequest`] instead.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// // Store handle when showing popup
+    /// let handle = context.show_popup(&request)?;
+    ///
+    /// // Later, close it
+    /// control.close_popup(handle)?;
+    /// ```
     pub fn close_popup(&self, handle: PopupHandle) -> Result<()> {
         self.sender
             .send(ShellCommand::Popup(PopupCommand::Close(handle)))
@@ -224,6 +365,22 @@ impl ShellControl {
     }
 
     /// Resizes a popup to the specified dimensions
+    ///
+    /// Dynamically changes the size of an active popup. This is typically used
+    /// in response to content changes or user interaction.
+    ///
+    /// For automatic content-based sizing, use `PopupSize::Content` with the
+    /// `resize_on` callback configuration in [`PopupRequest`] instead.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// shell.on("Main", "expand_menu", |control| {
+    ///     // Assuming we have the popup handle stored somewhere
+    ///     control.resize_popup(menu_handle, 400.0, 600.0)?;
+    ///     Value::Void
+    /// });
+    /// ```
     pub fn resize_popup(&self, handle: PopupHandle, width: f32, height: f32) -> Result<()> {
         self.sender
             .send(ShellCommand::Popup(PopupCommand::Resize {
@@ -722,11 +879,11 @@ impl EventDispatchContext<'_> {
     }
 
     /// Shows a popup from a popup request
-    pub fn show_popup(
-        &mut self,
-        req: &PopupRequest,
-        resize_control: Option<ShellControl>,
-    ) -> Result<PopupHandle> {
+    ///
+    /// Resize callbacks (if configured via `resize_on()`) will operate directly
+    /// on the popup manager for immediate updates.
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+    pub fn show_popup(&mut self, req: &PopupRequest) -> Result<PopupHandle> {
         log::info!("show_popup called for component '{}'", req.component);
 
         let compilation_result = self.compilation_result().ok_or_else(|| {
@@ -779,32 +936,67 @@ impl EventDispatchContext<'_> {
             })
         })?;
 
+        // For content-based sizing, we need to query the component's preferred size first
         let initial_dimensions = match req.size {
             PopupSize::Fixed { w, h } => {
                 log::debug!("Using fixed popup size: {}x{}", w, h);
                 (w, h)
             }
             PopupSize::Content => {
-                log::debug!("Using content-based sizing - will measure after instance creation");
+                log::debug!("Using content-based sizing - starting at 2×2");
+                // Start with minimal size. Consumer app should register a callback to
+                // call resize_popup() with the desired dimensions.
                 (2.0, 2.0)
             }
         };
+
+        let resolved_placement = match req.placement {
+            PopupPlacement::AtCursor => {
+                let cursor_pos = active_surface.current_pointer_position();
+                log::debug!(
+                    "Resolving AtCursor placement to actual cursor position: ({}, {})",
+                    cursor_pos.x,
+                    cursor_pos.y
+                );
+                PopupPlacement::AtPosition {
+                    x: cursor_pos.x,
+                    y: cursor_pos.y,
+                }
+            }
+            other => other,
+        };
+
+        let (ref_x, ref_y) = resolved_placement.position();
 
         log::debug!(
             "Creating popup for '{}' with dimensions {}x{} at position ({}, {}), mode: {:?}",
             req.component,
             initial_dimensions.0,
             initial_dimensions.1,
-            req.placement.position().0,
-            req.placement.position().1,
+            ref_x,
+            ref_y,
             req.mode
         );
 
-        let popup_handle =
-            popup_manager.request_popup(req.clone(), initial_dimensions.0, initial_dimensions.1);
+        // Create a new request with resolved placement
+        let resolved_request = PopupRequest {
+            component: req.component.clone(),
+            placement: resolved_placement,
+            size: req.size,
+            mode: req.mode,
+            grab: req.grab,
+            close_callback: req.close_callback.clone(),
+            resize_callback: req.resize_callback.clone(),
+        };
+
+        let popup_handle = popup_manager.request_popup(
+            resolved_request,
+            initial_dimensions.0,
+            initial_dimensions.1,
+        );
 
         let (instance, popup_key_cell) =
-            Self::create_popup_instance(&definition, &popup_manager, resize_control, req)?;
+            Self::create_popup_instance(&definition, &popup_manager, req)?;
 
         popup_key_cell.set(popup_handle.key());
 
@@ -894,7 +1086,6 @@ impl EventDispatchContext<'_> {
     fn create_popup_instance(
         definition: &ComponentDefinition,
         popup_manager: &Rc<PopupManager>,
-        resize_control: Option<ShellControl>,
         req: &PopupRequest,
     ) -> Result<(ComponentInstance, Rc<Cell<usize>>)> {
         let instance = definition.create().map_err(|e| {
@@ -905,13 +1096,7 @@ impl EventDispatchContext<'_> {
 
         let popup_key_cell = Rc::new(Cell::new(0));
 
-        Self::register_popup_callbacks(
-            &instance,
-            popup_manager,
-            resize_control,
-            &popup_key_cell,
-            req,
-        )?;
+        Self::register_popup_callbacks(&instance, popup_manager, &popup_key_cell, req)?;
 
         instance.show().map_err(|e| {
             Error::Domain(DomainError::Configuration {
@@ -925,7 +1110,6 @@ impl EventDispatchContext<'_> {
     fn register_popup_callbacks(
         instance: &ComponentInstance,
         popup_manager: &Rc<PopupManager>,
-        resize_control: Option<ShellControl>,
         popup_key_cell: &Rc<Cell<usize>>,
         req: &PopupRequest,
     ) -> Result<()> {
@@ -934,10 +1118,9 @@ impl EventDispatchContext<'_> {
         }
 
         if let Some(resize_callback_name) = &req.resize_callback {
-            Self::register_resize_callback(
+            Self::register_resize_direct(
                 instance,
                 popup_manager,
-                resize_control,
                 popup_key_cell,
                 resize_callback_name,
             )?;
@@ -956,59 +1139,6 @@ impl EventDispatchContext<'_> {
             .set_callback(callback_name, move |_| {
                 if let Some(popup_manager) = popup_manager_weak.upgrade() {
                     popup_manager.close_current_popup();
-                }
-                Value::Void
-            })
-            .map_err(|e| {
-                Error::Domain(DomainError::Configuration {
-                    message: format!("Failed to set '{}' callback: {}", callback_name, e),
-                })
-            })
-    }
-
-    fn register_resize_callback(
-        instance: &ComponentInstance,
-        popup_manager: &Rc<PopupManager>,
-        resize_control: Option<ShellControl>,
-        popup_key_cell: &Rc<Cell<usize>>,
-        callback_name: &str,
-    ) -> Result<()> {
-        if let Some(control) = resize_control {
-            Self::register_resize_with_control(instance, popup_key_cell, &control, callback_name)
-        } else {
-            Self::register_resize_direct(instance, popup_manager, popup_key_cell, callback_name)
-        }
-    }
-
-    fn register_resize_with_control(
-        instance: &ComponentInstance,
-        popup_key_cell: &Rc<Cell<usize>>,
-        control: &ShellControl,
-        callback_name: &str,
-    ) -> Result<()> {
-        let key_cell = Rc::clone(popup_key_cell);
-        let control = control.clone();
-        instance
-            .set_callback(callback_name, move |args| {
-                let dimensions = extract_dimensions_from_callback(args);
-                let popup_key = key_cell.get();
-
-                log::info!(
-                    "Resize callback invoked: {}x{} for key {}",
-                    dimensions.width,
-                    dimensions.height,
-                    popup_key
-                );
-
-                if control
-                    .resize_popup(
-                        PopupHandle::from_raw(popup_key),
-                        dimensions.width,
-                        dimensions.height,
-                    )
-                    .is_err()
-                {
-                    log::error!("Failed to resize popup through control");
                 }
                 Value::Void
             })

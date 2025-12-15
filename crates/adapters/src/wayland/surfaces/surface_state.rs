@@ -264,6 +264,10 @@ impl SurfaceState {
         self.event_context.borrow_mut().clear_entered_surface();
     }
 
+    pub fn is_popup_active(&self) -> bool {
+        self.event_context.borrow().is_popup_active()
+    }
+
     pub fn dispatch_to_active_window(&self, event: WindowEvent) {
         self.event_context.borrow().dispatch_to_active_window(event);
     }

@@ -109,6 +109,8 @@ struct ActivePopup {
 impl Drop for ActivePopup {
     fn drop(&mut self) {
         info!("ActivePopup being dropped - cleaning up resources");
+        self.window.cleanup_resources();
+        self.surface.destroy();
     }
 }
 
@@ -424,10 +426,9 @@ impl PopupManager {
     }
 
     fn destroy_popup(&self, id: PopupId) {
-        if let Some(popup) = self.state.borrow_mut().popups.remove(&id) {
+        if let Some(_popup) = self.state.borrow_mut().popups.remove(&id) {
             info!("Destroying popup with id {:?}", id);
-            popup.window.cleanup_resources();
-            popup.surface.destroy();
+            // cleanup happens automatically via ActivePopup::drop()
         }
     }
 

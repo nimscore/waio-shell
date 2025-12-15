@@ -1,15 +1,26 @@
-use crate::Result;
-use crate::shell::Shell;
-use layer_shika_adapters::platform::slint_interpreter::Value;
-use layer_shika_domain::prelude::AnchorStrategy;
 use layer_shika_domain::value_objects::popup_positioning_mode::PopupPositioningMode;
 use layer_shika_domain::value_objects::popup_request::{PopupPlacement, PopupRequest, PopupSize};
 
-/// Builder for configuring and displaying popup windows
+/// Builder for configuring popup windows
 ///
-/// Useful for context menus, tooltips, dropdowns, and other transient UI.
-pub struct PopupBuilder<'a> {
-    shell: &'a Shell,
+/// This is a convenience wrapper around `PopupRequest::builder()` that provides
+/// a fluent API for configuring popups. Once built, pass the resulting `PopupRequest`
+/// to `ShellControl::show_popup()` from within a callback.
+///
+/// # Example
+/// ```rust,ignore
+/// shell.on("Main", "open_menu", |control| {
+///     let request = PopupBuilder::new("MenuPopup")
+///         .relative_to_cursor()
+///         .anchor_top_left()
+///         .grab(true)
+///         .close_on("menu_closed")
+///         .build();
+///
+///     control.show_popup(&request)?;
+/// });
+/// ```
+pub struct PopupBuilder {
     component: String,
     reference: PopupPlacement,
     anchor: PopupPositioningMode,
@@ -19,11 +30,12 @@ pub struct PopupBuilder<'a> {
     resize_callback: Option<String>,
 }
 
-impl<'a> PopupBuilder<'a> {
-    pub(crate) fn new(shell: &'a Shell, component: String) -> Self {
+impl PopupBuilder {
+    /// Creates a new popup builder for the specified component
+    #[must_use]
+    pub fn new(component: impl Into<String>) -> Self {
         Self {
-            shell,
-            component,
+            component: component.into(),
             reference: PopupPlacement::AtCursor,
             anchor: PopupPositioningMode::TopLeft,
             size: PopupSize::Content,
@@ -168,181 +180,11 @@ impl<'a> PopupBuilder<'a> {
         self
     }
 
-    /// Binds the popup to show when the specified Slint callback is triggered
-    pub fn bind(self, trigger_callback: &str) -> Result<()> {
-        let request = self.build_request();
-        let control = self.shell.control();
-
-        self.shell.with_all_surfaces(|_name, instance| {
-            let request_clone = request.clone();
-            let control_clone = control.clone();
-
-            if let Err(e) = instance.set_callback(trigger_callback, move |_args| {
-                if let Err(e) = control_clone.show_popup(&request_clone) {
-                    log::error!("Failed to show popup: {}", e);
-                }
-                Value::Void
-            }) {
-                log::error!(
-                    "Failed to bind popup callback '{}': {}",
-                    trigger_callback,
-                    e
-                );
-            }
-        });
-
-        Ok(())
-    }
-
-    /// Binds the popup to toggle visibility when the specified callback is triggered
-    pub fn toggle(self, trigger_callback: &str) -> Result<()> {
-        let request = self.build_request();
-        let control = self.shell.control();
-        let component_name = request.component.clone();
-
-        self.shell.with_all_surfaces(|_name, instance| {
-            let request_clone = request.clone();
-            let control_clone = control.clone();
-            let component_clone = component_name.clone();
-
-            if let Err(e) = instance.set_callback(trigger_callback, move |_args| {
-                log::debug!("Toggle callback for component: {}", component_clone);
-                if let Err(e) = control_clone.show_popup(&request_clone) {
-                    log::error!("Failed to toggle popup: {}", e);
-                }
-                Value::Void
-            }) {
-                log::error!(
-                    "Failed to bind toggle popup callback '{}': {}",
-                    trigger_callback,
-                    e
-                );
-            }
-        });
-
-        Ok(())
-    }
-
-    #[allow(clippy::too_many_lines)]
-    pub fn bind_anchored(self, trigger_callback: &str, strategy: AnchorStrategy) -> Result<()> {
-        let component_name = self.component.clone();
-        let grab = self.grab;
-        let close_callback = self.close_callback.clone();
-        let resize_callback = self.resize_callback.clone();
-        let control = self.shell.control();
-
-        self.shell.with_all_surfaces(|_name, instance| {
-            let component_clone = component_name.clone();
-            let control_clone = control.clone();
-            let close_cb = close_callback.clone();
-            let resize_cb = resize_callback.clone();
-
-            if let Err(e) = instance.set_callback(trigger_callback, move |args| {
-                if args.len() < 4 {
-                    log::error!(
-                        "bind_anchored callback expects 4 arguments (x, y, width, height), got {}",
-                        args.len()
-                    );
-                    return Value::Void;
-                }
-
-                let anchor_x = args
-                    .first()
-                    .and_then(|v| v.clone().try_into().ok())
-                    .unwrap_or(0.0);
-                let anchor_y = args
-                    .get(1)
-                    .and_then(|v| v.clone().try_into().ok())
-                    .unwrap_or(0.0);
-                let anchor_w = args
-                    .get(2)
-                    .and_then(|v| v.clone().try_into().ok())
-                    .unwrap_or(0.0);
-                let anchor_h = args
-                    .get(3)
-                    .and_then(|v| v.clone().try_into().ok())
-                    .unwrap_or(0.0);
-
-                log::debug!(
-                    "Anchored popup triggered for '{}' at rect: ({}, {}, {}, {})",
-                    component_clone,
-                    anchor_x,
-                    anchor_y,
-                    anchor_w,
-                    anchor_h
-                );
-
-                let (reference_x, reference_y, mode) = match strategy {
-                    AnchorStrategy::CenterBottom => {
-                        let center_x = anchor_x + anchor_w / 2.0;
-                        let bottom_y = anchor_y + anchor_h;
-                        (center_x, bottom_y, PopupPositioningMode::TopCenter)
-                    }
-                    AnchorStrategy::CenterTop => {
-                        let center_x = anchor_x + anchor_w / 2.0;
-                        (center_x, anchor_y, PopupPositioningMode::BottomCenter)
-                    }
-                    AnchorStrategy::RightBottom => {
-                        let right_x = anchor_x + anchor_w;
-                        let bottom_y = anchor_y + anchor_h;
-                        (right_x, bottom_y, PopupPositioningMode::TopRight)
-                    }
-                    AnchorStrategy::LeftTop => {
-                        (anchor_x, anchor_y, PopupPositioningMode::BottomLeft)
-                    }
-                    AnchorStrategy::RightTop => {
-                        let right_x = anchor_x + anchor_w;
-                        (right_x, anchor_y, PopupPositioningMode::BottomRight)
-                    }
-                    AnchorStrategy::LeftBottom => {
-                        let bottom_y = anchor_y + anchor_h;
-                        (anchor_x, bottom_y, PopupPositioningMode::TopLeft)
-                    }
-                    AnchorStrategy::Cursor => (anchor_x, anchor_y, PopupPositioningMode::TopLeft),
-                };
-
-                log::debug!(
-                    "Resolved anchored popup reference for '{}' -> ({}, {}), mode: {:?}",
-                    component_clone,
-                    reference_x,
-                    reference_y,
-                    mode
-                );
-
-                let mut builder = PopupRequest::builder(component_clone.clone())
-                    .placement(PopupPlacement::at_position(reference_x, reference_y))
-                    .size(PopupSize::Content)
-                    .grab(grab)
-                    .mode(mode);
-
-                if let Some(ref close_cb) = close_cb {
-                    builder = builder.close_on(close_cb.clone());
-                }
-
-                if let Some(ref resize_cb) = resize_cb {
-                    builder = builder.resize_on(resize_cb.clone());
-                }
-
-                let request = builder.build();
-
-                if let Err(e) = control_clone.show_popup(&request) {
-                    log::error!("Failed to show anchored popup: {}", e);
-                }
-
-                Value::Void
-            }) {
-                log::error!(
-                    "Failed to bind anchored popup callback '{}': {}",
-                    trigger_callback,
-                    e
-                );
-            }
-        });
-
-        Ok(())
-    }
-
-    fn build_request(&self) -> PopupRequest {
+    /// Builds the popup request
+    ///
+    /// After building, pass the request to `ShellControl::show_popup()` to display the popup.
+    #[must_use]
+    pub fn build(self) -> PopupRequest {
         let mut builder = PopupRequest::builder(self.component.clone())
             .placement(self.reference)
             .size(self.size)

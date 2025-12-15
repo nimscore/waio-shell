@@ -12,6 +12,21 @@ use slint_interpreter::ComponentInstance;
 use std::cell::{Cell, OnceCell, RefCell};
 use std::rc::{Rc, Weak};
 
+/// Represents the rendering lifecycle state of a popup window
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PopupRenderState {
+    /// Awaiting Wayland configure event before rendering can begin
+    Unconfigured,
+    /// Wayland is recalculating geometry; rendering is paused
+    Repositioning,
+    /// Ready to render, no pending changes
+    ReadyClean,
+    /// Ready to render, frame is dirty and needs redraw
+    ReadyDirty,
+    /// Needs an additional layout pass after the next render
+    NeedsRelayout,
+}
+
 pub struct PopupWindow {
     window: Window,
     renderer: FemtoVGRenderer,
@@ -20,9 +35,7 @@ pub struct PopupWindow {
     scale_factor: Cell<f32>,
     popup_handle: Cell<Option<PopupHandle>>,
     on_close: OnceCell<OnCloseCallback>,
-    configured: Cell<bool>,
-    repositioning: Cell<bool>,
-    needs_relayout: Cell<bool>,
+    popup_render_state: Cell<PopupRenderState>,
     component_instance: RefCell<Option<ComponentInstance>>,
 }
 
@@ -39,9 +52,7 @@ impl PopupWindow {
                 scale_factor: Cell::new(1.),
                 popup_handle: Cell::new(None),
                 on_close: OnceCell::new(),
-                configured: Cell::new(false),
-                repositioning: Cell::new(false),
-                needs_relayout: Cell::new(false),
+                popup_render_state: Cell::new(PopupRenderState::Unconfigured),
                 component_instance: RefCell::new(None),
             }
         })
@@ -96,11 +107,26 @@ impl PopupWindow {
 
     pub fn mark_configured(&self) {
         info!("Popup window marked as configured");
-        self.configured.set(true);
+
+        if matches!(
+            self.popup_render_state.get(),
+            PopupRenderState::Unconfigured
+        ) {
+            info!("Transitioning from Unconfigured to ReadyDirty state");
+            self.popup_render_state.set(PopupRenderState::ReadyDirty);
+        } else {
+            info!(
+                "Preserving current render state to avoid overwriting: {:?}",
+                self.popup_render_state.get()
+            );
+        }
     }
 
     pub fn is_configured(&self) -> bool {
-        self.configured.get()
+        !matches!(
+            self.popup_render_state.get(),
+            PopupRenderState::Unconfigured
+        )
     }
 
     pub fn set_component_instance(&self, instance: ComponentInstance) {
@@ -110,6 +136,9 @@ impl PopupWindow {
             info!("Component instance already set for popup window - replacing");
         }
         *comp = Some(instance);
+
+        self.window()
+            .dispatch_event(WindowEvent::WindowActiveChanged(true));
     }
 
     pub fn request_resize(&self, width: f32, height: f32) {
@@ -119,25 +148,32 @@ impl PopupWindow {
     }
 
     pub fn begin_repositioning(&self) {
-        self.repositioning.set(true);
+        self.popup_render_state.set(PopupRenderState::Repositioning);
     }
 
     pub fn end_repositioning(&self) {
-        self.repositioning.set(false);
-        self.needs_relayout.set(true);
+        self.popup_render_state.set(PopupRenderState::NeedsRelayout);
     }
 }
 
 impl RenderableWindow for PopupWindow {
     fn render_frame_if_dirty(&self) -> Result<()> {
-        if !self.configured.get() {
-            info!("Popup not yet configured, skipping render");
-            return Ok(());
-        }
-
-        if self.repositioning.get() {
-            info!("Popup repositioning in progress, skipping render");
-            return Ok(());
+        match self.popup_render_state.get() {
+            PopupRenderState::Unconfigured => {
+                info!("Popup not yet configured, skipping render");
+                return Ok(());
+            }
+            PopupRenderState::Repositioning => {
+                info!("Popup repositioning in progress, skipping render");
+                return Ok(());
+            }
+            PopupRenderState::ReadyClean => {
+                // Nothing to render
+                return Ok(());
+            }
+            PopupRenderState::ReadyDirty | PopupRenderState::NeedsRelayout => {
+                // Proceed with rendering
+            }
         }
 
         if matches!(
@@ -156,10 +192,15 @@ impl RenderableWindow for PopupWindow {
                 })?;
             info!("Popup frame rendered successfully");
 
-            if self.needs_relayout.get() {
+            if matches!(
+                self.popup_render_state.get(),
+                PopupRenderState::NeedsRelayout
+            ) {
                 info!("Popup needs relayout, requesting additional render");
-                self.needs_relayout.set(false);
+                self.popup_render_state.set(PopupRenderState::ReadyDirty);
                 RenderableWindow::request_redraw(self);
+            } else {
+                self.popup_render_state.set(PopupRenderState::ReadyClean);
             }
         }
         Ok(())
@@ -203,6 +244,9 @@ impl WindowAdapter for PopupWindow {
     }
 
     fn request_redraw(&self) {
+        if matches!(self.popup_render_state.get(), PopupRenderState::ReadyClean) {
+            self.popup_render_state.set(PopupRenderState::ReadyDirty);
+        }
         RenderableWindow::request_redraw(self);
     }
 }

@@ -1,6 +1,5 @@
 use crate::event_loop::{EventLoopHandle, FromAppState};
 use crate::layer_surface::LayerSurfaceHandle;
-use crate::popup_builder::PopupBuilder;
 use crate::shell_config::{CompiledUiSource, ShellConfig};
 use crate::shell_runtime::ShellRuntime;
 use crate::surface_registry::{SurfaceDefinition, SurfaceEntry, SurfaceRegistry};
@@ -580,11 +579,11 @@ impl Shell {
     fn handle_popup_command(
         command: PopupCommand,
         ctx: &mut EventDispatchContext<'_>,
-        control: &ShellControl,
+        _control: &ShellControl,
     ) {
         match command {
             PopupCommand::Show(request) => {
-                if let Err(e) = ctx.show_popup(&request, Some(control.clone())) {
+                if let Err(e) = ctx.show_popup(&request) {
                     log::error!("Failed to show popup: {}", e);
                 }
             }
@@ -961,12 +960,6 @@ impl Shell {
     #[must_use]
     pub fn compilation_result(&self) -> &Rc<CompilationResult> {
         &self.compilation_result
-    }
-
-    /// Creates a popup builder for showing a popup window
-    #[must_use]
-    pub fn popup(&self, component_name: impl Into<String>) -> PopupBuilder<'_> {
-        PopupBuilder::new(self, component_name.into())
     }
 
     /// Returns the registry of all connected outputs

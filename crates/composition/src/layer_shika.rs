@@ -451,7 +451,7 @@ impl Runtime {
 
                     match command {
                         PopupCommand::Show(request) => {
-                            if let Err(e) = ctx.show_popup(&request, Some(control.clone())) {
+                            if let Err(e) = ctx.show_popup(&request) {
                                 log::error!("Failed to show popup: {}", e);
                             }
                         }
@@ -580,11 +580,6 @@ impl Runtime {
     #[must_use]
     pub fn compilation_result(&self) -> &Rc<CompilationResult> {
         &self.compilation_result
-    }
-
-    #[must_use]
-    pub fn popup(&self, component_name: impl Into<String>) -> PopupBuilder<'_> {
-        PopupBuilder::new(self, component_name.into())
     }
 
     pub fn on<F, R>(&self, surface_name: &str, callback_name: &str, handler: F) -> Result<()>

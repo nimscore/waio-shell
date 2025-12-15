@@ -142,15 +142,29 @@ impl EventContext {
         self.active_surface = ActiveWindow::None;
     }
 
+    pub const fn is_popup_active(&self) -> bool {
+        matches!(self.active_surface, ActiveWindow::Popup(_))
+    }
+
     pub fn dispatch_to_active_window(&self, event: WindowEvent) {
         match self.active_surface {
             ActiveWindow::Main => {
                 self.main_window.window().dispatch_event(event);
             }
             ActiveWindow::Popup(handle) => {
+                let is_pointer_event = matches!(
+                    event,
+                    WindowEvent::PointerMoved { .. }
+                        | WindowEvent::PointerPressed { .. }
+                        | WindowEvent::PointerReleased { .. }
+                );
+
                 if let Some(popup_manager) = &self.popup_manager {
                     if let Some(popup_surface) = popup_manager.get_popup_window(handle.key()) {
                         popup_surface.dispatch_event(event);
+                        if is_pointer_event {
+                            popup_surface.request_redraw();
+                        }
                     }
                 }
             }
