@@ -3317,6 +3317,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "simple-popup"
+version = "0.2.0"
+dependencies = [
+ "env_logger",
+ "layer-shika",
+ "log",
+]
+
+[[package]]
 name = "simplecss"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

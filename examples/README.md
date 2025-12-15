@@ -12,6 +12,7 @@ cargo run -p simple-bar
 cargo run -p multi-surface
 cargo run -p declarative-config
 cargo run -p runtime-surface-config
+cargo run -p simple-popup
 
 # Or from the example directory
 cd examples/simple-bar
@@ -27,6 +28,7 @@ cargo run
 3. **declarative-config** - See the alternative configuration approach
 4. **event-loop** - Explore event loop integration with timers and channels
 5. **runtime-surface-config** - Surface configuration manipulation at runtime
+6. **simple-popup** - Showing popups and content sizing
 
 ## Common Patterns
 

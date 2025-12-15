@@ -27,6 +27,7 @@ members = [
     "examples/declarative-config",
     "examples/event-loop",
     "examples/runtime-surface-config",
+    "examples/simple-popup",
 ]
 
 [workspace.package]

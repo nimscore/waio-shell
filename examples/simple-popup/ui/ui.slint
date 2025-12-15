@@ -1,0 +1,58 @@
+import { Button, HorizontalBox, VerticalBox } from "std-widgets.slint";
+
+export component MainWindow inherits Window {
+    callback open_popup();
+    callback open_two_popups();
+
+    HorizontalBox {
+        spacing: 12px;
+        alignment: center;
+
+        Button {
+            text: "Open popup";
+            clicked => {
+                root.open_popup();
+            }
+        }
+
+        Button {
+            text: "Open two popups";
+            clicked => {
+                root.open_two_popups();
+            }
+        }
+    }
+}
+
+export component ExamplePopup inherits Window {
+    callback close_popup();
+    callback resize_popup(length, length);
+
+    VerticalBox {
+        padding: 12px;
+        spacing: 8px;
+
+        Text {
+            text: "Hello from a layer-shika popup!";
+        }
+
+        Text {
+            text: "This popup uses content sizing via an one-shot 1ms Timer.";
+        }
+
+        Button {
+            text: "Close";
+            clicked => {
+                root.close_popup();
+            }
+        }
+    }
+
+    resize_timer := Timer {
+        interval: 1ms;
+        running: true;
+        triggered => {
+            root.resize_popup(root.preferred-width, root.preferred-height);
+        }
+    }
+}
