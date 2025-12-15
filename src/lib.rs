@@ -143,8 +143,8 @@ pub use shell::{
 };
 
 pub use window::{
-    AnchorEdges, AnchorStrategy, KeyboardInteractivity, Layer, PopupBuilder, PopupHandle, PopupPlacement,
-    PopupPositioningMode, PopupRequest, PopupSize,
+    AnchorEdges, AnchorStrategy, KeyboardInteractivity, Layer, PopupBuilder, PopupHandle,
+    PopupPlacement, PopupPositioningMode, PopupRequest, PopupSize,
 };
 
 pub use output::{OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry};
