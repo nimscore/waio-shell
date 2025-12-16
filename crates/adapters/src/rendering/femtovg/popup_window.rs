@@ -180,17 +180,11 @@ impl RenderableWindow for PopupWindow {
             self.render_state.replace(RenderState::Clean),
             RenderState::Dirty
         ) {
-            info!(
-                "Rendering popup frame (size: {:?}, scale: {})",
-                self.size.get(),
-                self.scale_factor.get()
-            );
             self.renderer
                 .render()
                 .map_err(|e| RenderingError::Operation {
                     message: format!("Error rendering popup frame: {e}"),
                 })?;
-            info!("Popup frame rendered successfully");
 
             if matches!(
                 self.popup_render_state.get(),
