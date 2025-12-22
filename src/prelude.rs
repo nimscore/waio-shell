@@ -32,8 +32,8 @@ pub use crate::{
 };
 
 pub use layer_shika_composition::prelude::{
-    Anchor, LogicalSize, Margins, PhysicalSize, ScaleFactor, SurfaceConfig, SurfaceDimension,
-    UiSource,
+    Anchor, LogicalPosition, LogicalRect, LogicalSize, Margins, PhysicalSize, ScaleFactor,
+    SurfaceConfig, SurfaceDimension, UiSource,
 };
 
 pub use crate::calloop;

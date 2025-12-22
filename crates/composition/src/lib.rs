@@ -95,7 +95,8 @@ pub mod prelude {
     pub use crate::{slint, slint_interpreter};
 
     pub use layer_shika_domain::prelude::{
-        LogicalSize, Margins, PhysicalSize, ScaleFactor, SurfaceConfig, SurfaceDimension, UiSource,
+        LogicalPosition, LogicalRect, LogicalSize, Margins, PhysicalSize, ScaleFactor,
+        SurfaceConfig, SurfaceDimension, UiSource,
     };
 
     pub use layer_shika_adapters::platform::wayland::Anchor;
