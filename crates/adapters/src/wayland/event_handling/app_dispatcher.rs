@@ -238,11 +238,12 @@ impl Dispatch<WlPointer, ()> for AppState {
 
             wl_pointer::Event::Button {
                 serial,
+                button,
                 state: button_state,
                 ..
             } => {
                 if let Some(surface) = state.active_surface_mut() {
-                    surface.handle_pointer_button(serial, button_state);
+                    surface.handle_pointer_button(serial, button, button_state);
                 }
             }
             wl_pointer::Event::AxisSource { axis_source } => {

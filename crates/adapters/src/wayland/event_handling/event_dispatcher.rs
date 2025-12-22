@@ -125,19 +125,29 @@ impl SurfaceState {
     pub(crate) fn handle_pointer_button(
         &mut self,
         serial: u32,
+        button: u32,
         button_state: WEnum<wl_pointer::ButtonState>,
     ) {
         self.set_last_pointer_serial(serial);
         let position = self.current_pointer_position();
+        let slint_button = match button {
+            0x110 => PointerEventButton::Left,
+            0x111 => PointerEventButton::Right,
+            0x112 => PointerEventButton::Middle,
+            0x115 => PointerEventButton::Forward,
+            0x116 => PointerEventButton::Back,
+            _ => PointerEventButton::Other,
+        };
         let event = match button_state {
             WEnum::Value(wl_pointer::ButtonState::Pressed) => WindowEvent::PointerPressed {
-                button: PointerEventButton::Left,
+                button: slint_button,
                 position,
             },
-            _ => WindowEvent::PointerReleased {
-                button: PointerEventButton::Left,
+            WEnum::Value(wl_pointer::ButtonState::Released) => WindowEvent::PointerReleased {
+                button: slint_button,
                 position,
             },
+            _ => return,
         };
 
         self.dispatch_to_active_window(event);
