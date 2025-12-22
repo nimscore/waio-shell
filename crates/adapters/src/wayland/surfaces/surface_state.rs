@@ -20,7 +20,10 @@ use slint::{LogicalPosition, PhysicalSize};
 use slint::platform::WindowEvent;
 use slint_interpreter::{ComponentInstance, CompilationResult};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
-use wayland_client::{protocol::wl_surface::WlSurface, Proxy};
+use wayland_client::{
+    Proxy,
+    protocol::{wl_pointer, wl_surface::WlSurface},
+};
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 
 pub struct SurfaceState {
@@ -270,6 +273,24 @@ impl SurfaceState {
 
     pub fn dispatch_to_active_window(&self, event: WindowEvent) {
         self.event_context.borrow().dispatch_to_active_window(event);
+    }
+
+    pub fn set_axis_source(&self, axis_source: wl_pointer::AxisSource) {
+        self.event_context.borrow_mut().set_axis_source(axis_source);
+    }
+
+    pub fn accumulate_axis(&self, axis: wl_pointer::Axis, value: f64) {
+        self.event_context.borrow_mut().accumulate_axis(axis, value);
+    }
+
+    pub fn accumulate_axis_discrete(&self, axis: wl_pointer::Axis, discrete: i32) {
+        self.event_context
+            .borrow_mut()
+            .accumulate_axis_discrete(axis, discrete);
+    }
+
+    pub fn take_accumulated_axis(&self) -> (f32, f32) {
+        self.event_context.borrow_mut().take_accumulated_axis()
     }
 
     #[allow(clippy::cast_precision_loss)]

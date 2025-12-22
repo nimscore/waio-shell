@@ -243,6 +243,33 @@ impl Dispatch<WlPointer, ()> for AppState {
                     surface.handle_pointer_button(serial, button_state);
                 }
             }
+            wl_pointer::Event::AxisSource { axis_source } => {
+                if let (Some(surface), WEnum::Value(axis_source)) =
+                    (state.active_surface_mut(), axis_source)
+                {
+                    surface.handle_axis_source(axis_source);
+                }
+            }
+            wl_pointer::Event::Axis { time, axis, value } => {
+                if let (Some(surface), WEnum::Value(axis)) = (state.active_surface_mut(), axis) {
+                    surface.handle_axis(time, axis, value);
+                }
+            }
+            wl_pointer::Event::AxisDiscrete { axis, discrete } => {
+                if let (Some(surface), WEnum::Value(axis)) = (state.active_surface_mut(), axis) {
+                    surface.handle_axis_discrete(axis, discrete);
+                }
+            }
+            wl_pointer::Event::AxisStop { time, axis } => {
+                if let (Some(surface), WEnum::Value(axis)) = (state.active_surface_mut(), axis) {
+                    surface.handle_axis_stop(time, axis);
+                }
+            }
+            wl_pointer::Event::Frame => {
+                if let Some(surface) = state.active_surface_mut() {
+                    surface.handle_pointer_frame();
+                }
+            }
             _ => {}
         }
     }

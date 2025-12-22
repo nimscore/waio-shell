@@ -5,7 +5,11 @@ use slint::platform::{WindowAdapter, WindowEvent};
 use slint::{LogicalPosition, PhysicalSize};
 use std::cell::Cell;
 use std::rc::Rc;
-use wayland_client::{Proxy, backend::ObjectId, protocol::wl_surface::WlSurface};
+use wayland_client::{
+    Proxy,
+    backend::ObjectId,
+    protocol::{wl_pointer, wl_surface::WlSurface},
+};
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 
 pub struct SharedPointerSerial {
@@ -43,6 +47,9 @@ pub struct EventContext {
     last_pointer_serial: u32,
     shared_pointer_serial: Option<Rc<SharedPointerSerial>>,
     active_surface: ActiveWindow,
+    accumulated_axis_x: f32,
+    accumulated_axis_y: f32,
+    axis_source: Option<wl_pointer::AxisSource>,
 }
 
 impl EventContext {
@@ -61,6 +68,9 @@ impl EventContext {
             last_pointer_serial: 0,
             shared_pointer_serial: None,
             active_surface: ActiveWindow::None,
+            accumulated_axis_x: 0.0,
+            accumulated_axis_y: 0.0,
+            axis_source: None,
         }
     }
 
@@ -157,6 +167,7 @@ impl EventContext {
                     WindowEvent::PointerMoved { .. }
                         | WindowEvent::PointerPressed { .. }
                         | WindowEvent::PointerReleased { .. }
+                        | WindowEvent::PointerScrolled { .. }
                 );
 
                 if let Some(popup_manager) = &self.popup_manager {
@@ -187,5 +198,48 @@ impl EventContext {
             popup_manager
                 .update_scale_for_fractional_scale_object(fractional_scale_proxy, scale_120ths);
         }
+    }
+
+    pub fn set_axis_source(&mut self, axis_source: wl_pointer::AxisSource) {
+        self.axis_source = Some(axis_source);
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn accumulate_axis(&mut self, axis: wl_pointer::Axis, value: f64) {
+        match axis {
+            wl_pointer::Axis::HorizontalScroll => {
+                self.accumulated_axis_x += value as f32;
+            }
+            wl_pointer::Axis::VerticalScroll => {
+                self.accumulated_axis_y += value as f32;
+            }
+            _ => {}
+        }
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    pub fn accumulate_axis_discrete(&mut self, axis: wl_pointer::Axis, discrete: i32) {
+        let delta = discrete as f32 * 60.0;
+
+        match axis {
+            wl_pointer::Axis::HorizontalScroll => {
+                self.accumulated_axis_x += delta;
+            }
+            wl_pointer::Axis::VerticalScroll => {
+                self.accumulated_axis_y += delta;
+            }
+            _ => {}
+        }
+    }
+
+    pub fn take_accumulated_axis(&mut self) -> (f32, f32) {
+        let delta_x = self.accumulated_axis_x;
+        let delta_y = self.accumulated_axis_y;
+
+        self.accumulated_axis_x = 0.0;
+        self.accumulated_axis_y = 0.0;
+        self.axis_source = None;
+
+        (delta_x, delta_y)
     }
 }

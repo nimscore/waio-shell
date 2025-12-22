@@ -138,6 +138,34 @@ impl SurfaceState {
         self.dispatch_to_active_window(event);
     }
 
+    pub(crate) fn handle_axis_source(&mut self, axis_source: wl_pointer::AxisSource) {
+        self.set_axis_source(axis_source);
+    }
+
+    pub(crate) fn handle_axis(&mut self, _time: u32, axis: wl_pointer::Axis, value: f64) {
+        self.accumulate_axis(axis, value);
+    }
+
+    pub(crate) fn handle_axis_discrete(&mut self, axis: wl_pointer::Axis, discrete: i32) {
+        self.accumulate_axis_discrete(axis, discrete);
+    }
+
+    #[allow(clippy::unused_self)]
+    pub(crate) fn handle_axis_stop(&mut self, _time: u32, _axis: wl_pointer::Axis) {}
+
+    pub(crate) fn handle_pointer_frame(&mut self) {
+        let (delta_x, delta_y) = self.take_accumulated_axis();
+
+        if delta_x.abs() > f32::EPSILON || delta_y.abs() > f32::EPSILON {
+            let position = self.current_pointer_position();
+            self.dispatch_to_active_window(WindowEvent::PointerScrolled {
+                position,
+                delta_x,
+                delta_y,
+            });
+        }
+    }
+
     pub(crate) fn handle_fractional_scale(&mut self, proxy: &WpFractionalScaleV1, scale: u32) {
         use crate::wayland::surfaces::display_metrics::DisplayMetrics;
         let scale_float = DisplayMetrics::scale_factor_from_120ths(scale);
