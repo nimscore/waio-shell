@@ -24,3 +24,4 @@ smithay-client-toolkit.workspace = true
 thiserror.workspace = true
 wayland-client.workspace = true
 wayland-protocols.workspace = true
+xkbcommon.workspace = true

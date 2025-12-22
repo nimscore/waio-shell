@@ -22,6 +22,7 @@ use slint_interpreter::{ComponentInstance, CompilationResult};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use wayland_client::{
     Proxy,
+    backend::ObjectId,
     protocol::{wl_pointer, wl_surface::WlSurface},
 };
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
@@ -273,6 +274,12 @@ impl SurfaceState {
 
     pub fn dispatch_to_active_window(&self, event: WindowEvent) {
         self.event_context.borrow().dispatch_to_active_window(event);
+    }
+
+    pub fn dispatch_to_surface(&self, surface_id: &ObjectId, event: WindowEvent) {
+        self.event_context
+            .borrow()
+            .dispatch_to_surface(surface_id, event);
     }
 
     pub fn set_axis_source(&self, axis_source: wl_pointer::AxisSource) {

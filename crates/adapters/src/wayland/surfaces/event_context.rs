@@ -183,6 +183,22 @@ impl EventContext {
         }
     }
 
+    pub fn dispatch_to_surface(&self, surface_id: &ObjectId, event: WindowEvent) {
+        if self.main_surface_id == *surface_id {
+            self.main_window.window().dispatch_event(event);
+            return;
+        }
+
+        if let Some(popup_manager) = &self.popup_manager {
+            if let Some(handle) = popup_manager.find_by_surface(surface_id) {
+                if let Some(popup_surface) = popup_manager.get_popup_window(handle.key()) {
+                    popup_surface.dispatch_event(event);
+                    popup_surface.request_redraw();
+                }
+            }
+        }
+    }
+
     pub fn update_output_size(&self, output_size: PhysicalSize) {
         if let Some(popup_manager) = &self.popup_manager {
             popup_manager.update_output_size(output_size);

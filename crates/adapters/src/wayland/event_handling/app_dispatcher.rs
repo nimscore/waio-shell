@@ -7,11 +7,13 @@ use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::ZwlrLayerShellV1,
     zwlr_layer_surface_v1::{self, ZwlrLayerSurfaceV1},
 };
+use std::os::fd::AsFd;
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, WEnum,
     globals::GlobalListContents,
     protocol::{
         wl_compositor::WlCompositor,
+        wl_keyboard::{self, WlKeyboard},
         wl_output::{self, WlOutput},
         wl_pointer::{self, WlPointer},
         wl_registry::Event,
@@ -269,6 +271,58 @@ impl Dispatch<WlPointer, ()> for AppState {
                 if let Some(surface) = state.active_surface_mut() {
                     surface.handle_pointer_frame();
                 }
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Dispatch<WlKeyboard, ()> for AppState {
+    fn event(
+        state: &mut Self,
+        _proxy: &WlKeyboard,
+        event: <WlKeyboard as Proxy>::Event,
+        _data: &(),
+        _conn: &Connection,
+        _qhandle: &QueueHandle<Self>,
+    ) {
+        match event {
+            wl_keyboard::Event::Keymap {
+                format: WEnum::Value(wl_keyboard::KeymapFormat::XkbV1),
+                fd,
+                size,
+            } => {
+                state.handle_keymap(fd.as_fd(), size);
+            }
+            wl_keyboard::Event::Enter {
+                serial,
+                surface,
+                keys,
+            } => {
+                state.handle_keyboard_enter(serial, &surface, &keys);
+            }
+            wl_keyboard::Event::Leave { serial, surface } => {
+                state.handle_keyboard_leave(serial, &surface);
+            }
+            wl_keyboard::Event::Key {
+                serial,
+                time,
+                key,
+                state: WEnum::Value(key_state),
+            } => {
+                state.handle_key(serial, time, key, key_state);
+            }
+            wl_keyboard::Event::Modifiers {
+                serial,
+                mods_depressed,
+                mods_latched,
+                mods_locked,
+                group,
+            } => {
+                state.handle_modifiers(serial, mods_depressed, mods_latched, mods_locked, group);
+            }
+            wl_keyboard::Event::RepeatInfo { rate, delay } => {
+                state.handle_repeat_info(rate, delay);
             }
             _ => {}
         }

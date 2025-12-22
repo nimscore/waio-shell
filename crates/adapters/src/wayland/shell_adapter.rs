@@ -1,7 +1,7 @@
 use crate::wayland::{
     config::{LayerSurfaceConfig, ShellSurfaceConfig, WaylandSurfaceConfig},
     globals::context::GlobalContext,
-    managed_proxies::ManagedWlPointer,
+    managed_proxies::{ManagedWlKeyboard, ManagedWlPointer},
     ops::WaylandSystemOps,
     outputs::{OutputManager, OutputManagerContext},
     surfaces::layer_surface::{SurfaceCtx, SurfaceSetupParams},
@@ -276,10 +276,12 @@ impl WaylandShellSystem {
         let layer_surface_config = Self::create_layer_surface_config(config);
 
         let pointer = Rc::new(global_ctx.seat.get_pointer(&event_queue.handle(), ()));
+        let keyboard = Rc::new(global_ctx.seat.get_keyboard(&event_queue.handle(), ()));
         let shared_serial = Rc::new(SharedPointerSerial::new());
 
         let mut app_state = AppState::new(
             ManagedWlPointer::new(Rc::clone(&pointer), Rc::new(connection.clone())),
+            ManagedWlKeyboard::new(Rc::clone(&keyboard), Rc::new(connection.clone())),
             Rc::clone(&shared_serial),
         );
 
@@ -342,10 +344,12 @@ impl WaylandShellSystem {
         let global_ctx = GlobalContext::initialize(connection, &event_queue.handle())?;
 
         let pointer = Rc::new(global_ctx.seat.get_pointer(&event_queue.handle(), ()));
+        let keyboard = Rc::new(global_ctx.seat.get_keyboard(&event_queue.handle(), ()));
         let shared_serial = Rc::new(SharedPointerSerial::new());
 
         let mut app_state = AppState::new(
             ManagedWlPointer::new(Rc::clone(&pointer), Rc::new(connection.clone())),
+            ManagedWlKeyboard::new(Rc::clone(&keyboard), Rc::new(connection.clone())),
             Rc::clone(&shared_serial),
         );
 

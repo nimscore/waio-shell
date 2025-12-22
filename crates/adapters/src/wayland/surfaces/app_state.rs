@@ -1,6 +1,7 @@
 use super::event_context::SharedPointerSerial;
+use super::keyboard_state::KeyboardState;
 use super::surface_state::SurfaceState;
-use crate::wayland::managed_proxies::ManagedWlPointer;
+use crate::wayland::managed_proxies::{ManagedWlKeyboard, ManagedWlPointer};
 use crate::wayland::outputs::{OutputManager, OutputMapping};
 use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::value_objects::handle::SurfaceHandle;
@@ -8,9 +9,13 @@ use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::os::fd::BorrowedFd;
 use std::rc::Rc;
 use wayland_client::Proxy;
 use wayland_client::backend::ObjectId;
+use wayland_client::protocol::wl_keyboard;
+use wayland_client::protocol::wl_surface::WlSurface;
+use xkbcommon::xkb;
 
 pub type PerOutputSurface = SurfaceState;
 
@@ -36,14 +41,22 @@ pub struct AppState {
     surface_to_key: HashMap<ObjectId, ShellSurfaceKey>,
     surface_handle_to_name: HashMap<SurfaceHandle, String>,
     _pointer: ManagedWlPointer,
+    _keyboard: ManagedWlKeyboard,
     shared_pointer_serial: Rc<SharedPointerSerial>,
     output_manager: Option<Rc<RefCell<OutputManager>>>,
     registry_name_to_output_id: HashMap<u32, ObjectId>,
     active_surface_key: Option<ShellSurfaceKey>,
+    keyboard_focus_key: Option<ShellSurfaceKey>,
+    keyboard_focus_surface_id: Option<ObjectId>,
+    keyboard_state: KeyboardState,
 }
 
 impl AppState {
-    pub fn new(pointer: ManagedWlPointer, shared_serial: Rc<SharedPointerSerial>) -> Self {
+    pub fn new(
+        pointer: ManagedWlPointer,
+        keyboard: ManagedWlKeyboard,
+        shared_serial: Rc<SharedPointerSerial>,
+    ) -> Self {
         Self {
             output_registry: OutputRegistry::new(),
             output_mapping: OutputMapping::new(),
@@ -51,10 +64,14 @@ impl AppState {
             surface_to_key: HashMap::new(),
             surface_handle_to_name: HashMap::new(),
             _pointer: pointer,
+            _keyboard: keyboard,
             shared_pointer_serial: shared_serial,
             output_manager: None,
             registry_name_to_output_id: HashMap::new(),
             active_surface_key: None,
+            keyboard_focus_key: None,
+            keyboard_focus_surface_id: None,
+            keyboard_state: KeyboardState::new(),
         }
     }
 
@@ -320,6 +337,84 @@ impl AppState {
 
     pub const fn shared_pointer_serial(&self) -> &Rc<SharedPointerSerial> {
         &self.shared_pointer_serial
+    }
+
+    pub fn handle_keymap(&mut self, fd: BorrowedFd<'_>, size: u32) {
+        let Ok(fd) = fd.try_clone_to_owned() else {
+            return;
+        };
+
+        let keymap = unsafe {
+            xkb::Keymap::new_from_fd(
+                &self.keyboard_state.xkb_context,
+                fd,
+                size as usize,
+                xkb::KEYMAP_FORMAT_TEXT_V1,
+                xkb::KEYMAP_COMPILE_NO_FLAGS,
+            )
+        };
+
+        if let Ok(Some(keymap)) = keymap {
+            self.keyboard_state.set_keymap(keymap);
+        }
+    }
+
+    pub fn handle_keyboard_enter(&mut self, _serial: u32, surface: &WlSurface, _keys: &[u8]) {
+        let surface_id = surface.id();
+        if let Some(key) = self.get_key_by_surface(&surface_id).cloned() {
+            self.set_keyboard_focus(Some(key), Some(surface_id));
+            return;
+        }
+
+        if let Some(key) = self.get_key_by_popup(&surface_id).cloned() {
+            self.set_keyboard_focus(Some(key), Some(surface_id));
+        }
+    }
+
+    pub fn handle_keyboard_leave(&mut self, _serial: u32, surface: &WlSurface) {
+        if self.keyboard_focus_surface_id == Some(surface.id()) {
+            self.set_keyboard_focus(None, None);
+        }
+    }
+
+    pub fn handle_key(&mut self, _serial: u32, _time: u32, key: u32, state: wl_keyboard::KeyState) {
+        let Some(focus_key) = self.keyboard_focus_key.clone() else {
+            return;
+        };
+        let Some(surface_id) = self.keyboard_focus_surface_id.clone() else {
+            return;
+        };
+
+        let keyboard_state = &mut self.keyboard_state;
+        if let Some(surface) = self.surfaces.get_mut(&focus_key) {
+            surface.handle_keyboard_key(&surface_id, key, state, keyboard_state);
+        }
+    }
+
+    pub fn handle_modifiers(
+        &mut self,
+        _serial: u32,
+        mods_depressed: u32,
+        mods_latched: u32,
+        mods_locked: u32,
+        group: u32,
+    ) {
+        if let Some(state) = self.keyboard_state.xkb_state.as_mut() {
+            state.update_mask(mods_depressed, mods_latched, mods_locked, 0, 0, group);
+        }
+    }
+
+    pub fn handle_repeat_info(&mut self, rate: i32, delay: i32) {
+        self.keyboard_state.repeat_rate = rate;
+        self.keyboard_state.repeat_delay = delay;
+    }
+
+    fn set_keyboard_focus(&mut self, key: Option<ShellSurfaceKey>, surface_id: Option<ObjectId>) {
+        if let Some(ref k) = key {
+            self.output_registry.set_active(Some(k.output_handle));
+        }
+        self.keyboard_focus_key = key;
+        self.keyboard_focus_surface_id = surface_id;
     }
 
     pub fn find_output_by_popup(&self, popup_surface_id: &ObjectId) -> Option<&PerOutputSurface> {

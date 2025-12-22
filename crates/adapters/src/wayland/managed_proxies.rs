@@ -1,5 +1,8 @@
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
-use wayland_client::{protocol::{wl_pointer::WlPointer, wl_surface::WlSurface}, Connection};
+use wayland_client::{
+    protocol::{wl_keyboard::WlKeyboard, wl_pointer::WlPointer, wl_surface::WlSurface},
+    Connection,
+};
 use wayland_protocols::wp::{
     fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1,
     viewporter::client::wp_viewport::WpViewport,
@@ -36,6 +39,39 @@ impl Drop for ManagedWlPointer {
         self.pointer.release();
         if let Err(e) = self.connection.flush() {
             error!("Failed to flush after releasing WlPointer: {e}");
+        }
+    }
+}
+
+pub struct ManagedWlKeyboard {
+    keyboard: Rc<WlKeyboard>,
+    connection: Rc<Connection>,
+}
+
+impl ManagedWlKeyboard {
+    #[must_use]
+    pub const fn new(keyboard: Rc<WlKeyboard>, connection: Rc<Connection>) -> Self {
+        Self {
+            keyboard,
+            connection,
+        }
+    }
+}
+
+impl Deref for ManagedWlKeyboard {
+    type Target = WlKeyboard;
+
+    fn deref(&self) -> &Self::Target {
+        &self.keyboard
+    }
+}
+
+impl Drop for ManagedWlKeyboard {
+    fn drop(&mut self) {
+        debug!("Releasing WlKeyboard");
+        self.keyboard.release();
+        if let Err(e) = self.connection.flush() {
+            error!("Failed to flush after releasing WlKeyboard: {e}");
         }
     }
 }
