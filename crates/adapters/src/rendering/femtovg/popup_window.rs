@@ -2,6 +2,7 @@ use super::renderable_window::{RenderState, RenderableWindow};
 use crate::errors::{RenderingError, Result};
 use crate::wayland::surfaces::popup_manager::OnCloseCallback;
 use core::ops::Deref;
+use layer_shika_domain::dimensions::LogicalSize;
 use layer_shika_domain::value_objects::handle::PopupHandle;
 use log::info;
 use slint::{
@@ -37,6 +38,7 @@ pub struct PopupWindow {
     on_close: OnceCell<OnCloseCallback>,
     popup_render_state: Cell<PopupRenderState>,
     component_instance: RefCell<Option<ComponentInstance>>,
+    logical_size: Cell<LogicalSize>,
 }
 
 impl PopupWindow {
@@ -54,6 +56,7 @@ impl PopupWindow {
                 on_close: OnceCell::new(),
                 popup_render_state: Cell::new(PopupRenderState::Unconfigured),
                 component_instance: RefCell::new(None),
+                logical_size: Cell::new(LogicalSize::default()),
             }
         })
     }
@@ -141,10 +144,21 @@ impl PopupWindow {
             .dispatch_event(WindowEvent::WindowActiveChanged(true));
     }
 
-    pub fn request_resize(&self, width: f32, height: f32) {
-        info!("Requesting popup resize to {}x{}", width, height);
+    pub fn request_resize(&self, width: f32, height: f32) -> bool {
+        let new_size = LogicalSize::from_raw(width, height);
+        let current_size = self.logical_size.get();
+
+        if current_size == new_size {
+            info!("Popup resize skipped - size unchanged: {}x{}", width, height);
+            return false;
+        }
+
+        info!("Requesting popup resize from {}x{} to {}x{}",
+              current_size.width(), current_size.height(), width, height);
+        self.logical_size.set(new_size);
         self.set_size(WindowSize::Logical(slint::LogicalSize::new(width, height)));
         RenderableWindow::request_redraw(self);
+        true
     }
 
     pub fn begin_repositioning(&self) {

@@ -903,24 +903,26 @@ impl EventDispatchContext<'_> {
         })?;
 
         if let Some(popup_surface) = popup_manager.get_popup_window(handle.key()) {
-            popup_surface.request_resize(width, height);
+            let size_changed = popup_surface.request_resize(width, height);
 
-            #[allow(clippy::cast_possible_truncation)]
-            #[allow(clippy::cast_possible_wrap)]
-            let logical_width = width as i32;
-            #[allow(clippy::cast_possible_truncation)]
-            #[allow(clippy::cast_possible_wrap)]
-            let logical_height = height as i32;
+            if size_changed {
+                #[allow(clippy::cast_possible_truncation)]
+                #[allow(clippy::cast_possible_wrap)]
+                let logical_width = width as i32;
+                #[allow(clippy::cast_possible_truncation)]
+                #[allow(clippy::cast_possible_wrap)]
+                let logical_height = height as i32;
 
-            popup_manager.update_popup_viewport(handle.key(), logical_width, logical_height);
-            popup_manager.commit_popup_surface(handle.key());
-            log::debug!(
-                "Updated popup viewport to logical size: {}x{} (from resize to {}x{})",
-                logical_width,
-                logical_height,
-                width,
-                height
-            );
+                popup_manager.update_popup_viewport(handle.key(), logical_width, logical_height);
+                popup_manager.commit_popup_surface(handle.key());
+                log::debug!(
+                    "Updated popup viewport to logical size: {}x{} (from resize to {}x{})",
+                    logical_width,
+                    logical_height,
+                    width,
+                    height
+                );
+            }
         }
 
         Ok(())
@@ -1022,27 +1024,29 @@ impl EventDispatchContext<'_> {
 
                 if let Some(popup_manager) = popup_manager_weak.upgrade() {
                     if let Some(popup_surface) = popup_manager.get_popup_window(popup_key) {
-                        popup_surface.request_resize(dimensions.width, dimensions.height);
+                        let size_changed = popup_surface.request_resize(dimensions.width, dimensions.height);
 
-                        #[allow(clippy::cast_possible_truncation)]
-                        #[allow(clippy::cast_possible_wrap)]
-                        let logical_width = dimensions.width as i32;
-                        #[allow(clippy::cast_possible_truncation)]
-                        #[allow(clippy::cast_possible_wrap)]
-                        let logical_height = dimensions.height as i32;
+                        if size_changed {
+                            #[allow(clippy::cast_possible_truncation)]
+                            #[allow(clippy::cast_possible_wrap)]
+                            let logical_width = dimensions.width as i32;
+                            #[allow(clippy::cast_possible_truncation)]
+                            #[allow(clippy::cast_possible_wrap)]
+                            let logical_height = dimensions.height as i32;
 
-                        popup_manager.update_popup_viewport(
-                            popup_key,
-                            logical_width,
-                            logical_height,
-                        );
-                        log::debug!(
-                            "Updated popup viewport to logical size: {}x{} (from direct resize to {}x{})",
-                            logical_width,
-                            logical_height,
-                            dimensions.width,
-                            dimensions.height
-                        );
+                            popup_manager.update_popup_viewport(
+                                popup_key,
+                                logical_width,
+                                logical_height,
+                            );
+                            log::debug!(
+                                "Updated popup viewport to logical size: {}x{} (from direct resize to {}x{})",
+                                logical_width,
+                                logical_height,
+                                dimensions.width,
+                                dimensions.height
+                            );
+                        }
                     }
                 }
                 Value::Void

@@ -52,6 +52,7 @@ export component ExamplePopup inherits Window {
         interval: 1ms;
         running: true;
         triggered => {
+            resize_timer.running = false;
             root.resize_popup(root.preferred-width, root.preferred-height);
         }
     }
