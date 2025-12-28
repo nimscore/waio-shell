@@ -610,7 +610,12 @@ impl WaylandShellSystem {
         info!("Starting WindowingSystem main loop");
 
         info!("Processing initial Wayland configuration events");
-        while self.event_queue.blocking_dispatch(&mut self.state)? > 0 {
+        // first roundtrip to receive initial output, globals, and surface configure events
+        // second roundtrip handles any cascading configure events like fractional scaling and layer surface configures
+        for i in 0..2 {
+            let dispatched = self.event_queue.roundtrip(&mut self.state)?;
+            info!("Roundtrip {} dispatched {} events", i + 1, dispatched);
+
             self.connection
                 .flush()
                 .map_err(|e| LayerShikaError::WaylandProtocol { source: e })?;
