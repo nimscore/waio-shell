@@ -405,6 +405,10 @@ impl Shell {
             }));
         }
 
+        for def in &definitions {
+            def.config.validate().map_err(Error::Domain)?;
+        }
+
         let is_single_window = definitions.len() == 1;
 
         if is_single_window {
@@ -693,6 +697,12 @@ impl Shell {
         config: &SurfaceConfig,
     ) {
         log::debug!("Surface command: ApplyConfig {:?}", target);
+
+        if let Err(e) = config.validate() {
+            log::error!("Invalid surface configuration: {}", e);
+            return;
+        }
+
         for surface in Self::resolve_surface_target(ctx, target) {
             let handle = LayerSurfaceHandle::from_window_state(surface);
 
