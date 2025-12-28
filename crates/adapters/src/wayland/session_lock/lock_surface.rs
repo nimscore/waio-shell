@@ -3,9 +3,7 @@ use log::info;
 use std::rc::Rc;
 use wayland_client::{Proxy, backend::ObjectId, protocol::wl_surface::WlSurface};
 use wayland_protocols::ext::session_lock::v1::client::ext_session_lock_surface_v1::ExtSessionLockSurfaceV1;
-use wayland_protocols::wp::fractional_scale::v1::client::{
-    wp_fractional_scale_v1::WpFractionalScaleV1,
-};
+use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
 
 pub struct LockSurface {

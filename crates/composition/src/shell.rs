@@ -803,10 +803,7 @@ impl Shell {
         let component = builder.component_name().to_string();
         if self.compilation_result.component(&component).is_none() {
             return Err(Error::Domain(DomainError::Configuration {
-                message: format!(
-                    "Component '{}' not found in compilation result",
-                    component
-                ),
+                message: format!("Component '{}' not found in compilation result", component),
             }));
         }
 

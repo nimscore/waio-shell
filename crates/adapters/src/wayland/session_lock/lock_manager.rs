@@ -15,9 +15,7 @@ use layer_shika_domain::value_objects::lock_state::LockState;
 use log::info;
 use slint::{
     LogicalPosition, LogicalSize, SharedString, WindowPosition, WindowSize,
-    platform::{
-        WindowAdapter, WindowEvent, femtovg_renderer::FemtoVGRenderer,
-    },
+    platform::{WindowAdapter, WindowEvent, femtovg_renderer::FemtoVGRenderer},
 };
 use slint_interpreter::{CompilationResult, ComponentDefinition, ComponentInstance, Value};
 use std::collections::HashMap;

@@ -1,7 +1,8 @@
-use crate::{Error, Result};
 use crate::IntoValue;
 use crate::calloop::channel;
+use crate::slint_interpreter::Value;
 use crate::system::{SessionLockCommand, ShellCommand};
+use crate::{Error, Result};
 use layer_shika_adapters::WaylandSystemOps;
 use layer_shika_domain::dimensions::ScaleFactor;
 use layer_shika_domain::errors::DomainError;
@@ -10,9 +11,8 @@ use layer_shika_domain::value_objects::lock_state::LockState;
 use layer_shika_domain::value_objects::margins::Margins;
 use layer_shika_domain::value_objects::output_policy::OutputPolicy;
 use std::cell::{Cell, RefCell};
-use std::rc::Weak;
 use std::rc::Rc;
-use crate::slint_interpreter::Value;
+use std::rc::Weak;
 
 pub struct SessionLock {
     system: Weak<RefCell<dyn WaylandSystemOps>>,
@@ -81,9 +81,11 @@ impl SessionLock {
         // Send deactivate command via channel to be processed outside borrow context
         self.command_sender
             .send(ShellCommand::SessionLock(SessionLockCommand::Deactivate))
-            .map_err(|e| Error::Domain(DomainError::InvalidInput {
-                message: format!("Failed to send session lock command: {e:?}"),
-            }))?;
+            .map_err(|e| {
+                Error::Domain(DomainError::InvalidInput {
+                    message: format!("Failed to send session lock command: {e:?}"),
+                })
+            })?;
 
         log::info!("SessionLockCommand::Deactivate queued successfully");
         Ok(())
@@ -134,7 +136,6 @@ impl SessionLock {
     pub fn component_name(&self) -> &str {
         &self.component_name
     }
-
 }
 
 pub struct SessionLockBuilder {

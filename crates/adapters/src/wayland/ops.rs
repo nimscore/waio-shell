@@ -3,9 +3,9 @@ use crate::wayland::config::ShellSurfaceConfig;
 use crate::wayland::surfaces::app_state::AppState;
 use layer_shika_domain::value_objects::lock_config::LockConfig;
 use layer_shika_domain::value_objects::lock_state::LockState;
-use slint_interpreter::Value;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use slint_interpreter::ComponentInstance;
+use slint_interpreter::Value;
 use smithay_client_toolkit::reexports::calloop::LoopHandle;
 use std::rc::Rc;
 
@@ -26,11 +26,7 @@ pub trait WaylandSystemOps {
 
     fn session_lock_state(&self) -> Option<LockState>;
 
-    fn register_session_lock_callback(
-        &mut self,
-        callback_name: &str,
-        handler: SessionLockCallback,
-    );
+    fn register_session_lock_callback(&mut self, callback_name: &str, handler: SessionLockCallback);
 
     fn app_state(&self) -> &AppState;
 

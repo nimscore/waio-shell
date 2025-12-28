@@ -3,17 +3,17 @@ use super::keyboard_state::KeyboardState;
 use super::surface_state::SurfaceState;
 use crate::errors::{LayerShikaError, Result};
 use crate::rendering::egl::context_factory::RenderContextFactory;
+use crate::rendering::slint_integration::platform::CustomSlintPlatform;
 use crate::wayland::globals::context::GlobalContext;
 use crate::wayland::managed_proxies::{ManagedWlKeyboard, ManagedWlPointer};
 use crate::wayland::outputs::{OutputManager, OutputMapping};
 use crate::wayland::session_lock::lock_context::SessionLockContext;
 use crate::wayland::session_lock::lock_manager::{LockCallback, SessionLockManager};
-use crate::rendering::slint_integration::platform::CustomSlintPlatform;
 use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::value_objects::handle::SurfaceHandle;
-use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::lock_config::LockConfig;
 use layer_shika_domain::value_objects::lock_state::LockState;
+use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
 use slint_interpreter::{CompilationResult, ComponentDefinition, Value};
 use std::cell::RefCell;
@@ -152,13 +152,13 @@ impl AppState {
         }
 
         let context = self.create_lock_context()?;
-        let (definition, compilation_result) =
-            self.resolve_lock_component(component_name)?;
-        let platform = self.slint_platform.as_ref().ok_or_else(|| {
-            LayerShikaError::InvalidInput {
-                message: "Slint platform not initialized".to_string(),
-            }
-        })?;
+        let (definition, compilation_result) = self.resolve_lock_component(component_name)?;
+        let platform =
+            self.slint_platform
+                .as_ref()
+                .ok_or_else(|| LayerShikaError::InvalidInput {
+                    message: "Slint platform not initialized".to_string(),
+                })?;
         let mut manager = SessionLockManager::new(
             context,
             definition,
@@ -208,13 +208,11 @@ impl AppState {
                 message: "No compilation result available for session lock".to_string(),
             })?;
 
-        let definition = compilation_result.component(component_name).ok_or_else(|| {
-            LayerShikaError::InvalidInput {
-                message: format!(
-                    "Component '{component_name}' not found in compilation result"
-                ),
-            }
-        })?;
+        let definition = compilation_result
+            .component(component_name)
+            .ok_or_else(|| LayerShikaError::InvalidInput {
+                message: format!("Component '{component_name}' not found in compilation result"),
+            })?;
 
         Ok((definition, Some(compilation_result)))
     }
