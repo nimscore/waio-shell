@@ -1,11 +1,12 @@
 use crate::event_loop::{EventLoopHandle, FromAppState};
 use crate::layer_surface::LayerSurfaceHandle;
+use crate::session_lock::{SessionLock, SessionLockBuilder};
 use crate::shell_config::{CompiledUiSource, ShellConfig};
 use crate::shell_runtime::ShellRuntime;
 use crate::surface_registry::{SurfaceDefinition, SurfaceEntry, SurfaceRegistry};
 use crate::system::{
-    CallbackContext, EventDispatchContext, PopupCommand, ShellCommand, ShellControl,
-    SurfaceCommand, SurfaceTarget,
+    CallbackContext, EventDispatchContext, PopupCommand, SessionLockCommand, ShellCommand,
+    ShellControl, SurfaceCommand, SurfaceTarget,
 };
 use crate::value_conversion::IntoValue;
 use crate::{Error, Result};
@@ -30,7 +31,7 @@ use layer_shika_domain::value_objects::surface_instance_id::SurfaceInstanceId;
 use spin_on::spin_on;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 /// Default Slint component name used when none is specified
 pub const DEFAULT_COMPONENT_NAME: &str = "Main";
@@ -543,6 +544,7 @@ impl Shell {
     fn setup_command_handler(&self, receiver: channel::Channel<ShellCommand>) -> Result<()> {
         let loop_handle = self.inner.borrow().event_loop_handle();
         let control = self.control();
+        let system = Rc::downgrade(&self.inner);
 
         loop_handle
             .insert_source(receiver, move |event, (), app_state| {
@@ -555,6 +557,9 @@ impl Shell {
                         }
                         ShellCommand::Surface(surface_cmd) => {
                             Self::handle_surface_command(surface_cmd, &mut ctx);
+                        }
+                        ShellCommand::SessionLock(lock_cmd) => {
+                            Self::handle_session_lock_command(&lock_cmd, &mut ctx, &system);
                         }
                         ShellCommand::Render => {
                             if let Err(e) = ctx.render_frame_if_dirty() {
@@ -599,6 +604,23 @@ impl Shell {
             } => {
                 if let Err(e) = ctx.resize_popup(handle, width, height) {
                     log::error!("Failed to resize popup: {}", e);
+                }
+            }
+        }
+    }
+
+    fn handle_session_lock_command(
+        command: &SessionLockCommand,
+        ctx: &mut EventDispatchContext<'_>,
+        _system: &Weak<RefCell<dyn WaylandSystemOps>>,
+    ) {
+        match command {
+            SessionLockCommand::Deactivate => {
+                log::info!("Processing SessionLockCommand::Deactivate");
+                if let Err(e) = ctx.deactivate_session_lock() {
+                    log::error!("Failed to deactivate session lock: {}", e);
+                } else {
+                    log::info!("Session lock deactivated successfully");
                 }
             }
         }
@@ -768,6 +790,33 @@ impl Shell {
     #[must_use]
     pub fn popups(&self) -> crate::PopupShell {
         self.control().popups()
+    }
+
+    pub fn create_session_lock(&self, component: impl Into<String>) -> Result<SessionLock> {
+        self.create_session_lock_with_config(SessionLockBuilder::new(component))
+    }
+
+    pub fn create_session_lock_with_config(
+        &self,
+        builder: SessionLockBuilder,
+    ) -> Result<SessionLock> {
+        let component = builder.component_name().to_string();
+        if self.compilation_result.component(&component).is_none() {
+            return Err(Error::Domain(DomainError::Configuration {
+                message: format!(
+                    "Component '{}' not found in compilation result",
+                    component
+                ),
+            }));
+        }
+
+        if !self.inner.borrow().is_session_lock_available() {
+            return Err(Error::ProtocolNotAvailable {
+                protocol: "ext-session-lock-v1".to_string(),
+            });
+        }
+
+        Ok(builder.build(Rc::downgrade(&self.inner), self.command_sender.clone()))
     }
 
     /// Returns the names of all registered surfaces

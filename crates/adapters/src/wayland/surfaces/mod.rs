@@ -5,6 +5,7 @@ pub mod display_metrics;
 pub mod event_context;
 pub mod keyboard_state;
 pub mod layer_surface;
+pub(crate) mod pointer_utils;
 pub mod popup_manager;
 pub mod popup_surface;
 pub mod rendering_state;

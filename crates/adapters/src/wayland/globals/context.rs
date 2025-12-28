@@ -13,6 +13,7 @@ use wayland_client::{
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1;
 use wayland_protocols::wp::viewporter::client::wp_viewporter::WpViewporter;
 use wayland_protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
+use wayland_protocols::ext::session_lock::v1::client::ext_session_lock_manager_v1::ExtSessionLockManagerV1;
 
 use crate::wayland::surfaces::app_state::AppState;
 
@@ -22,6 +23,7 @@ pub struct GlobalContext {
     pub layer_shell: ZwlrLayerShellV1,
     pub seat: WlSeat,
     pub xdg_wm_base: Option<XdgWmBase>,
+    pub session_lock_manager: Option<ExtSessionLockManagerV1>,
     pub fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
     pub viewporter: Option<WpViewporter>,
     pub render_context_manager: Rc<RenderContextManager>,
@@ -85,6 +87,10 @@ impl GlobalContext {
             .bind::<XdgWmBase, _, _>(queue_handle, 1..=6, ())
             .ok();
 
+        let session_lock_manager = global_list
+            .bind::<ExtSessionLockManagerV1, _, _>(queue_handle, 1..=1, ())
+            .ok();
+
         let fractional_scale_manager = global_list
             .bind::<WpFractionalScaleManagerV1, _, _>(queue_handle, 1..=1, ())
             .ok();
@@ -95,6 +101,10 @@ impl GlobalContext {
 
         if xdg_wm_base.is_none() {
             info!("xdg-shell protocol not available, popup support disabled");
+        }
+
+        if session_lock_manager.is_none() {
+            info!("ext-session-lock protocol not available, session lock disabled");
         }
 
         if fractional_scale_manager.is_none() {
@@ -113,6 +123,7 @@ impl GlobalContext {
             layer_shell,
             seat,
             xdg_wm_base,
+            session_lock_manager,
             fractional_scale_manager,
             viewporter,
             render_context_manager,

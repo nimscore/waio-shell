@@ -4,6 +4,7 @@ mod event_loop;
 mod layer_surface;
 mod popup;
 mod popup_builder;
+mod session_lock;
 mod selection;
 mod selector;
 mod shell;
@@ -40,6 +41,7 @@ pub use layer_shika_domain::value_objects::{
 pub use layer_surface::{LayerSurfaceHandle, ShellSurfaceConfigHandler};
 pub use popup::PopupShell;
 pub use popup_builder::PopupBuilder;
+pub use session_lock::{SessionLock, SessionLockBuilder};
 pub use selection::Selection;
 pub use selector::{Output, Selector, Surface, SurfaceInfo};
 pub use shell_runtime::{DEFAULT_SURFACE_NAME, ShellRuntime};
@@ -75,6 +77,12 @@ pub enum Error {
 
     #[error("App has been dropped")]
     SystemDropped,
+
+    #[error("Invalid lock state '{current}' for operation '{operation}'")]
+    InvalidState { current: String, operation: String },
+
+    #[error("Protocol '{protocol}' not available on this compositor")]
+    ProtocolNotAvailable { protocol: String },
 }
 
 pub mod prelude {
@@ -83,10 +91,11 @@ pub mod prelude {
         DEFAULT_SURFACE_NAME, EventDispatchContext, EventLoopHandle, Handle, IntoValue,
         KeyboardInteractivity, Layer, LayerSurfaceHandle, Output, OutputGeometry, OutputHandle,
         OutputInfo, OutputPolicy, OutputRegistry, PopupBuilder, PopupConfig, PopupHandle,
-        PopupPosition, PopupShell, PopupSize, PopupWindow, Result, Selection, Selector, Shell,
-        ShellBuilder, ShellConfig, ShellControl, ShellEventContext, ShellEventLoop, ShellRuntime,
-        ShellSurfaceConfigHandler, Surface, SurfaceComponentConfig, SurfaceConfigBuilder,
-        SurfaceControlHandle, SurfaceDefinition, SurfaceEntry, SurfaceHandle, SurfaceInfo,
+        PopupPosition, PopupShell, PopupSize, PopupWindow, Result, Selection, Selector,
+        SessionLock, SessionLockBuilder, Shell, ShellBuilder, ShellConfig, ShellControl,
+        ShellEventContext, ShellEventLoop, ShellRuntime, ShellSurfaceConfigHandler, Surface,
+        SurfaceComponentConfig, SurfaceConfigBuilder, SurfaceControlHandle, SurfaceDefinition,
+        SurfaceEntry, SurfaceHandle, SurfaceInfo,
         SurfaceMetadata, SurfaceRegistry,
     };
 

@@ -1,0 +1,190 @@
+use crate::{Error, Result};
+use crate::IntoValue;
+use crate::calloop::channel;
+use crate::system::{SessionLockCommand, ShellCommand};
+use layer_shika_adapters::WaylandSystemOps;
+use layer_shika_domain::dimensions::ScaleFactor;
+use layer_shika_domain::errors::DomainError;
+use layer_shika_domain::value_objects::lock_config::LockConfig;
+use layer_shika_domain::value_objects::lock_state::LockState;
+use layer_shika_domain::value_objects::margins::Margins;
+use layer_shika_domain::value_objects::output_policy::OutputPolicy;
+use std::cell::{Cell, RefCell};
+use std::rc::Weak;
+use std::rc::Rc;
+use crate::slint_interpreter::Value;
+
+pub struct SessionLock {
+    system: Weak<RefCell<dyn WaylandSystemOps>>,
+    component_name: String,
+    config: LockConfig,
+    state: Cell<LockState>,
+    command_sender: channel::Sender<ShellCommand>,
+}
+
+impl SessionLock {
+    pub(crate) fn new(
+        system: Weak<RefCell<dyn WaylandSystemOps>>,
+        component_name: String,
+        config: LockConfig,
+        command_sender: channel::Sender<ShellCommand>,
+    ) -> Self {
+        Self {
+            system,
+            component_name,
+            config,
+            state: Cell::new(LockState::Inactive),
+            command_sender,
+        }
+    }
+
+    pub fn activate(&self) -> Result<()> {
+        let current = self.state.get();
+        if !current.can_activate() {
+            return Err(Error::InvalidState {
+                current: format!("{current:?}"),
+                operation: "activate".to_string(),
+            });
+        }
+
+        let system = self.system.upgrade().ok_or(Error::SystemDropped)?;
+        system
+            .borrow_mut()
+            .activate_session_lock(&self.component_name, self.config.clone())?;
+        self.state.set(LockState::Locking);
+        Ok(())
+    }
+
+    pub fn deactivate(&self) -> Result<()> {
+        log::info!("deactivate() called - queuing SessionLockCommand::Deactivate");
+
+        if let Some(system) = self.system.upgrade() {
+            if let Ok(borrowed) = system.try_borrow() {
+                if let Some(state) = borrowed.session_lock_state() {
+                    log::info!("Syncing lock state before deactivate: {:?}", state);
+                    self.state.set(state);
+                }
+            } else {
+                log::warn!("Could not borrow system to sync state - already borrowed");
+            }
+        }
+
+        let current = self.state.get();
+        log::info!("Current lock state for deactivate check: {:?}", current);
+        if !current.can_deactivate() {
+            return Err(Error::InvalidState {
+                current: format!("{current:?}"),
+                operation: "deactivate".to_string(),
+            });
+        }
+
+        // Send deactivate command via channel to be processed outside borrow context
+        self.command_sender
+            .send(ShellCommand::SessionLock(SessionLockCommand::Deactivate))
+            .map_err(|e| Error::Domain(DomainError::InvalidInput {
+                message: format!("Failed to send session lock command: {e:?}"),
+            }))?;
+
+        log::info!("SessionLockCommand::Deactivate queued successfully");
+        Ok(())
+    }
+
+    /// Registers a callback handler on the lock screen component.
+    ///
+    /// The callback must exist in the Slint component, for example:
+    /// `callback unlock_requested(string)`.
+    pub fn on_callback<F, R>(&self, callback_name: &str, handler: F) -> Result<()>
+    where
+        F: Fn() -> R + Clone + 'static,
+        R: IntoValue,
+    {
+        self.on_callback_with_args(callback_name, move |_args| handler().into_value())
+    }
+
+    /// Registers a callback handler that receives Slint arguments.
+    pub fn on_callback_with_args<F, R>(&self, callback_name: &str, handler: F) -> Result<()>
+    where
+        F: Fn(&[Value]) -> R + Clone + 'static,
+        R: IntoValue,
+    {
+        let system = self.system.upgrade().ok_or(Error::SystemDropped)?;
+        let handler = Rc::new(move |args: &[Value]| handler(args).into_value());
+        system
+            .borrow_mut()
+            .register_session_lock_callback(callback_name, handler);
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn state(&self) -> LockState {
+        if let Some(system) = self.system.upgrade() {
+            if let Some(state) = system.borrow().session_lock_state() {
+                self.state.set(state);
+            }
+        }
+        self.state.get()
+    }
+
+    #[must_use]
+    pub fn is_locked(&self) -> bool {
+        self.state() == LockState::Locked
+    }
+
+    #[must_use]
+    pub fn component_name(&self) -> &str {
+        &self.component_name
+    }
+
+}
+
+pub struct SessionLockBuilder {
+    component_name: String,
+    config: LockConfig,
+}
+
+impl SessionLockBuilder {
+    #[must_use]
+    pub fn new(component_name: impl Into<String>) -> Self {
+        Self {
+            component_name: component_name.into(),
+            config: LockConfig::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn scale_factor(mut self, factor: impl TryInto<ScaleFactor, Error = DomainError>) -> Self {
+        self.config.scale_factor = factor.try_into().unwrap_or_default();
+        self
+    }
+
+    #[must_use]
+    pub fn margin(mut self, margin: impl Into<Margins>) -> Self {
+        self.config.margin = margin.into();
+        self
+    }
+
+    #[must_use]
+    pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.config.namespace = namespace.into();
+        self
+    }
+
+    #[must_use]
+    pub fn output_policy(mut self, policy: OutputPolicy) -> Self {
+        self.config.output_policy = policy;
+        self
+    }
+
+    pub(crate) fn build(
+        self,
+        system: Weak<RefCell<dyn WaylandSystemOps>>,
+        command_sender: channel::Sender<ShellCommand>,
+    ) -> SessionLock {
+        SessionLock::new(system, self.component_name, self.config, command_sender)
+    }
+
+    #[must_use]
+    pub fn component_name(&self) -> &str {
+        &self.component_name
+    }
+}

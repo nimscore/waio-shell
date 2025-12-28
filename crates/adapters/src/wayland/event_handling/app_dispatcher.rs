@@ -22,6 +22,11 @@ use wayland_client::{
         wl_surface::WlSurface,
     },
 };
+use wayland_protocols::ext::session_lock::v1::client::{
+    ext_session_lock_manager_v1::ExtSessionLockManagerV1,
+    ext_session_lock_surface_v1::{self, ExtSessionLockSurfaceV1},
+    ext_session_lock_v1::{self, ExtSessionLockV1},
+};
 use wayland_protocols::wp::fractional_scale::v1::client::{
     wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
     wp_fractional_scale_v1::{self, WpFractionalScaleV1},
@@ -188,6 +193,137 @@ impl Dispatch<WlOutput, ()> for AppState {
     }
 }
 
+fn handle_pointer_enter_event(
+    state: &mut AppState,
+    serial: u32,
+    surface: &WlSurface,
+    surface_x: f64,
+    surface_y: f64,
+) {
+    let surface_id = surface.id();
+
+    if let Some(manager) = state.lock_manager_mut() {
+        if manager.handle_pointer_enter(serial, surface, surface_x, surface_y) {
+            state.set_active_surface_key(None);
+            return;
+        }
+    }
+
+    if let Some(key) = state.get_key_by_surface(&surface_id).cloned() {
+        if let Some(layer_surface) = state.get_surface_by_key_mut(&key) {
+            layer_surface.handle_pointer_enter(serial, surface, surface_x, surface_y);
+        }
+        state.set_active_surface_key(Some(key));
+        return;
+    }
+
+    if let Some(key) = state.get_key_by_popup(&surface_id).cloned() {
+        if let Some(layer_surface) = state.get_surface_by_key_mut(&key) {
+            layer_surface.handle_pointer_enter(serial, surface, surface_x, surface_y);
+        }
+        state.set_active_surface_key(Some(key));
+    }
+}
+
+fn handle_pointer_motion_event(state: &mut AppState, surface_x: f64, surface_y: f64) {
+    if let Some(manager) = state.lock_manager_mut() {
+        if manager.handle_pointer_motion(surface_x, surface_y) {
+            return;
+        }
+    }
+
+    if let Some(surface) = state.active_surface_mut() {
+        surface.handle_pointer_motion(surface_x, surface_y);
+    }
+}
+
+fn handle_pointer_leave_event(state: &mut AppState) {
+    if let Some(manager) = state.lock_manager_mut() {
+        if manager.handle_pointer_leave() {
+            state.set_active_surface_key(None);
+            return;
+        }
+    }
+
+    if let Some(surface) = state.active_surface_mut() {
+        surface.handle_pointer_leave();
+    }
+    state.set_active_surface_key(None);
+}
+
+fn handle_pointer_button_event(
+    state: &mut AppState,
+    serial: u32,
+    button: u32,
+    button_state: WEnum<wl_pointer::ButtonState>,
+) {
+    if let Some(manager) = state.lock_manager_mut() {
+        if manager.handle_pointer_button(serial, button, button_state) {
+            return;
+        }
+    }
+
+    if let Some(surface) = state.active_surface_mut() {
+        surface.handle_pointer_button(serial, button, button_state);
+    }
+}
+
+fn handle_pointer_axis_source_event(state: &mut AppState, axis_source: wl_pointer::AxisSource) {
+    if let Some(manager) = state.lock_manager_mut() {
+        if manager.handle_axis_source(axis_source) {
+            return;
+        }
+    }
+    if let Some(surface) = state.active_surface_mut() {
+        surface.handle_axis_source(axis_source);
+    }
+}
+
+fn handle_pointer_axis_event(state: &mut AppState, time: u32, axis: wl_pointer::Axis, value: f64) {
+    if let Some(manager) = state.lock_manager_mut() {
+        if manager.handle_axis(axis, value) {
+            return;
+        }
+    }
+    if let Some(surface) = state.active_surface_mut() {
+        surface.handle_axis(time, axis, value);
+    }
+}
+
+fn handle_pointer_axis_discrete_event(state: &mut AppState, axis: wl_pointer::Axis, discrete: i32) {
+    if let Some(manager) = state.lock_manager_mut() {
+        if manager.handle_axis_discrete(axis, discrete) {
+            return;
+        }
+    }
+    if let Some(surface) = state.active_surface_mut() {
+        surface.handle_axis_discrete(axis, discrete);
+    }
+}
+
+fn handle_pointer_axis_stop_event(state: &mut AppState, time: u32, axis: wl_pointer::Axis) {
+    if let Some(manager) = state.lock_manager_mut() {
+        if manager.handle_axis_stop(axis) {
+            return;
+        }
+    }
+    if let Some(surface) = state.active_surface_mut() {
+        surface.handle_axis_stop(time, axis);
+    }
+}
+
+fn handle_pointer_frame_event(state: &mut AppState) {
+    if let Some(manager) = state.lock_manager_mut() {
+        if manager.handle_pointer_frame() {
+            return;
+        }
+    }
+
+    if let Some(surface) = state.active_surface_mut() {
+        surface.handle_pointer_frame();
+    }
+}
+
 impl Dispatch<WlPointer, ()> for AppState {
     fn event(
         state: &mut Self,
@@ -203,76 +339,36 @@ impl Dispatch<WlPointer, ()> for AppState {
                 surface,
                 surface_x,
                 surface_y,
-            } => {
-                let surface_id = surface.id();
-
-                if let Some(key) = state.get_key_by_surface(&surface_id).cloned() {
-                    if let Some(layer_surface) = state.get_surface_by_key_mut(&key) {
-                        layer_surface.handle_pointer_enter(serial, &surface, surface_x, surface_y);
-                    }
-                    state.set_active_surface_key(Some(key));
-                } else if let Some(key) = state.get_key_by_popup(&surface_id).cloned() {
-                    if let Some(layer_surface) = state.get_surface_by_key_mut(&key) {
-                        layer_surface.handle_pointer_enter(serial, &surface, surface_x, surface_y);
-                    }
-                    state.set_active_surface_key(Some(key));
-                }
-            }
-
+            } => handle_pointer_enter_event(state, serial, &surface, surface_x, surface_y),
             wl_pointer::Event::Motion {
                 surface_x,
                 surface_y,
                 ..
-            } => {
-                if let Some(surface) = state.active_surface_mut() {
-                    surface.handle_pointer_motion(surface_x, surface_y);
-                }
-            }
-
-            wl_pointer::Event::Leave { .. } => {
-                if let Some(surface) = state.active_surface_mut() {
-                    surface.handle_pointer_leave();
-                }
-                state.set_active_surface_key(None);
-            }
-
+            } => handle_pointer_motion_event(state, surface_x, surface_y),
+            wl_pointer::Event::Leave { .. } => handle_pointer_leave_event(state),
             wl_pointer::Event::Button {
                 serial,
                 button,
                 state: button_state,
                 ..
-            } => {
-                if let Some(surface) = state.active_surface_mut() {
-                    surface.handle_pointer_button(serial, button, button_state);
-                }
-            }
-            wl_pointer::Event::AxisSource { axis_source } => {
-                if let (Some(surface), WEnum::Value(axis_source)) =
-                    (state.active_surface_mut(), axis_source)
-                {
-                    surface.handle_axis_source(axis_source);
-                }
-            }
-            wl_pointer::Event::Axis { time, axis, value } => {
-                if let (Some(surface), WEnum::Value(axis)) = (state.active_surface_mut(), axis) {
-                    surface.handle_axis(time, axis, value);
-                }
-            }
-            wl_pointer::Event::AxisDiscrete { axis, discrete } => {
-                if let (Some(surface), WEnum::Value(axis)) = (state.active_surface_mut(), axis) {
-                    surface.handle_axis_discrete(axis, discrete);
-                }
-            }
-            wl_pointer::Event::AxisStop { time, axis } => {
-                if let (Some(surface), WEnum::Value(axis)) = (state.active_surface_mut(), axis) {
-                    surface.handle_axis_stop(time, axis);
-                }
-            }
-            wl_pointer::Event::Frame => {
-                if let Some(surface) = state.active_surface_mut() {
-                    surface.handle_pointer_frame();
-                }
-            }
+            } => handle_pointer_button_event(state, serial, button, button_state),
+            wl_pointer::Event::AxisSource {
+                axis_source: WEnum::Value(axis_source),
+            } => handle_pointer_axis_source_event(state, axis_source),
+            wl_pointer::Event::Axis {
+                time,
+                axis: WEnum::Value(axis),
+                value,
+            } => handle_pointer_axis_event(state, time, axis, value),
+            wl_pointer::Event::AxisDiscrete {
+                axis: WEnum::Value(axis),
+                discrete,
+            } => handle_pointer_axis_discrete_event(state, axis, discrete),
+            wl_pointer::Event::AxisStop {
+                time,
+                axis: WEnum::Value(axis),
+            } => handle_pointer_axis_stop_event(state, time, axis),
+            wl_pointer::Event::Frame => handle_pointer_frame_event(state),
             _ => {}
         }
     }
@@ -345,6 +441,10 @@ impl Dispatch<WpFractionalScaleV1, ()> for AppState {
 
             for surface in state.all_outputs_mut() {
                 surface.handle_fractional_scale(proxy, scale);
+            }
+
+            if let Some(manager) = state.lock_manager_mut() {
+                manager.handle_fractional_scale(&proxy.id(), scale);
             }
         }
     }
@@ -471,6 +571,7 @@ impl Dispatch<WlRegistry, GlobalListContents> for AppState {
 
                     let output = registry.bind::<WlOutput, _, _>(name, 4.min(version), qhandle, ());
                     let output_id = output.id();
+                    let output_for_lock = output.clone();
 
                     if let Some(manager) = state.output_manager() {
                         let mut manager_ref = manager.borrow_mut();
@@ -478,6 +579,11 @@ impl Dispatch<WlRegistry, GlobalListContents> for AppState {
                         info!("Registered hot-plugged output with handle {handle:?}");
 
                         state.register_registry_name(name, output_id);
+                        if let Err(err) =
+                            state.handle_output_added_for_lock(&output_for_lock, qhandle)
+                        {
+                            info!("Failed to add session lock surface for output: {err}");
+                        }
                     } else {
                         info!("No output manager available yet (startup initialization)");
                     }
@@ -489,6 +595,8 @@ impl Dispatch<WlRegistry, GlobalListContents> for AppState {
                 if let Some(output_id) = state.unregister_registry_name(name) {
                     info!("Output with registry name {name} removed, cleaning up...");
 
+                    state.handle_output_removed_for_lock(&output_id);
+
                     if let Some(manager) = state.output_manager() {
                         let mut manager_ref = manager.borrow_mut();
                         manager_ref.remove_output(&output_id, state);
@@ -496,6 +604,58 @@ impl Dispatch<WlRegistry, GlobalListContents> for AppState {
                 }
             }
             _ => {}
+        }
+    }
+}
+
+impl Dispatch<ExtSessionLockV1, ()> for AppState {
+    fn event(
+        state: &mut Self,
+        _proxy: &ExtSessionLockV1,
+        event: ext_session_lock_v1::Event,
+        _data: &(),
+        _conn: &Connection,
+        _queue_handle: &QueueHandle<Self>,
+    ) {
+        match event {
+            ext_session_lock_v1::Event::Locked => {
+                if let Some(manager) = state.lock_manager_mut() {
+                    manager.handle_locked();
+                }
+            }
+            ext_session_lock_v1::Event::Finished => {
+                if let Some(manager) = state.lock_manager_mut() {
+                    manager.handle_finished();
+                }
+                state.clear_lock_manager();
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Dispatch<ExtSessionLockSurfaceV1, ()> for AppState {
+    fn event(
+        state: &mut Self,
+        lock_surface: &ExtSessionLockSurfaceV1,
+        event: ext_session_lock_surface_v1::Event,
+        _data: &(),
+        _conn: &Connection,
+        _queue_handle: &QueueHandle<Self>,
+    ) {
+        if let ext_session_lock_surface_v1::Event::Configure {
+            serial,
+            width,
+            height,
+        } = event
+        {
+            let lock_surface_id = lock_surface.id();
+            if let Some(manager) = state.lock_manager_mut() {
+                if let Err(err) = manager.handle_configure(&lock_surface_id, serial, width, height)
+                {
+                    info!("Failed to configure session lock surface: {err}");
+                }
+            }
         }
     }
 }
@@ -523,6 +683,7 @@ impl_empty_dispatch_app!(
     (WlCompositor, ()),
     (WlSurface, ()),
     (ZwlrLayerShellV1, ()),
+    (ExtSessionLockManagerV1, ()),
     (WlSeat, ()),
     (WpFractionalScaleManagerV1, ()),
     (WpViewporter, ()),

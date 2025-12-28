@@ -14,6 +14,8 @@ pub use crate::value_objects::dimensions::{PopupDimensions, SurfaceDimension};
 pub use crate::value_objects::handle::{Handle, OutputHandle, PopupHandle, SurfaceHandle};
 pub use crate::value_objects::keyboard_interactivity::KeyboardInteractivity;
 pub use crate::value_objects::layer::Layer;
+pub use crate::value_objects::lock_config::LockConfig;
+pub use crate::value_objects::lock_state::LockState;
 pub use crate::value_objects::margins::Margins;
 pub use crate::value_objects::output_info::{OutputGeometry, OutputInfo};
 pub use crate::value_objects::output_policy::OutputPolicy;

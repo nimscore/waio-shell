@@ -86,9 +86,14 @@ pub enum SurfaceCommand {
     },
 }
 
+pub enum SessionLockCommand {
+    Deactivate,
+}
+
 pub enum ShellCommand {
     Popup(PopupCommand),
     Surface(SurfaceCommand),
+    SessionLock(SessionLockCommand),
     Render,
 }
 
@@ -746,6 +751,13 @@ impl EventDispatchContext<'_> {
             surface.render_frame_if_dirty()?;
         }
         Ok(())
+    }
+
+    /// Deactivates the session lock
+    pub(crate) fn deactivate_session_lock(&mut self) -> Result<()> {
+        self.app_state
+            .deactivate_session_lock()
+            .map_err(Error::Adapter)
     }
 
     /// Returns the compilation result if available

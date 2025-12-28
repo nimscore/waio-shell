@@ -4,6 +4,8 @@ pub mod dimensions;
 pub mod handle;
 pub mod keyboard_interactivity;
 pub mod layer;
+pub mod lock_config;
+pub mod lock_state;
 pub mod margins;
 pub mod output_handle;
 pub mod output_info;

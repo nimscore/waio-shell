@@ -1,12 +1,21 @@
 use super::event_context::SharedPointerSerial;
 use super::keyboard_state::KeyboardState;
 use super::surface_state::SurfaceState;
+use crate::errors::{LayerShikaError, Result};
+use crate::rendering::egl::context_factory::RenderContextFactory;
+use crate::wayland::globals::context::GlobalContext;
 use crate::wayland::managed_proxies::{ManagedWlKeyboard, ManagedWlPointer};
 use crate::wayland::outputs::{OutputManager, OutputMapping};
+use crate::wayland::session_lock::lock_context::SessionLockContext;
+use crate::wayland::session_lock::lock_manager::{LockCallback, SessionLockManager};
+use crate::rendering::slint_integration::platform::CustomSlintPlatform;
 use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::value_objects::handle::SurfaceHandle;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
+use layer_shika_domain::value_objects::lock_config::LockConfig;
+use layer_shika_domain::value_objects::lock_state::LockState;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
+use slint_interpreter::{CompilationResult, ComponentDefinition, Value};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::os::fd::BorrowedFd;
@@ -14,10 +23,11 @@ use std::rc::Rc;
 use wayland_client::Proxy;
 use wayland_client::backend::ObjectId;
 use wayland_client::protocol::wl_keyboard;
-use wayland_client::protocol::wl_surface::WlSurface;
+use wayland_client::protocol::{wl_output::WlOutput, wl_surface::WlSurface};
 use xkbcommon::xkb;
 
 pub type PerOutputSurface = SurfaceState;
+type SessionLockCallback = Rc<dyn Fn(&[Value]) -> Value>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ShellSurfaceKey {
@@ -35,6 +45,9 @@ impl ShellSurfaceKey {
 }
 
 pub struct AppState {
+    global_context: Option<Rc<GlobalContext>>,
+    known_outputs: Vec<WlOutput>,
+    slint_platform: Option<Rc<CustomSlintPlatform>>,
     output_registry: OutputRegistry,
     output_mapping: OutputMapping,
     surfaces: HashMap<ShellSurfaceKey, PerOutputSurface>,
@@ -49,6 +62,8 @@ pub struct AppState {
     keyboard_focus_key: Option<ShellSurfaceKey>,
     keyboard_focus_surface_id: Option<ObjectId>,
     keyboard_state: KeyboardState,
+    lock_manager: Option<SessionLockManager>,
+    lock_callbacks: Vec<LockCallback>,
 }
 
 impl AppState {
@@ -58,6 +73,9 @@ impl AppState {
         shared_serial: Rc<SharedPointerSerial>,
     ) -> Self {
         Self {
+            global_context: None,
+            known_outputs: Vec::new(),
+            slint_platform: None,
             output_registry: OutputRegistry::new(),
             output_mapping: OutputMapping::new(),
             surfaces: HashMap::new(),
@@ -72,6 +90,194 @@ impl AppState {
             keyboard_focus_key: None,
             keyboard_focus_surface_id: None,
             keyboard_state: KeyboardState::new(),
+            lock_manager: None,
+            lock_callbacks: Vec::new(),
+        }
+    }
+
+    pub fn set_global_context(&mut self, context: Rc<GlobalContext>) {
+        self.known_outputs.clone_from(&context.outputs);
+        self.global_context = Some(context);
+    }
+
+    pub fn set_slint_platform(&mut self, platform: Rc<CustomSlintPlatform>) {
+        self.slint_platform = Some(platform);
+    }
+
+    pub fn lock_manager(&self) -> Option<&SessionLockManager> {
+        self.lock_manager.as_ref()
+    }
+
+    pub fn lock_manager_mut(&mut self) -> Option<&mut SessionLockManager> {
+        self.lock_manager.as_mut()
+    }
+
+    pub fn clear_lock_manager(&mut self) {
+        self.lock_manager = None;
+    }
+
+    pub fn is_session_lock_available(&self) -> bool {
+        self.global_context
+            .as_ref()
+            .and_then(|ctx| ctx.session_lock_manager.as_ref())
+            .is_some()
+    }
+
+    pub fn current_lock_state(&self) -> Option<LockState> {
+        self.lock_manager.as_ref().map(SessionLockManager::state)
+    }
+
+    pub fn register_session_lock_callback(
+        &mut self,
+        callback_name: impl Into<String>,
+        handler: SessionLockCallback,
+    ) {
+        let callback = LockCallback::new(callback_name, handler);
+        if let Some(manager) = self.lock_manager.as_mut() {
+            manager.register_callback(callback.clone());
+        }
+        self.lock_callbacks.push(callback);
+    }
+
+    pub fn activate_session_lock(
+        &mut self,
+        component_name: &str,
+        config: LockConfig,
+        queue_handle: &wayland_client::QueueHandle<AppState>,
+    ) -> Result<()> {
+        if self.lock_manager.is_some() {
+            return Err(LayerShikaError::InvalidInput {
+                message: "Session lock already active".to_string(),
+            });
+        }
+
+        let context = self.create_lock_context()?;
+        let (definition, compilation_result) =
+            self.resolve_lock_component(component_name)?;
+        let platform = self.slint_platform.as_ref().ok_or_else(|| {
+            LayerShikaError::InvalidInput {
+                message: "Slint platform not initialized".to_string(),
+            }
+        })?;
+        let mut manager = SessionLockManager::new(
+            context,
+            definition,
+            compilation_result,
+            Rc::clone(platform),
+            config,
+        );
+        for callback in self.lock_callbacks.iter().cloned() {
+            manager.register_callback(callback);
+        }
+
+        let outputs = self.collect_session_lock_outputs();
+        manager.activate(outputs, queue_handle)?;
+
+        self.lock_manager = Some(manager);
+        Ok(())
+    }
+
+    pub fn deactivate_session_lock(&mut self) -> Result<()> {
+        let Some(manager) = self.lock_manager.as_mut() else {
+            return Err(LayerShikaError::InvalidInput {
+                message: "No session lock active".to_string(),
+            });
+        };
+
+        manager.deactivate()
+    }
+
+    pub fn render_lock_frames(&self) -> Result<()> {
+        if let Some(manager) = self.lock_manager.as_ref() {
+            if manager.state() != LockState::Locked && manager.state() != LockState::Locking {
+                return Ok(());
+            }
+            manager.render_frames()?;
+        }
+        Ok(())
+    }
+
+    fn resolve_lock_component(
+        &self,
+        component_name: &str,
+    ) -> Result<(ComponentDefinition, Option<Rc<CompilationResult>>)> {
+        let compilation_result = self
+            .primary_output()
+            .and_then(SurfaceState::compilation_result)
+            .ok_or_else(|| LayerShikaError::InvalidInput {
+                message: "No compilation result available for session lock".to_string(),
+            })?;
+
+        let definition = compilation_result.component(component_name).ok_or_else(|| {
+            LayerShikaError::InvalidInput {
+                message: format!(
+                    "Component '{component_name}' not found in compilation result"
+                ),
+            }
+        })?;
+
+        Ok((definition, Some(compilation_result)))
+    }
+
+    fn create_lock_context(&self) -> Result<Rc<SessionLockContext>> {
+        let Some(global_ctx) = self.global_context.as_ref() else {
+            return Err(LayerShikaError::InvalidInput {
+                message: "Global context not available for session lock".to_string(),
+            });
+        };
+
+        let Some(lock_manager) = global_ctx.session_lock_manager.as_ref() else {
+            return Err(LayerShikaError::InvalidInput {
+                message: "Session lock protocol not available".to_string(),
+            });
+        };
+
+        let render_factory =
+            RenderContextFactory::new(Rc::clone(&global_ctx.render_context_manager));
+
+        Ok(Rc::new(SessionLockContext::new(
+            global_ctx.compositor.clone(),
+            lock_manager.clone(),
+            global_ctx.seat.clone(),
+            global_ctx.fractional_scale_manager.clone(),
+            global_ctx.viewporter.clone(),
+            render_factory,
+        )))
+    }
+
+    fn collect_session_lock_outputs(&self) -> Vec<WlOutput> {
+        self.known_outputs.clone()
+    }
+
+    pub fn handle_output_added_for_lock(
+        &mut self,
+        output: &WlOutput,
+        queue_handle: &wayland_client::QueueHandle<AppState>,
+    ) -> Result<()> {
+        if !self
+            .known_outputs
+            .iter()
+            .any(|known| known.id() == output.id())
+        {
+            self.known_outputs.push(output.clone());
+        }
+
+        let Some(manager) = self.lock_manager.as_mut() else {
+            return Ok(());
+        };
+
+        if manager.state() == LockState::Locked {
+            manager.add_output(output, queue_handle)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn handle_output_removed_for_lock(&mut self, output_id: &ObjectId) {
+        self.known_outputs
+            .retain(|output| output.id() != *output_id);
+        if let Some(manager) = self.lock_manager.as_mut() {
+            manager.remove_output(output_id);
         }
     }
 
@@ -360,6 +566,13 @@ impl AppState {
     }
 
     pub fn handle_keyboard_enter(&mut self, _serial: u32, surface: &WlSurface, _keys: &[u8]) {
+        if let Some(manager) = self.lock_manager.as_mut() {
+            if manager.handle_keyboard_enter(surface) {
+                self.set_keyboard_focus(None, None);
+                return;
+            }
+        }
+
         let surface_id = surface.id();
         if let Some(key) = self.get_key_by_surface(&surface_id).cloned() {
             self.set_keyboard_focus(Some(key), Some(surface_id));
@@ -372,12 +585,24 @@ impl AppState {
     }
 
     pub fn handle_keyboard_leave(&mut self, _serial: u32, surface: &WlSurface) {
+        if let Some(manager) = self.lock_manager.as_mut() {
+            if manager.handle_keyboard_leave(surface) {
+                return;
+            }
+        }
+
         if self.keyboard_focus_surface_id == Some(surface.id()) {
             self.set_keyboard_focus(None, None);
         }
     }
 
     pub fn handle_key(&mut self, _serial: u32, _time: u32, key: u32, state: wl_keyboard::KeyState) {
+        if let Some(manager) = self.lock_manager.as_mut() {
+            if manager.handle_keyboard_key(key, state, &mut self.keyboard_state) {
+                return;
+            }
+        }
+
         let Some(focus_key) = self.keyboard_focus_key.clone() else {
             return;
         };
@@ -385,9 +610,8 @@ impl AppState {
             return;
         };
 
-        let keyboard_state = &mut self.keyboard_state;
         if let Some(surface) = self.surfaces.get_mut(&focus_key) {
-            surface.handle_keyboard_key(&surface_id, key, state, keyboard_state);
+            surface.handle_keyboard_key(&surface_id, key, state, &mut self.keyboard_state);
         }
     }
 

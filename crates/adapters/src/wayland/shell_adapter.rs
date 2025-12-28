@@ -26,6 +26,8 @@ use crate::{
 use core::result::Result as CoreResult;
 use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::ports::shell::ShellSystemPort;
+use layer_shika_domain::value_objects::lock_config::LockConfig;
+use layer_shika_domain::value_objects::lock_state::LockState;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
 use log::{error, info};
@@ -272,7 +274,10 @@ impl WaylandShellSystem {
         connection: &Connection,
         event_queue: &mut EventQueue<AppState>,
     ) -> Result<AppState> {
-        let global_ctx = GlobalContext::initialize(connection, &event_queue.handle())?;
+        let global_ctx = Rc::new(GlobalContext::initialize(
+            connection,
+            &event_queue.handle(),
+        )?);
         let layer_surface_config = Self::create_layer_surface_config(config);
 
         let pointer = Rc::new(global_ctx.seat.get_pointer(&event_queue.handle(), ()));
@@ -300,7 +305,7 @@ impl WaylandShellSystem {
 
         let setups = Self::create_output_setups(
             config,
-            &global_ctx,
+            global_ctx.as_ref(),
             connection,
             event_queue,
             &pointer,
@@ -308,6 +313,7 @@ impl WaylandShellSystem {
         )?;
 
         let platform = Self::setup_platform(&setups)?;
+        app_state.set_slint_platform(Rc::clone(&platform));
 
         let (popup_managers, layer_surfaces) =
             Self::create_window_states(setups, &popup_context, &shared_serial, &mut app_state)?;
@@ -322,7 +328,7 @@ impl WaylandShellSystem {
 
         let output_manager = Self::create_output_manager(&OutputManagerParams {
             config,
-            global_ctx: &global_ctx,
+            global_ctx: global_ctx.as_ref(),
             connection,
             layer_surface_config,
             render_factory: &render_factory,
@@ -332,6 +338,7 @@ impl WaylandShellSystem {
         });
 
         app_state.set_output_manager(Rc::new(RefCell::new(output_manager)));
+        app_state.set_global_context(Rc::clone(&global_ctx));
 
         Ok(app_state)
     }
@@ -341,7 +348,10 @@ impl WaylandShellSystem {
         connection: &Connection,
         event_queue: &mut EventQueue<AppState>,
     ) -> Result<AppState> {
-        let global_ctx = GlobalContext::initialize(connection, &event_queue.handle())?;
+        let global_ctx = Rc::new(GlobalContext::initialize(
+            connection,
+            &event_queue.handle(),
+        )?);
 
         let pointer = Rc::new(global_ctx.seat.get_pointer(&event_queue.handle(), ()));
         let keyboard = Rc::new(global_ctx.seat.get_keyboard(&event_queue.handle(), ()));
@@ -368,13 +378,14 @@ impl WaylandShellSystem {
 
         let setups = Self::create_output_setups_multi(
             configs,
-            &global_ctx,
+            global_ctx.as_ref(),
             connection,
             event_queue,
             &pointer,
         )?;
 
         let platform = Self::setup_platform(&setups)?;
+        app_state.set_slint_platform(Rc::clone(&platform));
 
         let (popup_managers, layer_surfaces) =
             Self::create_window_states(setups, &popup_context, &shared_serial, &mut app_state)?;
@@ -392,7 +403,7 @@ impl WaylandShellSystem {
             let layer_surface_config = Self::create_layer_surface_config(config);
             let output_manager = Self::create_output_manager(&OutputManagerParams {
                 config,
-                global_ctx: &global_ctx,
+                global_ctx: global_ctx.as_ref(),
                 connection,
                 layer_surface_config,
                 render_factory: &render_factory,
@@ -403,6 +414,8 @@ impl WaylandShellSystem {
 
             app_state.set_output_manager(Rc::new(RefCell::new(output_manager)));
         }
+
+        app_state.set_global_context(Rc::clone(&global_ctx));
 
         Ok(app_state)
     }
@@ -611,6 +624,8 @@ impl WaylandShellSystem {
                     }
                 })?;
             }
+
+            self.state.render_lock_frames()?;
         }
 
         info!("Initial configuration complete, requesting final render");
@@ -626,6 +641,7 @@ impl WaylandShellSystem {
                     message: e.to_string(),
                 })?;
         }
+        self.state.render_lock_frames()?;
         self.connection
             .flush()
             .map_err(|e| LayerShikaError::WaylandProtocol { source: e })?;
@@ -693,6 +709,8 @@ impl WaylandShellSystem {
                     })?;
             }
         }
+
+        shared_data.render_lock_frames()?;
 
         connection
             .flush()
@@ -778,6 +796,33 @@ impl WaylandSystemOps for WaylandShellSystem {
 
     fn despawn_surface(&mut self, name: &str) -> Result<()> {
         WaylandShellSystem::despawn_surface(self, name)
+    }
+
+    fn activate_session_lock(&mut self, component_name: &str, config: LockConfig) -> Result<()> {
+        let queue_handle = self.event_queue.handle();
+        self.state
+            .activate_session_lock(component_name, config, &queue_handle)
+    }
+
+    fn deactivate_session_lock(&mut self) -> Result<()> {
+        self.state.deactivate_session_lock()
+    }
+
+    fn is_session_lock_available(&self) -> bool {
+        self.state.is_session_lock_available()
+    }
+
+    fn session_lock_state(&self) -> Option<LockState> {
+        self.state.current_lock_state()
+    }
+
+    fn register_session_lock_callback(
+        &mut self,
+        callback_name: &str,
+        handler: Rc<dyn Fn(&[slint_interpreter::Value]) -> slint_interpreter::Value>,
+    ) {
+        self.state
+            .register_session_lock_callback(callback_name, handler);
     }
 
     fn app_state(&self) -> &AppState {

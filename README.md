@@ -2,7 +2,7 @@
 
 <div align="center">
   <h1 style="font-size: 5em;">🦌</h1>
-  <p><i>"A cute layer of abstraction where Slint UIs grow antlers and become cute Wayland shells."</i></p>
+  <p><i>"A cute library where Slint UIs grow antlers and become cute Wayland shells."</i></p>
   <p><b><a href="https://codeberg.org/waydeer/layer-shika">Main repo</a> | <a href="https://git.dren.dog/waydeer/layer-shika">Mirror</a> | <a href="https://github.com/waydeerwm/layer-shika">Temp mirror (github)</a></b></p>
 </div>
 
@@ -19,17 +19,18 @@ Oh deer! 🦌 You've stumbled upon `layer-shika`, a Rust library providing Wayla
 - **Slint Integration**: Runtime `.slint` file compilation via slint-interpreter or compile-time code generation. Support via pre-compiled is planned.
 - **Multi-Surface Support**: Create multiple independent layer shell windows, each with its own configuration and lifecycle
 - **Flexible Configuration**: Both fluent builder API and declarative configuration support
-- **Comprehensive Popup System**: Full xdg-popup protocol implementation with multiple positioning modes, grab support, and content-based sizing (rework in progress)
+- **Comprehensive Popup System**: Full `xdg-popup` protocol implementation with multiple positioning modes, grab support, and content-based sizing (rework in progress)
 - **Multi-Output Support**: Per-monitor component instances with flexible output policies (primary only, all outputs, specific outputs)
 - **Event Loop Integration**: Custom event sources (timers, channels, file descriptors) via calloop integration
 - **Clean-like Architecture**: Organized as a Cargo workspace with clear separation of concerns (domain, adapters, composition)
 - **HiDPI Support**: Configurable scale factors for high-resolution displays
+- **Session Lock Support**: `ext-session-lock-v1` protocol integration for lock screens
 
 ## Architecture
 
 layer-shika is organized as a **Cargo workspace** with three crates:
 
-- **domain** ([crates/domain/](crates/domain/)): Core domain models, value objects, and port trait definitions. No framework dependencies.
+- **domain** ([crates/domain/](crates/domain/)): Core domain models, value objects, and port trait definitions. No external dependencies.
 - **adapters** ([crates/adapters/](crates/adapters/)): Concrete implementations for Wayland (smithay-client-toolkit), rendering (femtovg + EGL), and platform integration.
 - **composition** ([crates/composition/](crates/composition/)): Public API layer providing Shell-based API, builder patterns, and system integration.
 
