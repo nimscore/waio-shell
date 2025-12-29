@@ -149,12 +149,20 @@ impl PopupWindow {
         let current_size = self.logical_size.get();
 
         if current_size == new_size {
-            info!("Popup resize skipped - size unchanged: {}x{}", width, height);
+            info!(
+                "Popup resize skipped - size unchanged: {}x{}",
+                width, height
+            );
             return false;
         }
 
-        info!("Requesting popup resize from {}x{} to {}x{}",
-              current_size.width(), current_size.height(), width, height);
+        info!(
+            "Requesting popup resize from {}x{} to {}x{}",
+            current_size.width(),
+            current_size.height(),
+            width,
+            height
+        );
         self.logical_size.set(new_size);
         self.set_size(WindowSize::Logical(slint::LogicalSize::new(width, height)));
         RenderableWindow::request_redraw(self);
