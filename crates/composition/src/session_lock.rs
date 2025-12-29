@@ -39,46 +39,26 @@ impl SessionLock {
     }
 
     pub fn activate(&self) -> Result<()> {
-        let current = self.state.get();
-        if !current.can_activate() {
-            return Err(Error::InvalidState {
-                current: format!("{current:?}"),
-                operation: "activate".to_string(),
-            });
-        }
+        log::info!("Session lock activation called - queuing SessionLockCommand::Activate");
 
-        let system = self.system.upgrade().ok_or(Error::SystemDropped)?;
-        system
-            .borrow_mut()
-            .activate_session_lock(&self.component_name, self.config.clone())?;
-        self.state.set(LockState::Locking);
+        self.command_sender
+            .send(ShellCommand::SessionLock(SessionLockCommand::Activate {
+                component_name: self.component_name.clone(),
+                config: self.config.clone(),
+            }))
+            .map_err(|e| {
+                Error::Domain(DomainError::InvalidInput {
+                    message: format!("Failed to send session lock command: {e:?}"),
+                })
+            })?;
+
+        log::info!("SessionLockCommand::Activate queued successfully");
         Ok(())
     }
 
     pub fn deactivate(&self) -> Result<()> {
-        log::info!("deactivate() called - queuing SessionLockCommand::Deactivate");
+        log::info!("Session lock deactivation called - queuing SessionLockCommand::Deactivate");
 
-        if let Some(system) = self.system.upgrade() {
-            if let Ok(borrowed) = system.try_borrow() {
-                if let Some(state) = borrowed.session_lock_state() {
-                    log::info!("Syncing lock state before deactivate: {:?}", state);
-                    self.state.set(state);
-                }
-            } else {
-                log::warn!("Could not borrow system to sync state - already borrowed");
-            }
-        }
-
-        let current = self.state.get();
-        log::info!("Current lock state for deactivate check: {:?}", current);
-        if !current.can_deactivate() {
-            return Err(Error::InvalidState {
-                current: format!("{current:?}"),
-                operation: "deactivate".to_string(),
-            });
-        }
-
-        // Send deactivate command via channel to be processed outside borrow context
         self.command_sender
             .send(ShellCommand::SessionLock(SessionLockCommand::Deactivate))
             .map_err(|e| {

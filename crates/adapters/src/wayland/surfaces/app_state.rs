@@ -64,6 +64,7 @@ pub struct AppState {
     keyboard_state: KeyboardState,
     lock_manager: Option<SessionLockManager>,
     lock_callbacks: Vec<LockCallback>,
+    queue_handle: Option<wayland_client::QueueHandle<AppState>>,
 }
 
 impl AppState {
@@ -92,6 +93,7 @@ impl AppState {
             keyboard_state: KeyboardState::new(),
             lock_manager: None,
             lock_callbacks: Vec::new(),
+            queue_handle: None,
         }
     }
 
@@ -102,6 +104,10 @@ impl AppState {
 
     pub fn set_slint_platform(&mut self, platform: Rc<CustomSlintPlatform>) {
         self.slint_platform = Some(platform);
+    }
+
+    pub fn set_queue_handle(&mut self, queue_handle: wayland_client::QueueHandle<AppState>) {
+        self.queue_handle = Some(queue_handle);
     }
 
     pub fn lock_manager(&self) -> Option<&SessionLockManager> {
@@ -143,13 +149,18 @@ impl AppState {
         &mut self,
         component_name: &str,
         config: LockConfig,
-        queue_handle: &wayland_client::QueueHandle<AppState>,
     ) -> Result<()> {
         if self.lock_manager.is_some() {
             return Err(LayerShikaError::InvalidInput {
                 message: "Session lock already active".to_string(),
             });
         }
+
+        let queue_handle = self.queue_handle.as_ref().ok_or_else(|| {
+            LayerShikaError::InvalidInput {
+                message: "Queue handle not initialized".to_string(),
+            }
+        })?;
 
         let context = self.create_lock_context()?;
         let (definition, compilation_result) = self.resolve_lock_component(component_name)?;
@@ -178,13 +189,14 @@ impl AppState {
     }
 
     pub fn deactivate_session_lock(&mut self) -> Result<()> {
-        let Some(manager) = self.lock_manager.as_mut() else {
+        let Some(mut manager) = self.lock_manager.take() else {
             return Err(LayerShikaError::InvalidInput {
                 message: "No session lock active".to_string(),
             });
         };
 
-        manager.deactivate()
+        manager.deactivate()?;
+        Ok(())
     }
 
     pub fn render_lock_frames(&self) -> Result<()> {

@@ -290,6 +290,8 @@ impl WaylandShellSystem {
             Rc::clone(&shared_serial),
         );
 
+        app_state.set_queue_handle(event_queue.handle());
+
         let render_factory =
             RenderContextFactory::new(Rc::clone(&global_ctx.render_context_manager));
 
@@ -362,6 +364,8 @@ impl WaylandShellSystem {
             ManagedWlKeyboard::new(Rc::clone(&keyboard), Rc::new(connection.clone())),
             Rc::clone(&shared_serial),
         );
+
+        app_state.set_queue_handle(event_queue.handle());
 
         let render_factory =
             RenderContextFactory::new(Rc::clone(&global_ctx.render_context_manager));
@@ -804,9 +808,7 @@ impl WaylandSystemOps for WaylandShellSystem {
     }
 
     fn activate_session_lock(&mut self, component_name: &str, config: LockConfig) -> Result<()> {
-        let queue_handle = self.event_queue.handle();
-        self.state
-            .activate_session_lock(component_name, config, &queue_handle)
+        self.state.activate_session_lock(component_name, config)
     }
 
     fn deactivate_session_lock(&mut self) -> Result<()> {

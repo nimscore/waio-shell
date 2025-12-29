@@ -16,6 +16,7 @@ use layer_shika_domain::prelude::{
 use layer_shika_domain::value_objects::dimensions::{PopupDimensions, SurfaceDimension};
 use layer_shika_domain::value_objects::handle::PopupHandle;
 use layer_shika_domain::value_objects::handle::SurfaceHandle;
+use layer_shika_domain::value_objects::lock_config::LockConfig;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputInfo;
 use layer_shika_domain::value_objects::popup_config::PopupConfig;
@@ -87,6 +88,10 @@ pub enum SurfaceCommand {
 }
 
 pub enum SessionLockCommand {
+    Activate {
+        component_name: String,
+        config: LockConfig,
+    },
     Deactivate,
 }
 
@@ -751,6 +756,17 @@ impl EventDispatchContext<'_> {
             surface.render_frame_if_dirty()?;
         }
         Ok(())
+    }
+
+    /// Activates the session lock
+    pub(crate) fn activate_session_lock(
+        &mut self,
+        component_name: &str,
+        config: LockConfig,
+    ) -> Result<()> {
+        self.app_state
+            .activate_session_lock(component_name, config)
+            .map_err(Error::Adapter)
     }
 
     /// Deactivates the session lock

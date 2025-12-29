@@ -619,6 +619,17 @@ impl Shell {
         _system: &Weak<RefCell<dyn WaylandSystemOps>>,
     ) {
         match command {
+            SessionLockCommand::Activate {
+                component_name,
+                config,
+            } => {
+                log::info!("Processing SessionLockCommand::Activate");
+                if let Err(e) = ctx.activate_session_lock(component_name, config.clone()) {
+                    log::error!("Failed to activate session lock: {}", e);
+                } else {
+                    log::info!("Session lock activated successfully");
+                }
+            }
             SessionLockCommand::Deactivate => {
                 log::info!("Processing SessionLockCommand::Deactivate");
                 if let Err(e) = ctx.deactivate_session_lock() {
