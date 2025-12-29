@@ -156,11 +156,12 @@ impl AppState {
             });
         }
 
-        let queue_handle = self.queue_handle.as_ref().ok_or_else(|| {
-            LayerShikaError::InvalidInput {
-                message: "Queue handle not initialized".to_string(),
-            }
-        })?;
+        let queue_handle =
+            self.queue_handle
+                .as_ref()
+                .ok_or_else(|| LayerShikaError::InvalidInput {
+                    message: "Queue handle not initialized".to_string(),
+                })?;
 
         let context = self.create_lock_context()?;
         let (definition, compilation_result) = self.resolve_lock_component(component_name)?;
