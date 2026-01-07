@@ -8,7 +8,7 @@ use crate::wayland::globals::context::GlobalContext;
 use crate::wayland::managed_proxies::{ManagedWlKeyboard, ManagedWlPointer};
 use crate::wayland::outputs::{OutputManager, OutputMapping};
 use crate::wayland::session_lock::lock_context::SessionLockContext;
-use crate::wayland::session_lock::lock_manager::{LockCallback, SessionLockManager};
+use crate::wayland::session_lock::lock_manager::{LockCallback, OutputFilter, SessionLockManager};
 use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::value_objects::handle::SurfaceHandle;
 use layer_shika_domain::value_objects::lock_config::LockConfig;
@@ -145,6 +145,19 @@ impl AppState {
         self.lock_callbacks.push(callback);
     }
 
+    pub fn register_session_lock_callback_with_filter(
+        &mut self,
+        callback_name: impl Into<String>,
+        handler: SessionLockCallback,
+        filter: OutputFilter,
+    ) {
+        let callback = LockCallback::with_filter(callback_name, handler, filter);
+        if let Some(manager) = self.lock_manager.as_mut() {
+            manager.register_callback(callback.clone());
+        }
+        self.lock_callbacks.push(callback);
+    }
+
     pub fn activate_session_lock(
         &mut self,
         component_name: &str,
@@ -208,6 +221,31 @@ impl AppState {
             manager.render_frames()?;
         }
         Ok(())
+    }
+
+    pub fn session_lock_component_name(&self) -> Option<String> {
+        self.lock_manager
+            .as_ref()
+            .map(|manager| manager.component_name().name().to_string())
+    }
+
+    pub fn iter_lock_surfaces(
+        &self,
+        f: &mut dyn FnMut(OutputHandle, &slint_interpreter::ComponentInstance),
+    ) {
+        if let Some(manager) = self.lock_manager.as_ref() {
+            manager.iter_lock_surfaces(&mut |output_id, component| {
+                if let Some(handle) = self.output_mapping.get(output_id) {
+                    f(handle, component);
+                }
+            });
+        }
+    }
+
+    pub fn count_lock_surfaces(&self) -> usize {
+        self.lock_manager
+            .as_ref()
+            .map_or(0, SessionLockManager::count_lock_surfaces)
     }
 
     fn resolve_lock_component(

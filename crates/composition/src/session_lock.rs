@@ -100,8 +100,10 @@ impl SessionLock {
     #[must_use]
     pub fn state(&self) -> LockState {
         if let Some(system) = self.system.upgrade() {
-            if let Some(state) = system.borrow().session_lock_state() {
-                self.state.set(state);
+            if let Ok(borrowed) = system.try_borrow() {
+                if let Some(state) = borrowed.session_lock_state() {
+                    self.state.set(state);
+                }
             }
         }
         self.state.get()

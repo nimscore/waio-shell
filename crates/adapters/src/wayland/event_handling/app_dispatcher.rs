@@ -1,6 +1,8 @@
+use crate::wayland::session_lock::lock_manager::LockSurfaceOutputContext;
 use crate::wayland::surfaces::app_state::AppState;
 use crate::wayland::surfaces::display_metrics::DisplayMetrics;
 use crate::wayland::surfaces::surface_state::SurfaceState;
+use layer_shika_domain::value_objects::output_handle::OutputHandle;
 use layer_shika_domain::value_objects::output_info::OutputGeometry;
 use log::{debug, info};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
@@ -650,8 +652,33 @@ impl Dispatch<ExtSessionLockSurfaceV1, ()> for AppState {
         } = event
         {
             let lock_surface_id = lock_surface.id();
+
+            let (output_handle, output_info) = if let Some(manager) = state.lock_manager() {
+                if let Some(output_id) = manager.find_output_id_for_lock_surface(&lock_surface_id) {
+                    let handle = state.get_handle_by_output_id(&output_id);
+                    let info = handle.and_then(|h| state.get_output_info(h).cloned());
+                    (handle.unwrap_or_else(|| OutputHandle::from_raw(0)), info)
+                } else {
+                    (OutputHandle::from_raw(0), None)
+                }
+            } else {
+                (OutputHandle::from_raw(0), None)
+            };
+
+            let output_registry = state.output_registry();
+            let primary_handle = output_registry.primary_handle();
+            let active_handle = output_registry.active_handle();
+
+            let output_ctx = LockSurfaceOutputContext {
+                output_handle,
+                output_info,
+                primary_handle,
+                active_handle,
+            };
+
             if let Some(manager) = state.lock_manager_mut() {
-                if let Err(err) = manager.handle_configure(&lock_surface_id, serial, width, height)
+                if let Err(err) =
+                    manager.handle_configure(&lock_surface_id, serial, width, height, output_ctx)
                 {
                     info!("Failed to configure session lock surface: {err}");
                 }

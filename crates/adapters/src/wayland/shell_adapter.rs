@@ -4,6 +4,7 @@ use crate::wayland::{
     managed_proxies::{ManagedWlKeyboard, ManagedWlPointer},
     ops::WaylandSystemOps,
     outputs::{OutputManager, OutputManagerContext},
+    session_lock::lock_manager::OutputFilter,
     surfaces::layer_surface::{SurfaceCtx, SurfaceSetupParams},
     surfaces::popup_manager::{PopupContext, PopupManager},
     surfaces::{
@@ -830,6 +831,28 @@ impl WaylandSystemOps for WaylandShellSystem {
     ) {
         self.state
             .register_session_lock_callback(callback_name, handler);
+    }
+
+    fn register_session_lock_callback_with_filter(
+        &mut self,
+        callback_name: &str,
+        handler: Rc<dyn Fn(&[slint_interpreter::Value]) -> slint_interpreter::Value>,
+        filter: OutputFilter,
+    ) {
+        self.state
+            .register_session_lock_callback_with_filter(callback_name, handler, filter);
+    }
+
+    fn session_lock_component_name(&self) -> Option<String> {
+        self.state.session_lock_component_name()
+    }
+
+    fn iter_lock_surfaces(&self, f: &mut dyn FnMut(OutputHandle, &ComponentInstance)) {
+        self.state.iter_lock_surfaces(f);
+    }
+
+    fn count_lock_surfaces(&self) -> usize {
+        self.state.count_lock_surfaces()
     }
 
     fn app_state(&self) -> &AppState {

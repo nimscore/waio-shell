@@ -1285,6 +1285,162 @@ impl Shell {
             })
             .collect()
     }
+
+    /// Creates a selection for targeting session lock surfaces by criteria
+    pub fn select_lock(&self, selector: impl Into<crate::Selector>) -> crate::LockSelection<'_> {
+        crate::LockSelection::new(self, selector.into())
+    }
+
+    fn selector_to_output_filter(selector: &crate::Selector) -> layer_shika_adapters::OutputFilter {
+        let selector = selector.clone();
+
+        Rc::new(
+            move |component_name: &str,
+                  output_handle: OutputHandle,
+                  output_info: Option<&OutputInfo>,
+                  primary_handle: Option<OutputHandle>,
+                  active_handle: Option<OutputHandle>| {
+                let surface_info = crate::SurfaceInfo {
+                    name: component_name.to_string(),
+                    output: output_handle,
+                };
+
+                selector.matches(&surface_info, output_info, primary_handle, active_handle)
+            },
+        )
+    }
+
+    pub(crate) fn on_lock_internal<F, R>(
+        &self,
+        selector: &crate::Selector,
+        callback_name: &str,
+        handler: F,
+    ) where
+        F: Fn(CallbackContext) -> R + Clone + 'static,
+        R: IntoValue,
+    {
+        let control = self.control();
+        let handler = Rc::new(handler);
+        let callback_name = callback_name.to_string();
+
+        let callback_handler = Rc::new(move |_args: &[Value]| {
+            let handler_rc = Rc::clone(&handler);
+            let control_clone = control.clone();
+            let instance_id =
+                SurfaceInstanceId::new(SurfaceHandle::from_raw(0), OutputHandle::from_raw(0));
+            let ctx = CallbackContext::new(instance_id, String::new(), control_clone);
+            handler_rc(ctx).into_value()
+        });
+
+        let filter = Self::selector_to_output_filter(selector);
+        self.inner
+            .borrow_mut()
+            .register_session_lock_callback_with_filter(&callback_name, callback_handler, filter);
+    }
+
+    pub(crate) fn on_lock_with_args_internal<F, R>(
+        &self,
+        selector: &crate::Selector,
+        callback_name: &str,
+        handler: F,
+    ) where
+        F: Fn(&[Value], CallbackContext) -> R + Clone + 'static,
+        R: IntoValue,
+    {
+        let control = self.control();
+        let handler = Rc::new(handler);
+        let callback_name = callback_name.to_string();
+
+        let callback_handler = Rc::new(move |args: &[Value]| {
+            let handler_rc = Rc::clone(&handler);
+            let control_clone = control.clone();
+            let instance_id =
+                SurfaceInstanceId::new(SurfaceHandle::from_raw(0), OutputHandle::from_raw(0));
+            let ctx = CallbackContext::new(instance_id, String::new(), control_clone);
+            handler_rc(args, ctx).into_value()
+        });
+
+        let filter = Self::selector_to_output_filter(selector);
+        self.inner
+            .borrow_mut()
+            .register_session_lock_callback_with_filter(&callback_name, callback_handler, filter);
+    }
+
+    pub(crate) fn with_selected_lock<F>(&self, selector: &crate::Selector, mut f: F)
+    where
+        F: FnMut(&str, &ComponentInstance),
+    {
+        let system = self.inner.borrow();
+        let (primary, active) = self.get_output_handles();
+
+        let Some(component_name) = system.session_lock_component_name() else {
+            return;
+        };
+
+        system.iter_lock_surfaces(&mut |output_handle, component| {
+            let surface_info = crate::SurfaceInfo {
+                name: component_name.clone(),
+                output: output_handle,
+            };
+
+            let output_info = system.app_state().get_output_info(output_handle);
+
+            if selector.matches(&surface_info, output_info, primary, active) {
+                f(&component_name, component);
+            }
+        });
+    }
+
+    pub(crate) fn count_selected_lock(&self, selector: &crate::Selector) -> usize {
+        let system = self.inner.borrow();
+        let (primary, active) = self.get_output_handles();
+
+        let Some(component_name) = system.session_lock_component_name() else {
+            return 0;
+        };
+
+        let mut count = 0;
+        system.iter_lock_surfaces(&mut |output_handle, _component| {
+            let surface_info = crate::SurfaceInfo {
+                name: component_name.clone(),
+                output: output_handle,
+            };
+
+            let output_info = system.app_state().get_output_info(output_handle);
+
+            if selector.matches(&surface_info, output_info, primary, active) {
+                count += 1;
+            }
+        });
+        count
+    }
+
+    pub(crate) fn get_selected_lock_info(
+        &self,
+        selector: &crate::Selector,
+    ) -> Vec<crate::SurfaceInfo> {
+        let system = self.inner.borrow();
+        let (primary, active) = self.get_output_handles();
+
+        let Some(component_name) = system.session_lock_component_name() else {
+            return Vec::new();
+        };
+
+        let mut info_vec = Vec::new();
+        system.iter_lock_surfaces(&mut |output_handle, _component| {
+            let surface_info = crate::SurfaceInfo {
+                name: component_name.clone(),
+                output: output_handle,
+            };
+
+            let output_info = system.app_state().get_output_info(output_handle);
+
+            if selector.matches(&surface_info, output_info, primary, active) {
+                info_vec.push(surface_info);
+            }
+        });
+        info_vec
+    }
 }
 
 impl ShellRuntime for Shell {

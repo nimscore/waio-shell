@@ -12,6 +12,8 @@ use crate::wayland::surfaces::pointer_utils::wayland_button_to_slint;
 use layer_shika_domain::surface_dimensions::SurfaceDimensions;
 use layer_shika_domain::value_objects::lock_config::LockConfig;
 use layer_shika_domain::value_objects::lock_state::LockState;
+use layer_shika_domain::value_objects::output_handle::OutputHandle;
+use layer_shika_domain::value_objects::output_info::OutputInfo;
 use log::info;
 use slint::{
     LogicalPosition, LogicalSize, SharedString, WindowPosition, WindowSize,
@@ -28,12 +30,22 @@ use wayland_client::{
 use wayland_protocols::ext::session_lock::v1::client::ext_session_lock_v1::ExtSessionLockV1;
 use xkbcommon::xkb;
 
-type LockCallbackHandler = Rc<dyn Fn(&[Value]) -> Value>;
+pub type LockCallbackHandler = Rc<dyn Fn(&[Value]) -> Value>;
+pub type OutputFilter = Rc<
+    dyn Fn(
+        &str,
+        OutputHandle,
+        Option<&OutputInfo>,
+        Option<OutputHandle>,
+        Option<OutputHandle>,
+    ) -> bool,
+>;
 
 #[derive(Clone)]
 pub(crate) struct LockCallback {
     name: String,
     handler: LockCallbackHandler,
+    filter: Option<OutputFilter>,
 }
 
 impl LockCallback {
@@ -41,7 +53,42 @@ impl LockCallback {
         Self {
             name: name.into(),
             handler,
+            filter: None,
         }
+    }
+
+    pub fn with_filter(
+        name: impl Into<String>,
+        handler: LockCallbackHandler,
+        filter: OutputFilter,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            handler,
+            filter: Some(filter),
+        }
+    }
+
+    pub fn should_apply(
+        &self,
+        component_name: &str,
+        output_handle: OutputHandle,
+        output_info: Option<&OutputInfo>,
+        primary_handle: Option<OutputHandle>,
+        active_handle: Option<OutputHandle>,
+    ) -> bool {
+        self.filter.as_ref().map_or_else(
+            || true,
+            |f| {
+                f(
+                    component_name,
+                    output_handle,
+                    output_info,
+                    primary_handle,
+                    active_handle,
+                )
+            },
+        )
     }
 
     pub fn apply_to(&self, component: &ComponentInstance) -> Result<()> {
@@ -62,12 +109,24 @@ struct ActiveLockSurface {
     has_fractional_scale: bool,
 }
 
+pub struct LockSurfaceOutputContext {
+    pub output_handle: OutputHandle,
+    pub output_info: Option<OutputInfo>,
+    pub primary_handle: Option<OutputHandle>,
+    pub active_handle: Option<OutputHandle>,
+}
+
 struct LockConfigureContext {
     scale_factor: f32,
     component_definition: ComponentDefinition,
     compilation_result: Option<Rc<CompilationResult>>,
     platform: Rc<CustomSlintPlatform>,
     callbacks: Vec<LockCallback>,
+    component_name: String,
+    output_handle: OutputHandle,
+    output_info: Option<OutputInfo>,
+    primary_handle: Option<OutputHandle>,
+    active_handle: Option<OutputHandle>,
 }
 
 impl ActiveLockSurface {
@@ -121,13 +180,26 @@ impl ActiveLockSurface {
                 .window()
                 .dispatch_event(WindowEvent::WindowActiveChanged(true));
             for callback in &context.callbacks {
-                if let Err(err) = callback.apply_to(component.component_instance()) {
-                    info!(
-                        "Failed to register lock callback '{}': {err}",
-                        callback.name
-                    );
+                if callback.should_apply(
+                    &context.component_name,
+                    context.output_handle,
+                    context.output_info.as_ref(),
+                    context.primary_handle,
+                    context.active_handle,
+                ) {
+                    if let Err(err) = callback.apply_to(component.component_instance()) {
+                        info!(
+                            "Failed to register lock callback '{}': {err}",
+                            callback.name
+                        );
+                    } else {
+                        info!("Registered lock callback '{}'", callback.name);
+                    }
                 } else {
-                    info!("Registered lock callback '{}'", callback.name);
+                    info!(
+                        "Skipping callback '{}' due to selector filter (output {:?})",
+                        callback.name, context.output_handle
+                    );
                 }
             }
             self.component = Some(component);
@@ -439,19 +511,34 @@ impl SessionLockManager {
             .find(|surface| surface.surface.surface_id() == *surface_id)
     }
 
+    pub fn find_output_id_for_lock_surface(&self, lock_surface_id: &ObjectId) -> Option<ObjectId> {
+        self.lock_surfaces
+            .iter()
+            .find(|(_, surface)| surface.surface.surface_id() == *lock_surface_id)
+            .map(|(id, _)| id.clone())
+    }
+
     pub fn handle_configure(
         &mut self,
         lock_surface_id: &ObjectId,
         serial: u32,
         width: u32,
         height: u32,
+        output_ctx: LockSurfaceOutputContext,
     ) -> Result<()> {
+        let component_name = self.component_definition.name().to_string();
+
         let context = LockConfigureContext {
             scale_factor: self.config.scale_factor.value(),
             component_definition: self.component_definition.clone(),
             compilation_result: self.compilation_result.clone(),
             platform: Rc::clone(&self.platform),
             callbacks: self.callbacks.clone(),
+            component_name,
+            output_handle: output_ctx.output_handle,
+            output_info: output_ctx.output_info,
+            primary_handle: output_ctx.primary_handle,
+            active_handle: output_ctx.active_handle,
         };
 
         let Some(surface) = self.find_surface_by_lock_surface_id_mut(lock_surface_id) else {
@@ -757,5 +844,24 @@ impl SessionLockManager {
         window.set_size(WindowSize::Logical(init_size));
         window.set_position(WindowPosition::Logical(LogicalPosition::new(0., 0.)));
         Ok(window)
+    }
+
+    pub fn iter_lock_surfaces(&self, f: &mut dyn FnMut(&ObjectId, &ComponentInstance)) {
+        for (output_id, active_surface) in &self.lock_surfaces {
+            if let Some(component) = active_surface.component.as_ref() {
+                f(output_id, component.component_instance());
+            }
+        }
+    }
+
+    pub const fn component_name(&self) -> &ComponentDefinition {
+        &self.component_definition
+    }
+
+    pub fn count_lock_surfaces(&self) -> usize {
+        self.lock_surfaces
+            .values()
+            .filter(|s| s.component.is_some())
+            .count()
     }
 }

@@ -2,6 +2,7 @@
 
 mod event_loop;
 mod layer_surface;
+mod lock_selection;
 mod popup;
 mod popup_builder;
 mod selection;
@@ -39,6 +40,7 @@ pub use layer_shika_domain::value_objects::{
     popup_size::PopupSize,
 };
 pub use layer_surface::{LayerSurfaceHandle, ShellSurfaceConfigHandler};
+pub use lock_selection::LockSelection;
 pub use popup::PopupShell;
 pub use popup_builder::PopupBuilder;
 pub use selection::Selection;
@@ -89,10 +91,10 @@ pub mod prelude {
     pub use crate::{
         AnchorEdges, AnchorStrategy, CompiledUiSource, DEFAULT_COMPONENT_NAME,
         DEFAULT_SURFACE_NAME, EventDispatchContext, EventLoopHandle, Handle, IntoValue,
-        KeyboardInteractivity, Layer, LayerSurfaceHandle, Output, OutputGeometry, OutputHandle,
-        OutputInfo, OutputPolicy, OutputRegistry, PopupBuilder, PopupConfig, PopupHandle,
-        PopupPosition, PopupShell, PopupSize, PopupWindow, Result, Selection, Selector,
-        SessionLock, SessionLockBuilder, Shell, ShellBuilder, ShellConfig, ShellControl,
+        KeyboardInteractivity, Layer, LayerSurfaceHandle, LockSelection, Output, OutputGeometry,
+        OutputHandle, OutputInfo, OutputPolicy, OutputRegistry, PopupBuilder, PopupConfig,
+        PopupHandle, PopupPosition, PopupShell, PopupSize, PopupWindow, Result, Selection,
+        Selector, SessionLock, SessionLockBuilder, Shell, ShellBuilder, ShellConfig, ShellControl,
         ShellEventContext, ShellEventLoop, ShellRuntime, ShellSurfaceConfigHandler, Surface,
         SurfaceComponentConfig, SurfaceConfigBuilder, SurfaceControlHandle, SurfaceDefinition,
         SurfaceEntry, SurfaceHandle, SurfaceInfo, SurfaceMetadata, SurfaceRegistry,
