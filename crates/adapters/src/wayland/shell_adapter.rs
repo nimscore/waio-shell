@@ -4,7 +4,7 @@ use crate::wayland::{
     managed_proxies::{ManagedWlKeyboard, ManagedWlPointer},
     ops::WaylandSystemOps,
     outputs::{OutputManager, OutputManagerContext},
-    session_lock::lock_manager::OutputFilter,
+    session_lock::OutputFilter,
     surfaces::layer_surface::{SurfaceCtx, SurfaceSetupParams},
     surfaces::popup_manager::{PopupContext, PopupManager},
     surfaces::{

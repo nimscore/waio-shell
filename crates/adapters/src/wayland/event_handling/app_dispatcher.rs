@@ -1,4 +1,4 @@
-use crate::wayland::session_lock::lock_manager::LockSurfaceOutputContext;
+use crate::wayland::session_lock::LockSurfaceOutputContext;
 use crate::wayland::surfaces::app_state::AppState;
 use crate::wayland::surfaces::display_metrics::DisplayMetrics;
 use crate::wayland::surfaces::surface_state::SurfaceState;

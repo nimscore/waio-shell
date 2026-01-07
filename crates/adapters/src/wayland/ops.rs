@@ -1,6 +1,6 @@
 use crate::errors::Result;
 use crate::wayland::config::ShellSurfaceConfig;
-use crate::wayland::session_lock::lock_manager::OutputFilter;
+use crate::wayland::session_lock::OutputFilter;
 use crate::wayland::surfaces::app_state::AppState;
 use layer_shika_domain::value_objects::lock_config::LockConfig;
 use layer_shika_domain::value_objects::lock_state::LockState;

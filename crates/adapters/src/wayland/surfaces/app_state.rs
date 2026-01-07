@@ -8,7 +8,7 @@ use crate::wayland::globals::context::GlobalContext;
 use crate::wayland::managed_proxies::{ManagedWlKeyboard, ManagedWlPointer};
 use crate::wayland::outputs::{OutputManager, OutputMapping};
 use crate::wayland::session_lock::lock_context::SessionLockContext;
-use crate::wayland::session_lock::lock_manager::{LockCallback, OutputFilter, SessionLockManager};
+use crate::wayland::session_lock::{LockCallback, OutputFilter, SessionLockManager};
 use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::value_objects::handle::SurfaceHandle;
 use layer_shika_domain::value_objects::lock_config::LockConfig;

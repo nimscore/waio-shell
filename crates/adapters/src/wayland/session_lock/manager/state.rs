@@ -1,0 +1,248 @@
+use crate::errors::Result;
+use crate::rendering::femtovg::main_window::FemtoVGWindow;
+use crate::rendering::femtovg::renderable_window::RenderableWindow;
+use crate::rendering::slint_integration::platform::CustomSlintPlatform;
+use crate::wayland::session_lock::lock_surface::LockSurface;
+use crate::wayland::surfaces::component_state::ComponentState;
+use crate::wayland::surfaces::display_metrics::DisplayMetrics;
+use layer_shika_domain::surface_dimensions::SurfaceDimensions;
+use layer_shika_domain::value_objects::output_handle::OutputHandle;
+use layer_shika_domain::value_objects::output_info::OutputInfo;
+use log::info;
+use slint::{
+    LogicalPosition, LogicalSize, WindowSize,
+    platform::{WindowAdapter, WindowEvent},
+};
+use slint_interpreter::{CompilationResult, ComponentDefinition};
+use std::rc::Rc;
+
+use super::callbacks::LockCallback;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LockScalingMode {
+    FractionalWithViewport,
+    FractionalOnly,
+    Integer,
+}
+
+pub struct LockSurfaceOutputContext {
+    pub output_handle: OutputHandle,
+    pub output_info: Option<OutputInfo>,
+    pub primary_handle: Option<OutputHandle>,
+    pub active_handle: Option<OutputHandle>,
+}
+
+pub struct LockConfigureContext {
+    pub scale_factor: f32,
+    pub component_definition: ComponentDefinition,
+    pub compilation_result: Option<Rc<CompilationResult>>,
+    pub platform: Rc<CustomSlintPlatform>,
+    pub callbacks: Vec<LockCallback>,
+    pub component_name: String,
+    pub output_handle: OutputHandle,
+    pub output_info: Option<OutputInfo>,
+    pub primary_handle: Option<OutputHandle>,
+    pub active_handle: Option<OutputHandle>,
+}
+
+pub struct ActiveLockSurface {
+    surface: LockSurface,
+    window: Rc<FemtoVGWindow>,
+    component: Option<ComponentState>,
+    scale_factor: f32,
+    has_fractional_scale: bool,
+}
+
+impl ActiveLockSurface {
+    pub fn new(surface: LockSurface, window: Rc<FemtoVGWindow>) -> Self {
+        Self {
+            has_fractional_scale: surface.fractional_scale().is_some(),
+            surface,
+            window,
+            component: None,
+            scale_factor: 1.0,
+        }
+    }
+
+    pub fn handle_configure(
+        &mut self,
+        serial: u32,
+        width: u32,
+        height: u32,
+        context: &LockConfigureContext,
+    ) -> Result<()> {
+        self.surface.handle_configure(serial, width, height);
+        self.scale_factor = context.scale_factor;
+        let dimensions = match SurfaceDimensions::calculate(width, height, context.scale_factor) {
+            Ok(dimensions) => dimensions,
+            Err(err) => {
+                info!("Failed to calculate lock surface dimensions: {err}");
+                return Ok(());
+            }
+        };
+        let scaling_mode = self.scaling_mode();
+        info!(
+            "Lock surface dimensions: logical {}x{}, physical {}x{}, scale {}, mode {:?}",
+            dimensions.logical_width(),
+            dimensions.logical_height(),
+            dimensions.physical_width(),
+            dimensions.physical_height(),
+            context.scale_factor,
+            scaling_mode
+        );
+        self.configure_window(&dimensions, scaling_mode, context.scale_factor);
+        self.configure_surface(&dimensions, scaling_mode);
+
+        if self.component.is_none() {
+            context.platform.add_window(Rc::clone(&self.window));
+            let component = ComponentState::new(
+                context.component_definition.clone(),
+                context.compilation_result.clone(),
+                &self.window,
+            )?;
+            self.window
+                .window()
+                .dispatch_event(WindowEvent::WindowActiveChanged(true));
+            for callback in &context.callbacks {
+                if callback.should_apply(
+                    &context.component_name,
+                    context.output_handle,
+                    context.output_info.as_ref(),
+                    context.primary_handle,
+                    context.active_handle,
+                ) {
+                    if let Err(err) = callback.apply_to(component.component_instance()) {
+                        info!(
+                            "Failed to register lock callback '{}': {err}",
+                            callback.name()
+                        );
+                    } else {
+                        info!("Registered lock callback '{}'", callback.name());
+                    }
+                } else {
+                    info!(
+                        "Skipping callback '{}' due to selector filter (output {:?})",
+                        callback.name(),
+                        context.output_handle
+                    );
+                }
+            }
+            self.component = Some(component);
+        }
+
+        RenderableWindow::request_redraw(self.window.as_ref());
+        Ok(())
+    }
+
+    pub fn render_frame_if_dirty(&self) -> Result<()> {
+        self.window.render_frame_if_dirty()
+    }
+
+    pub fn handle_fractional_scale(&mut self, scale_120ths: u32) {
+        let scale_factor = DisplayMetrics::scale_factor_from_120ths(scale_120ths);
+        self.scale_factor = scale_factor;
+        if self.surface.width() == 0 || self.surface.height() == 0 {
+            return;
+        }
+        let Ok(dimensions) =
+            SurfaceDimensions::calculate(self.surface.width(), self.surface.height(), scale_factor)
+        else {
+            return;
+        };
+        let scaling_mode = self.scaling_mode();
+        self.configure_window(&dimensions, scaling_mode, scale_factor);
+        self.configure_surface(&dimensions, scaling_mode);
+        RenderableWindow::request_redraw(self.window.as_ref());
+    }
+
+    pub fn apply_callback(&self, callback: &LockCallback) {
+        if let Some(component) = self.component.as_ref() {
+            if let Err(err) = callback.apply_to(component.component_instance()) {
+                info!(
+                    "Failed to register lock callback '{}': {err}",
+                    callback.name()
+                );
+            }
+        }
+    }
+
+    fn scaling_mode(&self) -> LockScalingMode {
+        if self.surface.has_fractional_scale() && self.surface.has_viewport() {
+            LockScalingMode::FractionalWithViewport
+        } else if self.surface.has_fractional_scale() {
+            LockScalingMode::FractionalOnly
+        } else {
+            LockScalingMode::Integer
+        }
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    fn configure_window(
+        &self,
+        dimensions: &SurfaceDimensions,
+        mode: LockScalingMode,
+        scale_factor: f32,
+    ) {
+        match mode {
+            LockScalingMode::FractionalWithViewport | LockScalingMode::FractionalOnly => {
+                RenderableWindow::set_scale_factor(self.window.as_ref(), scale_factor);
+                self.window.set_size(WindowSize::Logical(LogicalSize::new(
+                    dimensions.logical_width() as f32,
+                    dimensions.logical_height() as f32,
+                )));
+            }
+            LockScalingMode::Integer => {
+                RenderableWindow::set_scale_factor(self.window.as_ref(), scale_factor);
+                self.window
+                    .set_size(WindowSize::Physical(slint::PhysicalSize::new(
+                        dimensions.physical_width(),
+                        dimensions.physical_height(),
+                    )));
+            }
+        }
+    }
+
+    fn configure_surface(&self, dimensions: &SurfaceDimensions, mode: LockScalingMode) {
+        match mode {
+            LockScalingMode::FractionalWithViewport => {
+                self.surface.configure_fractional_viewport(
+                    dimensions.logical_width(),
+                    dimensions.logical_height(),
+                );
+            }
+            LockScalingMode::FractionalOnly | LockScalingMode::Integer => {
+                self.surface
+                    .configure_buffer_scale(dimensions.buffer_scale());
+            }
+        }
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn to_logical_position(&self, surface_x: f64, surface_y: f64) -> LogicalPosition {
+        if self.has_fractional_scale {
+            let x = surface_x as f32;
+            let y = surface_y as f32;
+            LogicalPosition::new(x, y)
+        } else {
+            let x = (surface_x / f64::from(self.scale_factor)) as f32;
+            let y = (surface_y / f64::from(self.scale_factor)) as f32;
+            LogicalPosition::new(x, y)
+        }
+    }
+
+    pub fn dispatch_event(&self, event: WindowEvent) {
+        self.window.window().dispatch_event(event);
+    }
+
+    pub fn window_rc(&self) -> Rc<FemtoVGWindow> {
+        Rc::clone(&self.window)
+    }
+
+    pub const fn surface(&self) -> &LockSurface {
+        &self.surface
+    }
+
+    pub const fn component(&self) -> Option<&ComponentState> {
+        self.component.as_ref()
+    }
+}
