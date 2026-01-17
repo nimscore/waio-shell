@@ -4,7 +4,99 @@ use layer_shika_domain::value_objects::output_info::OutputInfo;
 use slint_interpreter::{ComponentInstance, Value};
 use std::rc::Rc;
 
-pub type LockCallbackHandler = Rc<dyn Fn(&[Value]) -> Value>;
+pub(crate) trait FilterContext {
+    fn matches_filter(&self, filter: &dyn Fn(&Self) -> bool) -> bool {
+        filter(self)
+    }
+}
+
+type FilterFn<Ctx> = Box<dyn Fn(&Ctx) -> bool>;
+
+pub(crate) struct CallbackEntry<Ctx: FilterContext, Handler> {
+    name: String,
+    handler: Handler,
+    filter: Option<FilterFn<Ctx>>,
+}
+
+impl<Ctx: FilterContext, Handler: Clone> CallbackEntry<Ctx, Handler> {
+    fn new(name: impl Into<String>, handler: Handler) -> Self {
+        Self {
+            name: name.into(),
+            handler,
+            filter: None,
+        }
+    }
+
+    fn with_filter<F>(name: impl Into<String>, handler: Handler, filter: F) -> Self
+    where
+        F: Fn(&Ctx) -> bool + 'static,
+    {
+        Self {
+            name: name.into(),
+            handler,
+            filter: Some(Box::new(filter)),
+        }
+    }
+
+    pub fn should_apply(&self, context: &Ctx) -> bool {
+        self.filter
+            .as_ref()
+            .is_none_or(|f| context.matches_filter(f.as_ref()))
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn handler(&self) -> &Handler {
+        &self.handler
+    }
+}
+
+impl<Ctx: FilterContext, Handler: Clone> Clone for CallbackEntry<Ctx, Handler> {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            handler: self.handler.clone(),
+            filter: None,
+        }
+    }
+}
+
+pub type CallbackHandler = Rc<dyn Fn(&[Value]) -> Value>;
+
+pub struct LockCallbackContext {
+    pub component_name: String,
+    pub output_handle: OutputHandle,
+    pub output_info: Option<OutputInfo>,
+    pub primary_handle: Option<OutputHandle>,
+    pub active_handle: Option<OutputHandle>,
+}
+
+impl LockCallbackContext {
+    pub fn new(
+        component_name: String,
+        output_handle: OutputHandle,
+        output_info: Option<OutputInfo>,
+        primary_handle: Option<OutputHandle>,
+        active_handle: Option<OutputHandle>,
+    ) -> Self {
+        Self {
+            component_name,
+            output_handle,
+            output_info,
+            primary_handle,
+            active_handle,
+        }
+    }
+}
+
+impl FilterContext for LockCallbackContext {}
+
+pub type LockCallbackEntry = CallbackEntry<LockCallbackContext, CallbackHandler>;
+
+pub type LockCallback = LockCallbackEntry;
+
 pub type OutputFilter = Rc<
     dyn Fn(
         &str,
@@ -15,66 +107,64 @@ pub type OutputFilter = Rc<
     ) -> bool,
 >;
 
-#[derive(Clone)]
-pub struct LockCallback {
-    name: String,
-    handler: LockCallbackHandler,
-    filter: Option<OutputFilter>,
+pub fn create_lock_callback(name: impl Into<String>, handler: CallbackHandler) -> LockCallback {
+    LockCallbackEntry::new(name, handler)
 }
 
-impl LockCallback {
-    pub fn new(name: impl Into<String>, handler: LockCallbackHandler) -> Self {
-        Self {
-            name: name.into(),
-            handler,
-            filter: None,
-        }
-    }
-
-    pub fn with_filter(
-        name: impl Into<String>,
-        handler: LockCallbackHandler,
-        filter: OutputFilter,
-    ) -> Self {
-        Self {
-            name: name.into(),
-            handler,
-            filter: Some(filter),
-        }
-    }
-
-    pub fn should_apply(
-        &self,
-        component_name: &str,
-        output_handle: OutputHandle,
-        output_info: Option<&OutputInfo>,
-        primary_handle: Option<OutputHandle>,
-        active_handle: Option<OutputHandle>,
-    ) -> bool {
-        self.filter.as_ref().map_or_else(
-            || true,
-            |f| {
-                f(
-                    component_name,
-                    output_handle,
-                    output_info,
-                    primary_handle,
-                    active_handle,
-                )
-            },
+pub fn create_lock_callback_with_output_filter<F>(
+    name: impl Into<String>,
+    handler: CallbackHandler,
+    output_filter: F,
+) -> LockCallback
+where
+    F: Fn(
+            &str,
+            OutputHandle,
+            Option<&OutputInfo>,
+            Option<OutputHandle>,
+            Option<OutputHandle>,
+        ) -> bool
+        + 'static,
+{
+    LockCallbackEntry::with_filter(name, handler, move |ctx: &LockCallbackContext| {
+        output_filter(
+            &ctx.component_name,
+            ctx.output_handle,
+            ctx.output_info.as_ref(),
+            ctx.primary_handle,
+            ctx.active_handle,
         )
-    }
+    })
+}
 
-    pub fn apply_to(&self, component: &ComponentInstance) -> Result<()> {
-        let handler = Rc::clone(&self.handler);
+pub trait LockCallbackExt {
+    fn apply_to_component(&self, component: &ComponentInstance) -> Result<()>;
+    fn apply_with_context(
+        &self,
+        component: &ComponentInstance,
+        context: &LockCallbackContext,
+    ) -> Result<()>;
+}
+
+impl LockCallbackExt for LockCallbackEntry {
+    fn apply_to_component(&self, component: &ComponentInstance) -> Result<()> {
+        let handler = Rc::clone(self.handler());
         component
-            .set_callback(&self.name, move |args| handler(args))
+            .set_callback(self.name(), move |args| handler(args))
             .map_err(|e| LayerShikaError::InvalidInput {
-                message: format!("Failed to register callback '{}': {e}", self.name),
+                message: format!("Failed to register callback '{}': {e}", self.name()),
             })
     }
 
-    pub const fn name(&self) -> &String {
-        &self.name
+    fn apply_with_context(
+        &self,
+        component: &ComponentInstance,
+        context: &LockCallbackContext,
+    ) -> Result<()> {
+        if !self.should_apply(context) {
+            return Ok(());
+        }
+
+        self.apply_to_component(component)
     }
 }

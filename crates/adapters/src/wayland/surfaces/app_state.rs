@@ -8,6 +8,9 @@ use crate::wayland::globals::context::GlobalContext;
 use crate::wayland::managed_proxies::{ManagedWlKeyboard, ManagedWlPointer};
 use crate::wayland::outputs::{OutputManager, OutputMapping};
 use crate::wayland::session_lock::lock_context::SessionLockContext;
+use crate::wayland::session_lock::manager::callbacks::{
+    create_lock_callback, create_lock_callback_with_output_filter,
+};
 use crate::wayland::session_lock::{LockCallback, OutputFilter, SessionLockManager};
 use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::value_objects::handle::SurfaceHandle;
@@ -138,7 +141,7 @@ impl AppState {
         callback_name: impl Into<String>,
         handler: SessionLockCallback,
     ) {
-        let callback = LockCallback::new(callback_name, handler);
+        let callback = create_lock_callback(callback_name, handler);
         if let Some(manager) = self.lock_manager.as_mut() {
             manager.register_callback(callback.clone());
         }
@@ -151,7 +154,13 @@ impl AppState {
         handler: SessionLockCallback,
         filter: OutputFilter,
     ) {
-        let callback = LockCallback::with_filter(callback_name, handler, filter);
+        let callback = create_lock_callback_with_output_filter(
+            callback_name,
+            handler,
+            move |component_name, output_handle, output_info, primary, active| {
+                filter(component_name, output_handle, output_info, primary, active)
+            },
+        );
         if let Some(manager) = self.lock_manager.as_mut() {
             manager.register_callback(callback.clone());
         }

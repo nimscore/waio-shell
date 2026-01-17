@@ -1,3 +1,4 @@
+use super::callbacks::{LockCallbackContext, LockCallbackExt};
 use crate::errors::Result;
 use crate::rendering::femtovg::main_window::FemtoVGWindow;
 use crate::rendering::femtovg::renderable_window::RenderableWindow;
@@ -51,6 +52,11 @@ pub struct ActiveLockSurface {
     component: Option<ComponentState>,
     scale_factor: f32,
     has_fractional_scale: bool,
+    output_handle: Option<OutputHandle>,
+    component_name: Option<String>,
+    output_info: Option<OutputInfo>,
+    primary_handle: Option<OutputHandle>,
+    active_handle: Option<OutputHandle>,
 }
 
 impl ActiveLockSurface {
@@ -61,6 +67,11 @@ impl ActiveLockSurface {
             window,
             component: None,
             scale_factor: 1.0,
+            output_handle: None,
+            component_name: None,
+            output_info: None,
+            primary_handle: None,
+            active_handle: None,
         }
     }
 
@@ -73,6 +84,11 @@ impl ActiveLockSurface {
     ) -> Result<()> {
         self.surface.handle_configure(serial, width, height);
         self.scale_factor = context.scale_factor;
+        self.output_handle = Some(context.output_handle);
+        self.component_name = Some(context.component_name.clone());
+        self.output_info.clone_from(&context.output_info);
+        self.primary_handle = context.primary_handle;
+        self.active_handle = context.active_handle;
         let dimensions = match SurfaceDimensions::calculate(width, height, context.scale_factor) {
             Ok(dimensions) => dimensions,
             Err(err) => {
@@ -103,22 +119,25 @@ impl ActiveLockSurface {
             self.window
                 .window()
                 .dispatch_event(WindowEvent::WindowActiveChanged(true));
+
+            let callback_context = LockCallbackContext::new(
+                context.component_name.clone(),
+                context.output_handle,
+                context.output_info.clone(),
+                context.primary_handle,
+                context.active_handle,
+            );
+
             for callback in &context.callbacks {
-                if callback.should_apply(
-                    &context.component_name,
-                    context.output_handle,
-                    context.output_info.as_ref(),
-                    context.primary_handle,
-                    context.active_handle,
-                ) {
-                    if let Err(err) = callback.apply_to(component.component_instance()) {
-                        info!(
-                            "Failed to register lock callback '{}': {err}",
-                            callback.name()
-                        );
-                    } else {
-                        info!("Registered lock callback '{}'", callback.name());
-                    }
+                if let Err(err) =
+                    callback.apply_with_context(component.component_instance(), &callback_context)
+                {
+                    info!(
+                        "Failed to register lock callback '{}': {err}",
+                        callback.name()
+                    );
+                } else if callback.should_apply(&callback_context) {
+                    info!("Registered lock callback '{}'", callback.name());
                 } else {
                     info!(
                         "Skipping callback '{}' due to selector filter (output {:?})",
@@ -156,13 +175,33 @@ impl ActiveLockSurface {
     }
 
     pub fn apply_callback(&self, callback: &LockCallback) {
-        if let Some(component) = self.component.as_ref() {
-            if let Err(err) = callback.apply_to(component.component_instance()) {
-                info!(
-                    "Failed to register lock callback '{}': {err}",
-                    callback.name()
-                );
-            }
+        let Some(component) = self.component.as_ref() else {
+            return;
+        };
+
+        let Some(component_name) = &self.component_name else {
+            return;
+        };
+
+        let Some(output_handle) = self.output_handle else {
+            return;
+        };
+
+        let callback_context = LockCallbackContext::new(
+            component_name.clone(),
+            output_handle,
+            self.output_info.clone(),
+            self.primary_handle,
+            self.active_handle,
+        );
+
+        if let Err(err) =
+            callback.apply_with_context(component.component_instance(), &callback_context)
+        {
+            info!(
+                "Failed to register lock callback '{}': {err}",
+                callback.name()
+            );
         }
     }
 
