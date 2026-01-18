@@ -1,4 +1,5 @@
 use crate::{OutputHandle, OutputInfo};
+use layer_shika_domain::value_objects::surface_instance_id::SurfaceInstanceId;
 use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::sync::Arc;
 
@@ -9,6 +10,8 @@ pub struct SurfaceInfo {
     pub name: String,
     /// Handle to the output displaying this surface
     pub output: OutputHandle,
+    /// Unique identifier for this surface instance
+    pub instance_id: SurfaceInstanceId,
 }
 
 /// Selector for targeting surfaces when setting up callbacks or runtime configuration

@@ -1110,6 +1110,7 @@ impl Shell {
             let surface_info = crate::SurfaceInfo {
                 name: surface_name.clone(),
                 output: output_handle,
+                instance_id: SurfaceInstanceId::new(surface_handle, output_handle),
             };
 
             let output_info = system.app_state().get_output_info(output_handle);
@@ -1170,6 +1171,7 @@ impl Shell {
             let surface_info = crate::SurfaceInfo {
                 name: surface_name.clone(),
                 output: output_handle,
+                instance_id: SurfaceInstanceId::new(surface_handle, output_handle),
             };
 
             let output_info = system.app_state().get_output_info(output_handle);
@@ -1219,12 +1221,39 @@ impl Shell {
             let surface_info = crate::SurfaceInfo {
                 name: surface_name.to_string(),
                 output: key.output_handle,
+                instance_id: crate::SurfaceInstanceId::new(key.surface_handle, key.output_handle),
             };
 
             let output_info = system.app_state().get_output_info(key.output_handle);
 
             if selector.matches(&surface_info, output_info, primary, active) {
                 f(surface_name, surface.component_instance());
+            }
+        }
+    }
+
+    pub(crate) fn with_selected_info<F>(&self, selector: &crate::Selector, mut f: F)
+    where
+        F: FnMut(&crate::SurfaceInfo, &ComponentInstance),
+    {
+        let system = self.inner.borrow();
+        let (primary, active) = self.get_output_handles();
+
+        for (key, surface) in system.app_state().surfaces_with_keys() {
+            let surface_name = system
+                .app_state()
+                .get_surface_name(key.surface_handle)
+                .unwrap_or("unknown");
+            let surface_info = crate::SurfaceInfo {
+                name: surface_name.to_string(),
+                output: key.output_handle,
+                instance_id: crate::SurfaceInstanceId::new(key.surface_handle, key.output_handle),
+            };
+
+            let output_info = system.app_state().get_output_info(key.output_handle);
+
+            if selector.matches(&surface_info, output_info, primary, active) {
+                f(&surface_info, surface.component_instance());
             }
         }
     }
@@ -1244,6 +1273,7 @@ impl Shell {
             let surface_info = crate::SurfaceInfo {
                 name: surface_name.to_string(),
                 output: key.output_handle,
+                instance_id: crate::SurfaceInstanceId::new(key.surface_handle, key.output_handle),
             };
 
             let output_info = system.app_state().get_output_info(key.output_handle);
@@ -1270,6 +1300,10 @@ impl Shell {
                 let surface_info = crate::SurfaceInfo {
                     name: surface_name.to_string(),
                     output: key.output_handle,
+                    instance_id: crate::SurfaceInstanceId::new(
+                        key.surface_handle,
+                        key.output_handle,
+                    ),
                 };
 
                 let output_info = system.app_state().get_output_info(key.output_handle);
@@ -1294,6 +1328,10 @@ impl Shell {
                 let surface_info = crate::SurfaceInfo {
                     name: surface_name.to_string(),
                     output: key.output_handle,
+                    instance_id: crate::SurfaceInstanceId::new(
+                        key.surface_handle,
+                        key.output_handle,
+                    ),
                 };
 
                 let output_info = system.app_state().get_output_info(key.output_handle);
@@ -1324,6 +1362,10 @@ impl Shell {
                 let surface_info = crate::SurfaceInfo {
                     name: component_name.to_string(),
                     output: output_handle,
+                    instance_id: crate::SurfaceInstanceId::new(
+                        crate::SurfaceHandle::from_raw(0),
+                        output_handle,
+                    ),
                 };
 
                 selector.matches(&surface_info, output_info, primary_handle, active_handle)
@@ -1423,6 +1465,10 @@ impl Shell {
             let surface_info = crate::SurfaceInfo {
                 name: component_name.clone(),
                 output: output_handle,
+                instance_id: crate::SurfaceInstanceId::new(
+                    crate::SurfaceHandle::from_raw(0),
+                    output_handle,
+                ),
             };
 
             let output_info = system.app_state().get_output_info(output_handle);
@@ -1446,6 +1492,10 @@ impl Shell {
             let surface_info = crate::SurfaceInfo {
                 name: component_name.clone(),
                 output: output_handle,
+                instance_id: crate::SurfaceInstanceId::new(
+                    crate::SurfaceHandle::from_raw(0),
+                    output_handle,
+                ),
             };
 
             let output_info = system.app_state().get_output_info(output_handle);
@@ -1473,6 +1523,10 @@ impl Shell {
             let surface_info = crate::SurfaceInfo {
                 name: component_name.clone(),
                 output: output_handle,
+                instance_id: crate::SurfaceInstanceId::new(
+                    crate::SurfaceHandle::from_raw(0),
+                    output_handle,
+                ),
             };
 
             let output_info = system.app_state().get_output_info(output_handle);

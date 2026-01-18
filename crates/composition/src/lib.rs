@@ -43,7 +43,7 @@ pub use layer_surface::{LayerSurfaceHandle, ShellSurfaceConfigHandler};
 pub use lock_selection::LockSelection;
 pub use popup::PopupShell;
 pub use popup_builder::PopupBuilder;
-pub use selection::Selection;
+pub use selection::{PropertyError, Selection, SelectionResult};
 pub use selector::{Output, Selector, Surface, SurfaceInfo};
 pub use session_lock::{SessionLock, SessionLockBuilder};
 pub use shell_runtime::{DEFAULT_SURFACE_NAME, ShellRuntime};
@@ -93,11 +93,12 @@ pub mod prelude {
         DEFAULT_SURFACE_NAME, EventDispatchContext, EventLoopHandle, Handle, IntoValue,
         KeyboardInteractivity, Layer, LayerSurfaceHandle, LockSelection, Output, OutputGeometry,
         OutputHandle, OutputInfo, OutputPolicy, OutputRegistry, PopupBuilder, PopupConfig,
-        PopupHandle, PopupPosition, PopupShell, PopupSize, PopupWindow, Result, Selection,
-        Selector, SessionLock, SessionLockBuilder, Shell, ShellBuilder, ShellConfig, ShellControl,
-        ShellEventContext, ShellEventLoop, ShellRuntime, ShellSurfaceConfigHandler, Surface,
-        SurfaceComponentConfig, SurfaceConfigBuilder, SurfaceControlHandle, SurfaceDefinition,
-        SurfaceEntry, SurfaceHandle, SurfaceInfo, SurfaceMetadata, SurfaceRegistry,
+        PopupHandle, PopupPosition, PopupShell, PopupSize, PopupWindow, PropertyError, Result,
+        Selection, SelectionResult, Selector, SessionLock, SessionLockBuilder, Shell, ShellBuilder,
+        ShellConfig, ShellControl, ShellEventContext, ShellEventLoop, ShellRuntime,
+        ShellSurfaceConfigHandler, Surface, SurfaceComponentConfig, SurfaceConfigBuilder,
+        SurfaceControlHandle, SurfaceDefinition, SurfaceEntry, SurfaceHandle, SurfaceInfo,
+        SurfaceMetadata, SurfaceRegistry,
     };
 
     pub use crate::calloop::{Generic, Interest, Mode, PostAction, RegistrationToken, Timer};

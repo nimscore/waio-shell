@@ -3,7 +3,79 @@ use crate::{
     selector::{Selector, SurfaceInfo},
     slint_interpreter::{ComponentInstance, Value},
 };
-use layer_shika_domain::errors::DomainError;
+use layer_shika_domain::{
+    errors::DomainError, value_objects::surface_instance_id::SurfaceInstanceId,
+};
+
+/// Result of a property operation on a single surface
+#[derive(Debug)]
+pub struct PropertyError {
+    pub surface_name: String,
+    pub instance_id: SurfaceInstanceId,
+    pub error: String,
+}
+
+/// Result of an operation on multiple selected surfaces
+#[derive(Debug)]
+pub struct SelectionResult<T> {
+    pub success_count: usize,
+    pub values: Vec<T>,
+    pub failures: Vec<PropertyError>,
+}
+
+impl<T> SelectionResult<T> {
+    fn new() -> Self {
+        Self {
+            success_count: 0,
+            values: Vec::new(),
+            failures: Vec::new(),
+        }
+    }
+
+    fn add_success(&mut self, value: T) {
+        self.success_count += 1;
+        self.values.push(value);
+    }
+
+    fn add_failure(&mut self, surface_name: String, instance_id: SurfaceInstanceId, error: String) {
+        self.failures.push(PropertyError {
+            surface_name,
+            instance_id,
+            error,
+        });
+    }
+
+    pub fn is_ok(&self) -> bool {
+        self.failures.is_empty()
+    }
+
+    pub fn is_partial_failure(&self) -> bool {
+        !self.failures.is_empty() && self.success_count > 0
+    }
+
+    pub fn is_total_failure(&self) -> bool {
+        !self.failures.is_empty() && self.success_count == 0
+    }
+
+    pub fn into_result(self) -> Result<Vec<T>, Error> {
+        if self.failures.is_empty() {
+            Ok(self.values)
+        } else {
+            let error_messages: Vec<String> = self
+                .failures
+                .iter()
+                .map(|e| format!("{}[{:?}]: {}", e.surface_name, e.instance_id, e.error))
+                .collect();
+            Err(Error::Domain(DomainError::Configuration {
+                message: format!(
+                    "Operation failed on {} surface(s): {}",
+                    self.failures.len(),
+                    error_messages.join(", ")
+                ),
+            }))
+        }
+    }
+}
 
 /// A selection of surfaces matching a selector
 ///
@@ -54,35 +126,55 @@ impl<'a> Selection<'a> {
     }
 
     /// Sets a property value on all matching surfaces
-    pub fn set_property(&self, name: &str, value: &Value) -> Result<(), Error> {
-        let mut result = Ok(());
-        self.shell.with_selected(&self.selector, |_, component| {
-            if let Err(e) = component.set_property(name, value.clone()) {
-                log::error!("Failed to set property '{}': {}", name, e);
-                result = Err(Error::Domain(DomainError::Configuration {
-                    message: format!("Failed to set property '{}': {}", name, e),
-                }));
-            }
-        });
+    ///
+    /// Returns a `SelectionResult` that contains information about both successes and failures.
+    /// Use `.into_result()` to convert to a standard `Result` if you want fail-fast behavior,
+    /// or inspect `.failures` to handle partial failures gracefully.
+    pub fn set_property(&self, name: &str, value: &Value) -> SelectionResult<()> {
+        let mut result = SelectionResult::new();
+        self.shell
+            .with_selected_info(&self.selector, |info, component| {
+                match component.set_property(name, value.clone()) {
+                    Ok(()) => result.add_success(()),
+                    Err(e) => {
+                        let error_msg = format!("Failed to set property '{}': {}", name, e);
+                        log::error!(
+                            "{} on surface {}[{:?}]",
+                            error_msg,
+                            info.name,
+                            info.instance_id
+                        );
+                        result.add_failure(info.name.clone(), info.instance_id, error_msg);
+                    }
+                }
+            });
         result
     }
 
     /// Gets property values from all matching surfaces
-    pub fn get_property(&self, name: &str) -> Result<Vec<Value>, Error> {
-        let mut values = Vec::new();
-        let mut result = Ok(());
-        self.shell.with_selected(&self.selector, |_, component| {
-            match component.get_property(name) {
-                Ok(value) => values.push(value),
-                Err(e) => {
-                    log::error!("Failed to get property '{}': {}", name, e);
-                    result = Err(Error::Domain(DomainError::Configuration {
-                        message: format!("Failed to get property '{}': {}", name, e),
-                    }));
+    ///
+    /// Returns a `SelectionResult` containing all successfully retrieved values and any failures.
+    /// Use `.into_result()` to convert to a standard `Result` if you want fail-fast behavior,
+    /// or inspect `.values` and `.failures` to handle partial failures gracefully.
+    pub fn get_property(&self, name: &str) -> SelectionResult<Value> {
+        let mut result = SelectionResult::new();
+        self.shell
+            .with_selected_info(&self.selector, |info, component| {
+                match component.get_property(name) {
+                    Ok(value) => result.add_success(value),
+                    Err(e) => {
+                        let error_msg = format!("Failed to get property '{}': {}", name, e);
+                        log::error!(
+                            "{} on surface {}[{:?}]",
+                            error_msg,
+                            info.name,
+                            info.instance_id
+                        );
+                        result.add_failure(info.name.clone(), info.instance_id, error_msg);
+                    }
                 }
-            }
-        });
-        result.map(|()| values)
+            });
+        result
     }
 
     /// Executes a configuration function with component and surface handle for matching surfaces
