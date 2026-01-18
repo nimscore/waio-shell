@@ -784,7 +784,7 @@ checksum = "5c297a1c74b71ae29df00c3e22dd9534821d60eb9af5a0192823fa2acea70c2a"
 
 [[package]]
 name = "declarative-config"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "env_logger",
  "layer-shika",
@@ -1015,7 +1015,7 @@ dependencies = [
 
 [[package]]
 name = "event-loop-examples"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "env_logger",
@@ -1987,14 +1987,14 @@ dependencies = [
 
 [[package]]
 name = "layer-shika"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "layer-shika-composition",
 ]
 
 [[package]]
 name = "layer-shika-adapters"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "glutin",
  "layer-shika-domain",
@@ -2011,7 +2011,7 @@ dependencies = [
 
 [[package]]
 name = "layer-shika-composition"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "layer-shika-adapters",
  "layer-shika-domain",
@@ -2022,7 +2022,7 @@ dependencies = [
 
 [[package]]
 name = "layer-shika-domain"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "thiserror 2.0.17",
 ]
@@ -2258,7 +2258,7 @@ dependencies = [
 
 [[package]]
 name = "multi-surface"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "env_logger",
  "layer-shika",
@@ -3095,7 +3095,7 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "runtime-surface-config"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "env_logger",
  "layer-shika",
@@ -3289,7 +3289,7 @@ dependencies = [
 
 [[package]]
 name = "session-lock"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "env_logger",
  "layer-shika",
@@ -3298,7 +3298,7 @@ dependencies = [
 
 [[package]]
 name = "session-lock-selectors"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "env_logger",
  "layer-shika",
@@ -3307,7 +3307,7 @@ dependencies = [
 
 [[package]]
 name = "session-lock-standalone"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "env_logger",
  "layer-shika",
@@ -3337,7 +3337,7 @@ checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 
 [[package]]
 name = "simple-bar"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "env_logger",
  "layer-shika",
@@ -3346,7 +3346,7 @@ dependencies = [
 
 [[package]]
 name = "simple-popup"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "env_logger",
  "layer-shika",
