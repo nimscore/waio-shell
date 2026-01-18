@@ -10,7 +10,7 @@ use layer_shika_domain::value_objects::lock_config::LockConfig;
 use layer_shika_domain::value_objects::lock_state::LockState;
 use layer_shika_domain::value_objects::margins::Margins;
 use layer_shika_domain::value_objects::output_policy::OutputPolicy;
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::rc::Weak;
 
@@ -18,7 +18,6 @@ pub struct SessionLock {
     system: Weak<RefCell<dyn WaylandSystemOps>>,
     component_name: String,
     config: LockConfig,
-    state: Cell<LockState>,
     command_sender: channel::Sender<ShellCommand>,
 }
 
@@ -33,7 +32,6 @@ impl SessionLock {
             system,
             component_name,
             config,
-            state: Cell::new(LockState::Inactive),
             command_sender,
         }
     }
@@ -99,14 +97,15 @@ impl SessionLock {
 
     #[must_use]
     pub fn state(&self) -> LockState {
-        if let Some(system) = self.system.upgrade() {
-            if let Ok(borrowed) = system.try_borrow() {
-                if let Some(state) = borrowed.session_lock_state() {
-                    self.state.set(state);
-                }
-            }
-        }
-        self.state.get()
+        let Some(system) = self.system.upgrade() else {
+            return LockState::Inactive;
+        };
+
+        let Ok(borrowed) = system.try_borrow() else {
+            return LockState::Inactive;
+        };
+
+        borrowed.session_lock_state().unwrap_or(LockState::Inactive)
     }
 
     #[must_use]
