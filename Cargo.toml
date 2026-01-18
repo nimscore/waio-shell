@@ -27,6 +27,9 @@ members = [
     "examples/declarative-config",
     "examples/event-loop",
     "examples/runtime-surface-config",
+    "examples/session-lock",
+    "examples/session-lock-selectors",
+    "examples/session-lock-standalone",
     "examples/simple-popup",
 ]
 

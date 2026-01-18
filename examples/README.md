@@ -13,6 +13,8 @@ cargo run -p multi-surface
 cargo run -p declarative-config
 cargo run -p runtime-surface-config
 cargo run -p simple-popup
+cargo run -p session-lock
+cargo run -p session-lock-standalone
 
 # Or from the example directory
 cd examples/simple-bar
@@ -29,6 +31,8 @@ cargo run
 4. **event-loop** - Explore event loop integration with timers and channels
 5. **runtime-surface-config** - Surface configuration manipulation at runtime
 6. **simple-popup** - Showing popups and content sizing
+7. **session-lock-standalone** - Minimal lock-only application without layer surfaces
+8. **session-lock** - Lock screen with layer shell surfaces (status bar + lock)
 
 ## Common Patterns
 

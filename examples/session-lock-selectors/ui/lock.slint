@@ -1,0 +1,118 @@
+import {
+    Button,
+    LineEdit,
+    HorizontalBox,
+    VerticalBox,
+} from "std-widgets.slint";
+
+export component Main inherits Window {
+    background: transparent;
+    callback lock_requested();
+
+    default-font-size: 16px;
+    HorizontalLayout {
+        alignment: center;
+        Button {
+            text: "Lock Screen";
+            clicked => root.lock_requested();
+        }
+    }
+}
+
+export component LockScreen inherits Window {
+    out property <string> password;
+    in property <string> theme: "light";
+    property <bool> is_primary;
+
+    callback unlock_requested(string);
+    callback cancel_requested();
+
+    is_primary: theme == "dark" ? true : false;
+    background: theme == "dark" ? #1a1a1a : #f0f0f0;
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+
+        HorizontalLayout {
+            alignment: center;
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 20px;
+
+                Text {
+                    text: "Session Locked";
+                    font-size: 32px;
+                    color: theme == "dark" ? #ffffff : #000000;
+                    horizontal-alignment: center;
+                }
+
+                HorizontalLayout {
+                    alignment: center;
+
+                    if is_primary: Rectangle {
+                        width: self.preferred-width;
+                        height: 30px;
+                        background: #4a90e2;
+                        border-radius: 15px;
+
+                        HorizontalLayout {
+                            padding: 8px;
+                            Text {
+                                text: "Primary Monitor";
+                                color: #ffffff;
+                                font-size: 12px;
+                            }
+                        }
+                    }
+                }
+
+                Text {
+                    text: "Enter password to unlock";
+                    color: theme == "dark" ? #cccccc : #333333;
+                    horizontal-alignment: center;
+                }
+
+                VerticalLayout {
+                    width: 300px;
+                    spacing: 12px;
+
+                    LineEdit {
+                        text: root.password;
+                        placeholder-text: "Password";
+                        edited => {
+                            root.password = self.text;
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+
+                        Button {
+                            text: "Unlock";
+                            primary: true;
+                            clicked => {
+                                root.unlock_requested(root.password);
+                            }
+                        }
+
+                        Button {
+                            text: "Cancel";
+                            clicked => {
+                                root.cancel_requested();
+                            }
+                        }
+                    }
+                }
+
+                Text {
+                    text: "Theme: " + theme;
+                    color: theme == "dark" ? #888888 : #666666;
+                    font-size: 10px;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+    }
+}

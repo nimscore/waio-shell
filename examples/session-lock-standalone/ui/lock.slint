@@ -1,0 +1,79 @@
+import { Button, LineEdit, HorizontalBox } from "std-widgets.slint";
+
+// Standalone session lock - no layer surface needed!
+// This component is only displayed when the lock is activated.
+export component LockScreen inherits Window {
+    in-out property <string> password;
+    in-out property <string> theme: "dark";
+    callback unlock_requested(string);
+    callback cancel_requested();
+
+    background: theme == "dark" ? #1a1a1a : #f0f0f0;
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+
+        HorizontalLayout {
+            alignment: center;
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 20px;
+
+                Text {
+                    text: "🔒 Session Locked";
+                    font-size: 32px;
+                    color: theme == "dark" ? #ffffff : #000000;
+                }
+
+                Text {
+                    text: "This is a standalone lock screen without any layer surfaces";
+                    font-size: 14px;
+                    color: theme == "dark" ? #cccccc : #666666;
+                }
+
+                Text {
+                    text: "Enter password to unlock";
+                    font-size: 16px;
+                    color: theme == "dark" ? #ffffff : #000000;
+                }
+
+                VerticalLayout {
+                    width: 300px;
+                    spacing: 12px;
+
+                    LineEdit {
+                        placeholder-text: "Password";
+                        text: root.password;
+                        edited => {
+                            root.password = self.text;
+                        }
+                        accepted => {
+                            root.unlock_requested(root.password);
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+
+                        Button {
+                            text: "Unlock";
+                            primary: true;
+                            clicked => {
+                                root.unlock_requested(root.password);
+                            }
+                        }
+
+                        Button {
+                            text: "Cancel";
+                            clicked => {
+                                root.cancel_requested();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
