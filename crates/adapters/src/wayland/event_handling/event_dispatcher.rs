@@ -240,6 +240,7 @@ impl SurfaceState {
                     "Marking popup with handle {handle:?} as configured after XdgPopup::Configure"
                 );
                 popup_manager.mark_popup_configured(handle.key());
+                popup_manager.commit_popup_surface(handle.key());
                 popup_manager.mark_all_popups_dirty();
             }
         }
