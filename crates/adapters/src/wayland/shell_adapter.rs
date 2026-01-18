@@ -5,7 +5,7 @@ use crate::wayland::{
     ops::WaylandSystemOps,
     outputs::{OutputManager, OutputManagerContext},
     rendering::RenderableSet,
-    session_lock::OutputFilter,
+    session_lock::{LockPropertyOperation, OutputFilter},
     surfaces::layer_surface::{SurfaceCtx, SurfaceSetupParams},
     surfaces::popup_manager::{PopupContext, PopupManager},
     surfaces::{
@@ -900,6 +900,10 @@ impl WaylandSystemOps for WaylandShellSystem {
     ) {
         self.state
             .register_session_lock_callback_with_filter(callback_name, handler, filter);
+    }
+
+    fn register_session_lock_property_operation(&mut self, property_operation: LockPropertyOperation) {
+        self.state.register_session_lock_property_operation(property_operation);
     }
 
     fn session_lock_component_name(&self) -> Option<String> {

@@ -1,4 +1,4 @@
-use super::callbacks::{LockCallbackContext, LockCallbackExt};
+use super::callbacks::{LockCallbackContext, LockCallbackExt, LockPropertyOperationExt};
 use crate::errors::Result;
 use crate::rendering::femtovg::main_window::FemtoVGWindow;
 use crate::rendering::femtovg::renderable_window::RenderableWindow;
@@ -39,6 +39,7 @@ pub struct LockConfigureContext {
     pub compilation_result: Option<Rc<CompilationResult>>,
     pub platform: Rc<CustomSlintPlatform>,
     pub callbacks: Vec<LockCallback>,
+    pub property_operations: Vec<super::callbacks::LockPropertyOperation>,
     pub component_name: String,
     pub output_handle: OutputHandle,
     pub output_info: Option<OutputInfo>,
@@ -175,6 +176,29 @@ impl ActiveLockSurface {
                 );
             }
         }
+
+        for property_op in &context.property_operations {
+            if property_op.should_apply(&callback_context) {
+                if let Err(err) =
+                    property_op.apply_to_component(component.component_instance())
+                {
+                    info!(
+                        "Failed to set lock property '{}': {err}",
+                        property_op.name()
+                    );
+                } else {
+                    info!("Set lock property '{}' on output {:?}", property_op.name(), context.output_handle);
+                }
+            } else {
+                info!(
+                    "Skipping property '{}' due to selector filter (output {:?}, primary={:?})",
+                    property_op.name(),
+                    context.output_handle,
+                    context.primary_handle
+                );
+            }
+        }
+
         self.component = Some(component);
         self.pending_component_initialization = false;
 
@@ -229,6 +253,37 @@ impl ActiveLockSurface {
             info!(
                 "Failed to register lock callback '{}': {err}",
                 callback.name()
+            );
+        }
+    }
+
+    pub fn apply_property_operation(&self, property_op: &super::callbacks::LockPropertyOperation) {
+        let Some(component) = self.component.as_ref() else {
+            return;
+        };
+
+        let Some(component_name) = &self.component_name else {
+            return;
+        };
+
+        let Some(output_handle) = self.output_handle else {
+            return;
+        };
+
+        let callback_context = LockCallbackContext::new(
+            component_name.clone(),
+            output_handle,
+            self.output_info.clone(),
+            self.primary_handle,
+            self.active_handle,
+        );
+
+        if let Err(err) =
+            property_op.apply_with_context(component.component_instance(), &callback_context)
+        {
+            info!(
+                "Failed to set lock property '{}': {err}",
+                property_op.name()
             );
         }
     }

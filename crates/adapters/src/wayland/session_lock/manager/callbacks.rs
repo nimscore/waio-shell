@@ -10,7 +10,7 @@ pub(crate) trait FilterContext {
     }
 }
 
-type FilterFn<Ctx> = Box<dyn Fn(&Ctx) -> bool>;
+type FilterFn<Ctx> = Rc<dyn Fn(&Ctx) -> bool>;
 
 pub(crate) struct CallbackEntry<Ctx: FilterContext, Handler> {
     name: String,
@@ -34,7 +34,7 @@ impl<Ctx: FilterContext, Handler: Clone> CallbackEntry<Ctx, Handler> {
         Self {
             name: name.into(),
             handler,
-            filter: Some(Box::new(filter)),
+            filter: Some(Rc::new(filter)),
         }
     }
 
@@ -58,7 +58,7 @@ impl<Ctx: FilterContext, Handler: Clone> Clone for CallbackEntry<Ctx, Handler> {
         Self {
             name: self.name.clone(),
             handler: self.handler.clone(),
-            filter: None,
+            filter: self.filter.clone(),
         }
     }
 }
@@ -153,6 +153,118 @@ impl LockCallbackExt for LockCallbackEntry {
             .set_callback(self.name(), move |args| handler(args))
             .map_err(|e| LayerShikaError::InvalidInput {
                 message: format!("Failed to register callback '{}': {e}", self.name()),
+            })
+    }
+
+    fn apply_with_context(
+        &self,
+        component: &ComponentInstance,
+        context: &LockCallbackContext,
+    ) -> Result<()> {
+        if !self.should_apply(context) {
+            return Ok(());
+        }
+
+        self.apply_to_component(component)
+    }
+}
+
+pub struct LockPropertyOperation {
+    name: String,
+    value: Value,
+    filter: Option<FilterFn<LockCallbackContext>>,
+}
+
+impl LockPropertyOperation {
+    pub fn new(name: impl Into<String>, value: Value) -> Self {
+        Self {
+            name: name.into(),
+            value,
+            filter: None,
+        }
+    }
+
+    pub fn with_filter<F>(name: impl Into<String>, value: Value, filter: F) -> Self
+    where
+        F: Fn(&LockCallbackContext) -> bool + 'static,
+    {
+        Self {
+            name: name.into(),
+            value,
+            filter: Some(Rc::new(filter)),
+        }
+    }
+
+    pub fn should_apply(&self, context: &LockCallbackContext) -> bool {
+        self.filter
+            .as_ref()
+            .is_none_or(|f| context.matches_filter(f.as_ref()))
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn value(&self) -> &Value {
+        &self.value
+    }
+}
+
+impl Clone for LockPropertyOperation {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            value: self.value.clone(),
+            filter: self.filter.clone(),
+        }
+    }
+}
+
+pub fn create_lock_property_operation(name: impl Into<String>, value: Value) -> LockPropertyOperation {
+    LockPropertyOperation::new(name, value)
+}
+
+pub fn create_lock_property_operation_with_output_filter<F>(
+    name: impl Into<String>,
+    value: Value,
+    output_filter: F,
+) -> LockPropertyOperation
+where
+    F: Fn(
+            &str,
+            OutputHandle,
+            Option<&OutputInfo>,
+            Option<OutputHandle>,
+            Option<OutputHandle>,
+        ) -> bool
+        + 'static,
+{
+    LockPropertyOperation::with_filter(name, value, move |ctx: &LockCallbackContext| {
+        output_filter(
+            &ctx.component_name,
+            ctx.output_handle,
+            ctx.output_info.as_ref(),
+            ctx.primary_handle,
+            ctx.active_handle,
+        )
+    })
+}
+
+pub trait LockPropertyOperationExt {
+    fn apply_to_component(&self, component: &ComponentInstance) -> Result<()>;
+    fn apply_with_context(
+        &self,
+        component: &ComponentInstance,
+        context: &LockCallbackContext,
+    ) -> Result<()>;
+}
+
+impl LockPropertyOperationExt for LockPropertyOperation {
+    fn apply_to_component(&self, component: &ComponentInstance) -> Result<()> {
+        component
+            .set_property(self.name(), self.value().clone())
+            .map_err(|e| LayerShikaError::InvalidInput {
+                message: format!("Failed to set property '{}': {e}", self.name()),
             })
     }
 

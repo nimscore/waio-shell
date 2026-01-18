@@ -23,7 +23,10 @@ use wayland_client::{
 };
 use wayland_protocols::ext::session_lock::v1::client::ext_session_lock_v1::ExtSessionLockV1;
 
-pub use callbacks::{LockCallback, OutputFilter};
+pub use callbacks::{
+    create_lock_property_operation_with_output_filter, LockCallback, LockPropertyOperation,
+    OutputFilter,
+};
 pub use state::{ActiveLockSurface, LockConfigureContext, LockSurfaceOutputContext};
 
 use self::input_handling::InputState;
@@ -39,6 +42,7 @@ pub struct SessionLockManager {
     compilation_result: Option<Rc<CompilationResult>>,
     platform: Rc<CustomSlintPlatform>,
     callbacks: Vec<LockCallback>,
+    property_operations: Vec<LockPropertyOperation>,
     input_state: InputState,
 }
 
@@ -61,6 +65,7 @@ impl SessionLockManager {
             compilation_result,
             platform,
             callbacks: Vec::new(),
+            property_operations: Vec::new(),
             input_state: InputState::new(),
         }
     }
@@ -219,7 +224,7 @@ impl SessionLockManager {
     pub fn find_output_id_for_lock_surface(&self, lock_surface_id: &ObjectId) -> Option<ObjectId> {
         self.lock_surfaces
             .iter()
-            .find(|(_, surface)| surface.surface().surface_id() == *lock_surface_id)
+            .find(|(_, surface)| surface.surface().lock_surface_id() == *lock_surface_id)
             .map(|(id, _)| id.clone())
     }
 
@@ -239,6 +244,7 @@ impl SessionLockManager {
             compilation_result: self.compilation_result.clone(),
             platform: Rc::clone(&self.platform),
             callbacks: self.callbacks.clone(),
+            property_operations: self.property_operations.clone(),
             component_name,
             output_handle: output_ctx.output_handle,
             output_info: output_ctx.output_info,
@@ -269,6 +275,7 @@ impl SessionLockManager {
             compilation_result: self.compilation_result.clone(),
             platform: Rc::clone(&self.platform),
             callbacks: self.callbacks.clone(),
+            property_operations: self.property_operations.clone(),
             component_name,
             output_handle: output_ctx.output_handle,
             output_info: output_ctx.output_info,
@@ -298,6 +305,7 @@ impl SessionLockManager {
                     compilation_result: self.compilation_result.clone(),
                     platform: Rc::clone(&self.platform),
                     callbacks: self.callbacks.clone(),
+                    property_operations: self.property_operations.clone(),
                     component_name: component_name.clone(),
                     output_handle,
                     output_info: surface.output_info.clone(),
@@ -321,6 +329,13 @@ impl SessionLockManager {
             surface.apply_callback(&callback);
         }
         self.callbacks.push(callback);
+    }
+
+    pub(crate) fn register_property_operation(&mut self, property_operation: LockPropertyOperation) {
+        for (_, surface) in &self.lock_surfaces {
+            surface.apply_property_operation(&property_operation);
+        }
+        self.property_operations.push(property_operation);
     }
 
     pub fn handle_fractional_scale(&mut self, fractional_scale_id: &ObjectId, scale_120ths: u32) {

@@ -1387,6 +1387,27 @@ impl Shell {
             .register_session_lock_callback_with_filter(&callback_name, callback_handler, filter);
     }
 
+    pub(crate) fn register_lock_property_internal(
+        &self,
+        selector: &crate::Selector,
+        property_name: &str,
+        value: Value,
+    ) {
+        use layer_shika_adapters::create_lock_property_operation_with_output_filter;
+
+        let filter = Self::selector_to_output_filter(selector);
+        let property_operation = create_lock_property_operation_with_output_filter(
+            property_name,
+            value,
+            move |component_name, output_handle, output_info, primary, active| {
+                filter(component_name, output_handle, output_info, primary, active)
+            },
+        );
+        self.inner
+            .borrow_mut()
+            .register_session_lock_property_operation(property_operation);
+    }
+
     pub(crate) fn with_selected_lock<F>(&self, selector: &crate::Selector, mut f: F)
     where
         F: FnMut(&str, &ComponentInstance),

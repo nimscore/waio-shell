@@ -63,20 +63,13 @@ impl<'a> LockSelection<'a> {
 
     /// Sets a property value on all matching lock surfaces
     ///
-    /// If the lock is inactive, this operation succeeds silently with no effect.
-    /// If the lock is active, the property is set on all matching component instances.
+    /// If the lock is inactive, the property operation is stored and will be applied
+    /// when the lock is activated. If the lock is active, the property is set immediately
+    /// on all matching component instances.
     pub fn set_property(&self, name: &str, value: &Value) -> Result<(), Error> {
-        let mut result = Ok(());
         self.shell
-            .with_selected_lock(&self.selector, |_, component| {
-                if let Err(e) = component.set_property(name, value.clone()) {
-                    log::error!("Failed to set property '{}' on lock surface: {}", name, e);
-                    result = Err(Error::Domain(DomainError::Configuration {
-                        message: format!("Failed to set property '{}': {}", name, e),
-                    }));
-                }
-            });
-        result
+            .register_lock_property_internal(&self.selector, name, value.clone());
+        Ok(())
     }
 
     /// Gets property values from all matching lock surfaces

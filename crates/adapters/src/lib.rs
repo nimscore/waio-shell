@@ -8,7 +8,9 @@ pub use rendering::femtovg::popup_window::PopupWindow;
 
 pub use wayland::config::{MultiSurfaceConfig, ShellSurfaceConfig, WaylandSurfaceConfig};
 pub use wayland::ops::WaylandSystemOps;
-pub use wayland::session_lock::{LockSurfaceOutputContext, OutputFilter};
+pub use wayland::session_lock::{
+    create_lock_property_operation_with_output_filter, LockSurfaceOutputContext, OutputFilter,
+};
 pub use wayland::shell_adapter::WaylandShellSystem;
 pub use wayland::surfaces::app_state::AppState;
 pub use wayland::surfaces::popup_manager::PopupManager;

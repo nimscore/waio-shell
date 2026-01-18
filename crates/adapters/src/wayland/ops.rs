@@ -1,6 +1,6 @@
 use crate::errors::Result;
 use crate::wayland::config::ShellSurfaceConfig;
-use crate::wayland::session_lock::OutputFilter;
+use crate::wayland::session_lock::{LockPropertyOperation, OutputFilter};
 use crate::wayland::surfaces::app_state::AppState;
 use layer_shika_domain::value_objects::lock_config::LockConfig;
 use layer_shika_domain::value_objects::lock_state::LockState;
@@ -37,6 +37,8 @@ pub trait WaylandSystemOps {
         handler: SessionLockCallback,
         filter: OutputFilter,
     );
+
+    fn register_session_lock_property_operation(&mut self, property_operation: LockPropertyOperation);
 
     fn session_lock_component_name(&self) -> Option<String>;
 

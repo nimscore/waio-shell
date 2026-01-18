@@ -14,7 +14,7 @@ use crate::wayland::session_lock::lock_context::SessionLockContext;
 use crate::wayland::session_lock::manager::callbacks::{
     create_lock_callback, create_lock_callback_with_output_filter,
 };
-use crate::wayland::session_lock::{LockCallback, OutputFilter, SessionLockManager};
+use crate::wayland::session_lock::{LockCallback, LockPropertyOperation, OutputFilter, SessionLockManager};
 use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::value_objects::handle::SurfaceHandle;
 use layer_shika_domain::value_objects::lock_config::LockConfig;
@@ -71,6 +71,7 @@ pub struct AppState {
     keyboard_state: KeyboardState,
     lock_manager: Option<SessionLockManager>,
     lock_callbacks: Vec<LockCallback>,
+    lock_property_operations: Vec<LockPropertyOperation>,
     queue_handle: Option<wayland_client::QueueHandle<AppState>>,
 }
 
@@ -101,6 +102,7 @@ impl AppState {
             keyboard_state: KeyboardState::new(),
             lock_manager: None,
             lock_callbacks: Vec::new(),
+            lock_property_operations: Vec::new(),
             queue_handle: None,
         }
     }
@@ -176,6 +178,16 @@ impl AppState {
         self.lock_callbacks.push(callback);
     }
 
+    pub fn register_session_lock_property_operation(
+        &mut self,
+        property_operation: LockPropertyOperation,
+    ) {
+        if let Some(manager) = self.lock_manager.as_mut() {
+            manager.register_property_operation(property_operation.clone());
+        }
+        self.lock_property_operations.push(property_operation);
+    }
+
     pub fn activate_session_lock(
         &mut self,
         component_name: &str,
@@ -211,6 +223,9 @@ impl AppState {
         );
         for callback in self.lock_callbacks.iter().cloned() {
             manager.register_callback(callback);
+        }
+        for property_op in self.lock_property_operations.iter().cloned() {
+            manager.register_property_operation(property_op);
         }
 
         let outputs = self.collect_session_lock_outputs();
