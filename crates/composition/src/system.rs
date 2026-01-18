@@ -227,11 +227,7 @@ impl ShellControl {
     pub fn close_popup(&self, handle: PopupHandle) -> Result<()> {
         self.sender
             .send(ShellCommand::Popup(PopupCommand::Close(handle)))
-            .map_err(|_| {
-                Error::Domain(DomainError::Configuration {
-                    message: "Failed to send popup close command: channel closed".to_string(),
-                })
-            })
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))
     }
 
     /// Resizes a popup to the specified dimensions
@@ -258,20 +254,14 @@ impl ShellControl {
                 width,
                 height,
             }))
-            .map_err(|_| {
-                Error::Domain(DomainError::Configuration {
-                    message: "Failed to send popup resize command: channel closed".to_string(),
-                })
-            })
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))
     }
 
     /// Requests a redraw of all surfaces
     pub fn request_redraw(&self) -> Result<()> {
-        self.sender.send(ShellCommand::Render).map_err(|_| {
-            Error::Domain(DomainError::Configuration {
-                message: "Failed to send redraw command: channel closed".to_string(),
-            })
-        })
+        self.sender
+            .send(ShellCommand::Render)
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))
     }
 
     /// Returns a control handle for a specific surface instance
@@ -337,11 +327,7 @@ impl SurfaceControlHandle {
                 width,
                 height,
             }))
-            .map_err(|_| {
-                Error::Domain(DomainError::Configuration {
-                    message: "Failed to send surface resize command: channel closed".to_string(),
-                })
-            })
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))
     }
 
     /// Sets the surface width
@@ -361,12 +347,7 @@ impl SurfaceControlHandle {
                 target: self.target.clone(),
                 anchor,
             }))
-            .map_err(|_| {
-                Error::Domain(DomainError::Configuration {
-                    message: "Failed to send surface set_anchor command: channel closed"
-                        .to_string(),
-                })
-            })
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))
     }
 
     /// Sets the exclusive zone for the surface
@@ -376,12 +357,7 @@ impl SurfaceControlHandle {
                 target: self.target.clone(),
                 zone,
             }))
-            .map_err(|_| {
-                Error::Domain(DomainError::Configuration {
-                    message: "Failed to send surface set_exclusive_zone command: channel closed"
-                        .to_string(),
-                })
-            })
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))
     }
 
     /// Sets the margins for the surface
@@ -391,12 +367,7 @@ impl SurfaceControlHandle {
                 target: self.target.clone(),
                 margins: margins.into(),
             }))
-            .map_err(|_| {
-                Error::Domain(DomainError::Configuration {
-                    message: "Failed to send surface set_margins command: channel closed"
-                        .to_string(),
-                })
-            })
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))
     }
 
     /// Sets the layer for the surface
@@ -406,11 +377,7 @@ impl SurfaceControlHandle {
                 target: self.target.clone(),
                 layer,
             }))
-            .map_err(|_| {
-                Error::Domain(DomainError::Configuration {
-                    message: "Failed to send surface set_layer command: channel closed".to_string(),
-                })
-            })
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))
     }
 
     /// Sets the output policy for the surface
@@ -420,12 +387,7 @@ impl SurfaceControlHandle {
                 target: self.target.clone(),
                 policy,
             }))
-            .map_err(|_| {
-                Error::Domain(DomainError::Configuration {
-                    message: "Failed to send surface set_output_policy command: channel closed"
-                        .to_string(),
-                })
-            })
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))
     }
 
     /// Sets the scale factor for the surface
@@ -435,12 +397,7 @@ impl SurfaceControlHandle {
                 target: self.target.clone(),
                 factor,
             }))
-            .map_err(|_| {
-                Error::Domain(DomainError::Configuration {
-                    message: "Failed to send surface set_scale_factor command: channel closed"
-                        .to_string(),
-                })
-            })
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))
     }
 
     /// Sets the keyboard interactivity mode for the surface
@@ -452,13 +409,7 @@ impl SurfaceControlHandle {
                     mode,
                 },
             ))
-            .map_err(|_| {
-                Error::Domain(DomainError::Configuration {
-                    message:
-                        "Failed to send surface set_keyboard_interactivity command: channel closed"
-                            .to_string(),
-                })
-            })
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))
     }
 
     /// Applies a complete surface configuration
@@ -468,12 +419,7 @@ impl SurfaceControlHandle {
                 target: self.target.clone(),
                 config,
             }))
-            .map_err(|_| {
-                Error::Domain(DomainError::Configuration {
-                    message: "Failed to send surface apply_config command: channel closed"
-                        .to_string(),
-                })
-            })
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))
     }
 
     /// Returns a builder for configuring multiple properties at once
@@ -655,7 +601,7 @@ impl EventDispatchContext<'_> {
         F: FnOnce(&ComponentInstance) -> R,
     {
         let component = self.get_surface_component(name).ok_or_else(|| {
-            Error::Domain(DomainError::Configuration {
+            Error::Domain(DomainError::SurfaceNotFound {
                 message: format!("Surface '{}' not found", name),
             })
         })?;
@@ -667,7 +613,7 @@ impl EventDispatchContext<'_> {
         F: FnOnce(&ComponentInstance) -> R,
     {
         let component = self.get_output_component(handle).ok_or_else(|| {
-            Error::Domain(DomainError::Configuration {
+            Error::Domain(DomainError::OutputNotFound {
                 message: format!("Output with handle {:?} not found", handle),
             })
         })?;
@@ -811,11 +757,8 @@ impl EventDispatchContext<'_> {
                     "Component '{}' not found in compilation result",
                     config.component
                 );
-                Error::Domain(DomainError::Configuration {
-                    message: format!(
-                        "{} component not found in compilation result",
-                        config.component
-                    ),
+                Error::Domain(DomainError::ComponentNotFound {
+                    name: config.component.clone(),
                 })
             })?;
 
@@ -824,7 +767,7 @@ impl EventDispatchContext<'_> {
         let is_using_active = self.app_state.active_output().is_some();
         let active_surface = self.active_or_primary_output().ok_or_else(|| {
             log::error!("No active or primary output available");
-            Error::Domain(DomainError::Configuration {
+            Error::Domain(DomainError::OutputNotFound {
                 message: "No active or primary output available".to_string(),
             })
         })?;
@@ -835,7 +778,7 @@ impl EventDispatchContext<'_> {
         );
 
         let popup_manager = active_surface.popup_manager().ok_or_else(|| {
-            Error::Domain(DomainError::Configuration {
+            Error::Domain(DomainError::SurfaceNotFound {
                 message: "No popup manager available".to_string(),
             })
         })?;
@@ -886,7 +829,7 @@ impl EventDispatchContext<'_> {
         if let Some(popup_surface) = popup_manager.get_popup_window(handle.key()) {
             popup_surface.set_component_instance(instance);
         } else {
-            return Err(Error::Domain(DomainError::Configuration {
+            return Err(Error::Domain(DomainError::SurfaceNotFound {
                 message: "Popup window not found after creation".to_string(),
             }));
         }
@@ -907,13 +850,13 @@ impl EventDispatchContext<'_> {
     /// Resizes a popup to the specified dimensions
     pub fn resize_popup(&mut self, handle: PopupHandle, width: f32, height: f32) -> Result<()> {
         let active_surface = self.active_or_primary_output().ok_or_else(|| {
-            Error::Domain(DomainError::Configuration {
+            Error::Domain(DomainError::OutputNotFound {
                 message: "No active or primary output available".to_string(),
             })
         })?;
 
         let popup_manager = active_surface.popup_manager().ok_or_else(|| {
-            Error::Domain(DomainError::Configuration {
+            Error::Domain(DomainError::SurfaceNotFound {
                 message: "No popup manager available".to_string(),
             })
         })?;
@@ -1080,7 +1023,7 @@ impl EventDispatchContext<'_> {
     {
         let surfaces = self.app_state.surfaces_by_name(name);
         let surface = surfaces.first().ok_or_else(|| {
-            Error::Domain(DomainError::Configuration {
+            Error::Domain(DomainError::SurfaceNotFound {
                 message: format!("Surface '{}' not found", name),
             })
         })?;

@@ -29,11 +29,7 @@ impl PopupShell {
         let handle = PopupHandle::new();
         self.sender
             .send(ShellCommand::Popup(PopupCommand::Show { handle, config }))
-            .map_err(|_| {
-                Error::Domain(DomainError::Configuration {
-                    message: "Failed to send popup show command: channel closed".to_string(),
-                })
-            })?;
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))?;
         Ok(handle)
     }
 

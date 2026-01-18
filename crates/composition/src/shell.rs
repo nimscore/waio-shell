@@ -423,11 +423,8 @@ impl Shell {
         let component_definition = compilation_result
             .component(&definition.component)
             .ok_or_else(|| {
-                Error::Domain(DomainError::Configuration {
-                    message: format!(
-                        "Component '{}' not found in compilation result",
-                        definition.component
-                    ),
+                Error::Domain(DomainError::ComponentNotFound {
+                    name: definition.component.clone(),
                 })
             })?;
 
@@ -475,11 +472,8 @@ impl Shell {
                 let component_definition = compilation_result
                     .component(&def.component)
                     .ok_or_else(|| {
-                        Error::Domain(DomainError::Configuration {
-                            message: format!(
-                                "Component '{}' not found in compilation result",
-                                def.component
-                            ),
+                        Error::Domain(DomainError::ComponentNotFound {
+                            name: def.component.clone(),
                         })
                     })?;
 
@@ -844,8 +838,8 @@ impl Shell {
     ) -> Result<SessionLock> {
         let component = builder.component_name().to_string();
         if self.compilation_result.component(&component).is_none() {
-            return Err(Error::Domain(DomainError::Configuration {
-                message: format!("Component '{}' not found in compilation result", component),
+            return Err(Error::Domain(DomainError::ComponentNotFound {
+                name: component,
             }));
         }
 
@@ -891,11 +885,8 @@ impl Shell {
             .compilation_result
             .component(&definition.component)
             .ok_or_else(|| {
-                Error::Domain(DomainError::Configuration {
-                    message: format!(
-                        "Component '{}' not found in compilation result",
-                        definition.component
-                    ),
+                Error::Domain(DomainError::ComponentNotFound {
+                    name: definition.component.clone(),
                 })
             })?;
 
@@ -932,7 +923,7 @@ impl Shell {
     /// Removes and destroys a surface by its handle
     pub fn despawn_surface(&mut self, handle: SurfaceHandle) -> Result<()> {
         let entry = self.registry.remove(handle).ok_or_else(|| {
-            Error::Domain(DomainError::Configuration {
+            Error::Domain(DomainError::SurfaceNotFound {
                 message: format!("Surface handle {:?} not found", handle),
             })
         })?;
@@ -989,7 +980,7 @@ impl Shell {
         F: FnOnce(&ComponentInstance) -> R,
     {
         if !self.registry.contains_name(name) {
-            return Err(Error::Domain(DomainError::Configuration {
+            return Err(Error::Domain(DomainError::SurfaceNotFound {
                 message: format!("Window '{}' not found", name),
             }));
         }
@@ -1002,7 +993,7 @@ impl Shell {
             .first()
             .map(|surface| f(surface.component_instance()))
             .ok_or_else(|| {
-                Error::Domain(DomainError::Configuration {
+                Error::Domain(DomainError::SurfaceNotFound {
                     message: format!("No instance found for window '{}'", name),
                 })
             })
@@ -1032,7 +1023,7 @@ impl Shell {
             .app_state()
             .get_output_by_handle(handle)
             .ok_or_else(|| {
-                Error::Domain(DomainError::Configuration {
+                Error::Domain(DomainError::OutputNotFound {
                     message: format!("Output with handle {:?} not found", handle),
                 })
             })?;
