@@ -48,6 +48,7 @@ This clean-like architecture enables flexibility, and clear dependency boundarie
 - Event handling framework with ShellEventContext and ShellControl
 - Custom event loop integration (timers, channels, file descriptors)
 - HiDPI scale factor support
+- Session lock support via ext-session-lock-v1 protocol
 
 > [!WARNING]
 > **Known Limitations:**
@@ -67,7 +68,7 @@ Each example includes detailed documentation and can be run with:
 cargo run -p simple-bar
 cargo run -p multi-surface
 cargo run -p declarative-config
-...
+cargo run -p session-lock
 ...
 ```
 
