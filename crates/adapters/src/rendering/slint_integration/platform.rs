@@ -23,6 +23,14 @@ impl CustomSlintPlatform {
         })
     }
 
+    #[must_use]
+    pub fn new_empty() -> Rc<Self> {
+        Rc::new(Self {
+            pending_windows: RefCell::new(Vec::new()),
+            popup_creator: OnceCell::new(),
+        })
+    }
+
     pub fn add_window(&self, window: Rc<FemtoVGWindow>) {
         self.pending_windows.borrow_mut().push(window);
     }

@@ -77,15 +77,11 @@ impl ShellBuilder {
     }
 
     /// Builds the shell from the configured surfaces
+    ///
+    /// If no surfaces are configured, creates a minimal shell without layer surfaces.
+    /// This is useful for lock-only applications that don't need persistent UI surfaces.
     pub fn build(self) -> Result<Shell> {
-        let surfaces = if self.surfaces.is_empty() {
-            vec![SurfaceDefinition {
-                component: DEFAULT_COMPONENT_NAME.to_string(),
-                config: SurfaceConfig::default(),
-            }]
-        } else {
-            self.surfaces
-        };
+        let surfaces = self.surfaces;
 
         let compilation_result = match self.compilation {
             CompilationSource::File { path, compiler } => {
@@ -399,27 +395,24 @@ impl Shell {
     ) -> Result<Self> {
         log::info!("Creating Shell with {} windows", definitions.len());
 
-        if definitions.is_empty() {
-            return Err(Error::Domain(DomainError::Configuration {
-                message: "At least one window definition is required".to_string(),
-            }));
-        }
-
         for def in &definitions {
             def.config.validate().map_err(Error::Domain)?;
         }
 
-        let is_single_window = definitions.len() == 1;
-
-        if is_single_window {
-            let definition = definitions.into_iter().next().ok_or_else(|| {
-                Error::Domain(DomainError::Configuration {
-                    message: "Expected at least one window definition".to_string(),
-                })
-            })?;
-            Self::new_single_window(compilation_result, definition)
-        } else {
-            Self::new_multi_window(compilation_result, &definitions)
+        match definitions.len() {
+            0 => {
+                log::info!("Creating minimal shell without layer surfaces");
+                Self::new_minimal(compilation_result)
+            }
+            1 => {
+                let definition = definitions.into_iter().next().ok_or_else(|| {
+                    Error::Domain(DomainError::Configuration {
+                        message: "Expected at least one window definition".to_string(),
+                    })
+                })?;
+                Self::new_single_window(compilation_result, definition)
+            }
+            _ => Self::new_multi_window(compilation_result, &definitions),
         }
     }
 
@@ -541,6 +534,34 @@ impl Shell {
             "Shell created (multi-surface mode) with surfaces: {:?}",
             shell.surface_names()
         );
+
+        Ok(shell)
+    }
+
+    fn new_minimal(compilation_result: Rc<CompilationResult>) -> Result<Self> {
+        let inner = layer_shika_adapters::WaylandShellSystem::new_minimal()?;
+        let inner_rc: Rc<RefCell<dyn WaylandSystemOps>> = Rc::new(RefCell::new(inner));
+
+        inner_rc
+            .borrow_mut()
+            .set_compilation_result(Rc::clone(&compilation_result));
+
+        let (sender, receiver) = channel::channel();
+
+        let registry = SurfaceRegistry::new();
+
+        let shell = Self {
+            inner: Rc::clone(&inner_rc),
+            registry,
+            compilation_result,
+            command_sender: sender,
+            output_connected_handlers: Rc::new(RefCell::new(Vec::new())),
+            output_disconnected_handlers: Rc::new(RefCell::new(Vec::new())),
+        };
+
+        shell.setup_command_handler(receiver)?;
+
+        log::info!("Shell created (minimal mode - no layer surfaces)");
 
         Ok(shell)
     }

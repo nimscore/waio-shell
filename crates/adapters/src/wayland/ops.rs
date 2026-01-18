@@ -5,7 +5,7 @@ use crate::wayland::surfaces::app_state::AppState;
 use layer_shika_domain::value_objects::lock_config::LockConfig;
 use layer_shika_domain::value_objects::lock_state::LockState;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
-use slint_interpreter::ComponentInstance;
+use slint_interpreter::{ComponentInstance, CompilationResult};
 use slint_interpreter::Value;
 use smithay_client_toolkit::reexports::calloop::LoopHandle;
 use std::rc::Rc;
@@ -18,6 +18,8 @@ pub trait WaylandSystemOps {
     fn spawn_surface(&mut self, config: &ShellSurfaceConfig) -> Result<Vec<OutputHandle>>;
 
     fn despawn_surface(&mut self, name: &str) -> Result<()>;
+
+    fn set_compilation_result(&mut self, compilation_result: Rc<CompilationResult>);
 
     fn activate_session_lock(&mut self, component_name: &str, config: LockConfig) -> Result<()>;
 

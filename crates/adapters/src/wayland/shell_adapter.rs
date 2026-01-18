@@ -37,7 +37,7 @@ use slint::{
     LogicalPosition, PhysicalSize, PlatformError, WindowPosition,
     platform::{WindowAdapter, femtovg_renderer::FemtoVGRenderer, set_platform, update_timers_and_animations},
 };
-use slint_interpreter::ComponentInstance;
+use slint_interpreter::{ComponentInstance, CompilationResult};
 use smithay_client_toolkit::reexports::calloop::{
     EventLoop, Interest, LoopHandle, Mode, PostAction, generic::Generic,
 };
@@ -97,9 +97,7 @@ impl WaylandShellSystem {
 
     pub fn new_multi(configs: &[ShellSurfaceConfig]) -> Result<Self> {
         if configs.is_empty() {
-            return Err(LayerShikaError::InvalidInput {
-                message: "At least one surface config is required".into(),
-            });
+            return Self::new_minimal();
         }
 
         info!(
@@ -111,6 +109,22 @@ impl WaylandShellSystem {
             EventLoop::try_new().map_err(|e| EventLoopError::Creation { source: e })?;
 
         let state = Self::init_state_multi(configs, &connection, &mut event_queue)?;
+
+        Ok(Self {
+            state,
+            connection,
+            event_queue,
+            event_loop,
+        })
+    }
+
+    pub fn new_minimal() -> Result<Self> {
+        info!("Initializing WindowingSystem in minimal mode (no layer surfaces)");
+        let (connection, mut event_queue) = Self::init_wayland_connection()?;
+        let event_loop =
+            EventLoop::try_new().map_err(|e| EventLoopError::Creation { source: e })?;
+
+        let state = Self::init_state_minimal(&connection, &mut event_queue)?;
 
         Ok(Self {
             state,
@@ -145,6 +159,12 @@ impl WaylandShellSystem {
         pointer: &Rc<WlPointer>,
         layer_surface_config: &LayerSurfaceConfig,
     ) -> Result<Vec<OutputSetup>> {
+        let layer_shell = global_ctx.layer_shell.as_ref().ok_or_else(|| {
+            LayerShikaError::InvalidInput {
+                message: "wlr-layer-shell protocol not available - cannot create layer surfaces".into(),
+            }
+        })?;
+
         let mut setups = Vec::new();
 
         for (index, output) in global_ctx.outputs.iter().enumerate() {
@@ -163,7 +183,7 @@ impl WaylandShellSystem {
             let setup_params = SurfaceSetupParams {
                 compositor: &global_ctx.compositor,
                 output,
-                layer_shell: &global_ctx.layer_shell,
+                layer_shell,
                 fractional_scale_manager: global_ctx.fractional_scale_manager.as_ref(),
                 viewporter: global_ctx.viewporter.as_ref(),
                 queue_handle: &event_queue.handle(),
@@ -426,6 +446,38 @@ impl WaylandShellSystem {
         Ok(app_state)
     }
 
+    fn init_state_minimal(
+        connection: &Connection,
+        event_queue: &mut EventQueue<AppState>,
+    ) -> Result<AppState> {
+        let global_ctx = Rc::new(GlobalContext::initialize(
+            connection,
+            &event_queue.handle(),
+        )?);
+
+        let pointer = Rc::new(global_ctx.seat.get_pointer(&event_queue.handle(), ()));
+        let keyboard = Rc::new(global_ctx.seat.get_keyboard(&event_queue.handle(), ()));
+        let shared_serial = Rc::new(SharedPointerSerial::new());
+
+        let mut app_state = AppState::new(
+            ManagedWlPointer::new(Rc::clone(&pointer), Rc::new(connection.clone())),
+            ManagedWlKeyboard::new(Rc::clone(&keyboard), Rc::new(connection.clone())),
+            Rc::clone(&shared_serial),
+        );
+
+        app_state.set_queue_handle(event_queue.handle());
+        app_state.set_global_context(Rc::clone(&global_ctx));
+
+        let platform = CustomSlintPlatform::new_empty();
+        set_platform(Box::new(PlatformWrapper(Rc::clone(&platform))))
+            .map_err(|e| LayerShikaError::PlatformSetup { source: e })?;
+        app_state.set_slint_platform(Rc::clone(&platform));
+
+        info!("Minimal state initialized successfully (no layer surfaces, empty Slint platform for session locks)");
+
+        Ok(app_state)
+    }
+
     fn create_output_setups_multi(
         configs: &[ShellSurfaceConfig],
         global_ctx: &GlobalContext,
@@ -433,6 +485,12 @@ impl WaylandShellSystem {
         event_queue: &mut EventQueue<AppState>,
         pointer: &Rc<WlPointer>,
     ) -> Result<Vec<OutputSetup>> {
+        let layer_shell = global_ctx.layer_shell.as_ref().ok_or_else(|| {
+            LayerShikaError::InvalidInput {
+                message: "wlr-layer-shell protocol not available - cannot create layer surfaces".into(),
+            }
+        })?;
+
         let mut setups = Vec::new();
 
         for (output_index, output) in global_ctx.outputs.iter().enumerate() {
@@ -458,7 +516,7 @@ impl WaylandShellSystem {
                 let setup_params = SurfaceSetupParams {
                     compositor: &global_ctx.compositor,
                     output,
-                    layer_shell: &global_ctx.layer_shell,
+                    layer_shell,
                     fractional_scale_manager: global_ctx.fractional_scale_manager.as_ref(),
                     viewporter: global_ctx.viewporter.as_ref(),
                     queue_handle: &event_queue.handle(),
@@ -803,6 +861,10 @@ impl WaylandSystemOps for WaylandShellSystem {
 
     fn despawn_surface(&mut self, name: &str) -> Result<()> {
         WaylandShellSystem::despawn_surface(self, name)
+    }
+
+    fn set_compilation_result(&mut self, compilation_result: Rc<CompilationResult>) {
+        self.state.set_compilation_result(compilation_result);
     }
 
     fn activate_session_lock(&mut self, component_name: &str, config: LockConfig) -> Result<()> {

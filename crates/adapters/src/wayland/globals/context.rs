@@ -20,7 +20,7 @@ use crate::wayland::surfaces::app_state::AppState;
 pub struct GlobalContext {
     pub compositor: WlCompositor,
     pub outputs: Vec<WlOutput>,
-    pub layer_shell: ZwlrLayerShellV1,
+    pub layer_shell: Option<ZwlrLayerShellV1>,
     pub seat: WlSeat,
     pub xdg_wm_base: Option<XdgWmBase>,
     pub session_lock_manager: Option<ExtSessionLockManagerV1>,
@@ -38,13 +38,16 @@ impl GlobalContext {
             .map(|(global_list, _)| global_list)
             .map_err(|e| LayerShikaError::GlobalInitialization { source: e })?;
 
-        let (compositor, layer_shell, seat) = bind_globals!(
+        let (compositor, seat) = bind_globals!(
             &global_list,
             queue_handle,
             (WlCompositor, compositor, 3..=6),
-            (ZwlrLayerShellV1, layer_shell, 1..=5),
             (WlSeat, seat, 1..=9)
         )?;
+
+        let layer_shell = global_list
+            .bind::<ZwlrLayerShellV1, _, _>(queue_handle, 1..=5, ())
+            .ok();
 
         let output_names: Vec<u32> = global_list
             .contents()
@@ -113,6 +116,10 @@ impl GlobalContext {
 
         if viewporter.is_none() {
             info!("Viewporter protocol not available");
+        }
+
+        if layer_shell.is_none() {
+            info!("wlr-layer-shell protocol not available, layer surfaces disabled");
         }
 
         let render_context_manager = RenderContextManager::new(&connection.display().id())?;

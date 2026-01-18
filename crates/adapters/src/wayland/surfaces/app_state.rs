@@ -54,6 +54,7 @@ pub struct AppState {
     global_context: Option<Rc<GlobalContext>>,
     known_outputs: Vec<WlOutput>,
     slint_platform: Option<Rc<CustomSlintPlatform>>,
+    compilation_result: Option<Rc<CompilationResult>>,
     output_registry: OutputRegistry,
     output_mapping: OutputMapping,
     surfaces: HashMap<ShellSurfaceKey, PerOutputSurface>,
@@ -83,6 +84,7 @@ impl AppState {
             global_context: None,
             known_outputs: Vec::new(),
             slint_platform: None,
+            compilation_result: None,
             output_registry: OutputRegistry::new(),
             output_mapping: OutputMapping::new(),
             surfaces: HashMap::new(),
@@ -110,6 +112,10 @@ impl AppState {
 
     pub fn set_slint_platform(&mut self, platform: Rc<CustomSlintPlatform>) {
         self.slint_platform = Some(platform);
+    }
+
+    pub fn set_compilation_result(&mut self, compilation_result: Rc<CompilationResult>) {
+        self.compilation_result = Some(compilation_result);
     }
 
     pub fn set_queue_handle(&mut self, queue_handle: wayland_client::QueueHandle<AppState>) {
@@ -255,8 +261,12 @@ impl AppState {
         component_name: &str,
     ) -> Result<(ComponentDefinition, Option<Rc<CompilationResult>>)> {
         let compilation_result = self
-            .primary_output()
-            .and_then(SurfaceState::compilation_result)
+            .compilation_result
+            .clone()
+            .or_else(|| {
+                self.primary_output()
+                    .and_then(SurfaceState::compilation_result)
+            })
             .ok_or_else(|| LayerShikaError::InvalidInput {
                 message: "No compilation result available for session lock".to_string(),
             })?;

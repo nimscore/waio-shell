@@ -35,7 +35,7 @@ use super::OutputMapping;
 
 pub struct OutputManagerContext {
     pub compositor: WlCompositor,
-    pub layer_shell: ZwlrLayerShellV1,
+    pub layer_shell: Option<ZwlrLayerShellV1>,
     pub fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
     pub viewporter: Option<WpViewporter>,
     pub render_factory: Rc<RenderContextFactory>,
@@ -161,10 +161,16 @@ impl OutputManager {
         _output_id: &ObjectId,
         queue_handle: &QueueHandle<AppState>,
     ) -> Result<(SurfaceState, ObjectId)> {
+        let layer_shell = self.context.layer_shell.as_ref().ok_or_else(|| {
+            LayerShikaError::InvalidInput {
+                message: "wlr-layer-shell protocol not available - cannot create layer surfaces".into(),
+            }
+        })?;
+
         let setup_params = SurfaceSetupParams {
             compositor: &self.context.compositor,
             output,
-            layer_shell: &self.context.layer_shell,
+            layer_shell,
             fractional_scale_manager: self.context.fractional_scale_manager.as_ref(),
             viewporter: self.context.viewporter.as_ref(),
             queue_handle,
