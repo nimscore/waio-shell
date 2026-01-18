@@ -93,7 +93,12 @@ impl<'a> Selection<'a> {
 
     /// Registers a callback handler for all matching surfaces
     ///
-    /// Handler receives a `CallbackContext` with surface identity and shell control.
+    /// ```ignore
+    /// shell.select(Surface::named("bar"))
+    ///     .on_callback("clicked", |ctx| {
+    ///         println!("Clicked: {}", ctx.surface_name());
+    ///     });
+    /// ```
     pub fn on_callback<F, R>(&self, callback_name: &str, handler: F) -> &Self
     where
         F: Fn(crate::CallbackContext) -> R + Clone + 'static,
@@ -104,7 +109,17 @@ impl<'a> Selection<'a> {
         self
     }
 
-    /// Registers a callback handler that receives arguments for all matching surfaces
+    /// Registers a callback handler that receives Slint arguments
+    ///
+    /// ```ignore
+    /// // Slint: callback item-clicked(string);
+    /// shell.select(Surface::named("menu"))
+    ///     .on_callback_with_args("item-clicked", |args, ctx| {
+    ///         if let Some(Value::String(item)) = args.get(0) {
+    ///             println!("{} clicked {}", ctx.surface_name(), item);
+    ///         }
+    ///     });
+    /// ```
     pub fn on_callback_with_args<F, R>(&self, callback_name: &str, handler: F) -> &Self
     where
         F: Fn(&[Value], crate::CallbackContext) -> R + Clone + 'static,

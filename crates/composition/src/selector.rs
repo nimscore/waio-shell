@@ -14,9 +14,30 @@ pub struct SurfaceInfo {
     pub instance_id: SurfaceInstanceId,
 }
 
-/// Selector for targeting surfaces when setting up callbacks or runtime configuration
+/// Selector for targeting surfaces in callbacks and runtime configuration
 ///
-/// Combine with `.or()`, `.except()`, or `.on()` for complex targeting.
+/// # Examples
+///
+/// ```ignore
+/// // Single surface by name
+/// shell.select(Surface::named("bar"))
+///     .on_callback("clicked", |ctx| { /* ... */ });
+///
+/// // Multiple surfaces
+/// shell.select(Surface::any(["bar", "panel"]))
+///     .set_property("visible", &Value::Bool(true));
+///
+/// // All except one
+/// shell.select(Surface::all().except(Surface::named("hidden")))
+///     .on_callback("update", |ctx| { /* ... */ });
+///
+/// // Custom filter
+/// shell.select(Surface::matching(|info| info.name.starts_with("popup")))
+///     .set_property("layer", &Value::String("overlay".into()));
+///
+/// // Combine with output selector
+/// Surface::named("bar").on(Output::primary())
+/// ```
 #[derive(Clone)]
 pub enum Surface {
     /// Select all surfaces
@@ -50,6 +71,10 @@ impl Surface {
     }
 
     /// Selects surfaces matching a custom predicate
+    ///
+    /// ```ignore
+    /// Surface::matching(|info| info.name.starts_with("widget"))
+    /// ```
     pub fn matching<F>(predicate: F) -> Self
     where
         F: Fn(&SurfaceInfo) -> bool + Send + Sync + 'static,
@@ -58,6 +83,11 @@ impl Surface {
     }
 
     /// Combines this surface selector with an output selector
+    ///
+    /// ```ignore
+    /// Surface::named("bar").on(Output::primary())
+    /// Surface::all().on(Output::named("HDMI-1"))
+    /// ```
     pub fn on(self, output: Output) -> Selector {
         Selector {
             surface: self,
@@ -66,12 +96,20 @@ impl Surface {
     }
 
     /// Inverts the selection to exclude matching surfaces
+    ///
+    /// ```ignore
+    /// Surface::all().except(Surface::named("hidden"))
+    /// ```
     #[must_use]
     pub fn except(self, other: impl Into<Surface>) -> Self {
         Self::Not(Box::new(other.into()))
     }
 
     /// Combines this selector with another using OR logic
+    ///
+    /// ```ignore
+    /// Surface::named("bar").or(Surface::named("panel"))
+    /// ```
     #[must_use]
     pub fn or(self, other: impl Into<Surface>) -> Self {
         match self {
@@ -108,7 +146,23 @@ impl Debug for Surface {
     }
 }
 
-/// Selector for targeting outputs (monitors) in runtime operations
+/// Selector for targeting outputs (monitors)
+///
+/// # Examples
+///
+/// ```ignore
+/// // Primary monitor only
+/// shell.select(Surface::named("bar").on(Output::primary()))
+///     .on_callback("clicked", |ctx| { /* ... */ });
+///
+/// // Specific output by name
+/// shell.select(Output::named("HDMI-1"))
+///     .set_property("scale", &Value::Number(1.5));
+///
+/// // Custom filter
+/// shell.select(Output::matching(|info| info.scale().unwrap_or(1) > 1))
+///     .set_property("enable-hidpi", &Value::Bool(true));
+/// ```
 #[derive(Clone)]
 pub enum Output {
     /// Select all outputs
@@ -156,6 +210,10 @@ impl Output {
     }
 
     /// Selects outputs matching a custom predicate
+    ///
+    /// ```ignore
+    /// Output::matching(|info| info.is_primary())
+    /// ```
     pub fn matching<F>(predicate: F) -> Self
     where
         F: Fn(&OutputInfo) -> bool + Send + Sync + 'static,
@@ -164,12 +222,20 @@ impl Output {
     }
 
     /// Inverts the selection to exclude matching outputs
+    ///
+    /// ```ignore
+    /// Output::all().except(Output::primary())
+    /// ```
     #[must_use]
     pub fn except(self, other: impl Into<Output>) -> Self {
         Self::Not(Box::new(other.into()))
     }
 
     /// Combines this selector with another using OR logic
+    ///
+    /// ```ignore
+    /// Output::named("HDMI-1").or(Output::named("HDMI-2"))
+    /// ```
     #[must_use]
     pub fn or(self, other: impl Into<Output>) -> Self {
         match self {
@@ -220,7 +286,18 @@ impl Debug for Output {
 
 /// Combined surface and output selector for precise targeting
 ///
-/// Targets specific surface instances on specific outputs.
+/// Created by combining `Surface` and `Output` selectors:
+///
+/// ```ignore
+/// Surface::named("bar").on(Output::primary())
+/// ```
+///
+/// Or implicitly from either selector:
+///
+/// ```ignore
+/// shell.select(Surface::named("bar"))  // All outputs
+/// shell.select(Output::primary())      // All surfaces
+/// ```
 #[derive(Clone, Debug)]
 pub struct Selector {
     pub surface: Surface,

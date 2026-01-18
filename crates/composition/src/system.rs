@@ -102,9 +102,12 @@ pub enum ShellCommand {
     Render,
 }
 
-/// Context provided to callback handlers with surface and control information
+/// Context provided to callback handlers
 ///
-/// Provides surface identity, output info, and control handle for runtime operations.
+/// # Callback Signatures
+///
+/// - Basic: `Fn(CallbackContext) -> impl IntoValue`
+/// - With args: `Fn(&[Value], CallbackContext) -> impl IntoValue`
 pub struct CallbackContext {
     instance_id: SurfaceInstanceId,
     surface_name: String,

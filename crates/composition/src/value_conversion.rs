@@ -1,5 +1,6 @@
 use layer_shika_adapters::platform::slint_interpreter::Value;
 
+/// Trait for callback return types
 pub trait IntoValue {
     fn into_value(self) -> Value;
 }
