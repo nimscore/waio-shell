@@ -26,7 +26,7 @@ impl<'a> LockSelection<'a> {
     /// Handler receives a `CallbackContext` with surface identity and shell control.
     /// Callbacks are stored and applied when the lock is activated, and automatically
     /// applied to new surfaces when outputs are hotplugged during an active lock.
-    pub fn on_callback<F, R>(&mut self, callback_name: &str, handler: F) -> &mut Self
+    pub fn on_callback<F, R>(&self, callback_name: &str, handler: F) -> &Self
     where
         F: Fn(crate::CallbackContext) -> R + Clone + 'static,
         R: crate::IntoValue,
@@ -37,7 +37,7 @@ impl<'a> LockSelection<'a> {
     }
 
     /// Registers a callback handler that receives arguments for all matching lock surfaces
-    pub fn on_callback_with_args<F, R>(&mut self, callback_name: &str, handler: F) -> &mut Self
+    pub fn on_callback_with_args<F, R>(&self, callback_name: &str, handler: F) -> &Self
     where
         F: Fn(&[Value], crate::CallbackContext) -> R + Clone + 'static,
         R: crate::IntoValue,

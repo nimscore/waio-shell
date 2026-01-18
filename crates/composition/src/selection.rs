@@ -94,7 +94,7 @@ impl<'a> Selection<'a> {
     /// Registers a callback handler for all matching surfaces
     ///
     /// Handler receives a `CallbackContext` with surface identity and shell control.
-    pub fn on_callback<F, R>(&mut self, callback_name: &str, handler: F) -> &mut Self
+    pub fn on_callback<F, R>(&self, callback_name: &str, handler: F) -> &Self
     where
         F: Fn(crate::CallbackContext) -> R + Clone + 'static,
         R: crate::IntoValue,
@@ -105,7 +105,7 @@ impl<'a> Selection<'a> {
     }
 
     /// Registers a callback handler that receives arguments for all matching surfaces
-    pub fn on_callback_with_args<F, R>(&mut self, callback_name: &str, handler: F) -> &mut Self
+    pub fn on_callback_with_args<F, R>(&self, callback_name: &str, handler: F) -> &Self
     where
         F: Fn(&[Value], crate::CallbackContext) -> R + Clone + 'static,
         R: crate::IntoValue,
