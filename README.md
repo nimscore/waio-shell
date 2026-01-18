@@ -80,7 +80,7 @@ See the [examples README](examples/README.md) for detailed usage instructions an
 
 ## First Stable Release
 
-The aim is to have the first stable release by the end of 2025, with a focus on core functionality and API stability.
+The aim is to have the first stable release by the end of February 2026, with a focus on core functionality and API stability.
 
 Stay tuned!
 
