@@ -220,10 +220,6 @@ impl Clone for LockPropertyOperation {
     }
 }
 
-pub fn create_lock_property_operation(name: impl Into<String>, value: Value) -> LockPropertyOperation {
-    LockPropertyOperation::new(name, value)
-}
-
 pub fn create_lock_property_operation_with_output_filter<F>(
     name: impl Into<String>,
     value: Value,

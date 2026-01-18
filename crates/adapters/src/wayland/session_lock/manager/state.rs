@@ -179,15 +179,17 @@ impl ActiveLockSurface {
 
         for property_op in &context.property_operations {
             if property_op.should_apply(&callback_context) {
-                if let Err(err) =
-                    property_op.apply_to_component(component.component_instance())
-                {
+                if let Err(err) = property_op.apply_to_component(component.component_instance()) {
                     info!(
                         "Failed to set lock property '{}': {err}",
                         property_op.name()
                     );
                 } else {
-                    info!("Set lock property '{}' on output {:?}", property_op.name(), context.output_handle);
+                    info!(
+                        "Set lock property '{}' on output {:?}",
+                        property_op.name(),
+                        context.output_handle
+                    );
                 }
             } else {
                 info!(

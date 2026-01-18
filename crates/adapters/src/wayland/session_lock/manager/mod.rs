@@ -24,8 +24,8 @@ use wayland_client::{
 use wayland_protocols::ext::session_lock::v1::client::ext_session_lock_v1::ExtSessionLockV1;
 
 pub use callbacks::{
-    create_lock_property_operation_with_output_filter, LockCallback, LockPropertyOperation,
-    OutputFilter,
+    LockCallback, LockPropertyOperation, OutputFilter,
+    create_lock_property_operation_with_output_filter,
 };
 pub use state::{ActiveLockSurface, LockConfigureContext, LockSurfaceOutputContext};
 
@@ -331,7 +331,10 @@ impl SessionLockManager {
         self.callbacks.push(callback);
     }
 
-    pub(crate) fn register_property_operation(&mut self, property_operation: LockPropertyOperation) {
+    pub(crate) fn register_property_operation(
+        &mut self,
+        property_operation: LockPropertyOperation,
+    ) {
         for (_, surface) in &self.lock_surfaces {
             surface.apply_property_operation(&property_operation);
         }

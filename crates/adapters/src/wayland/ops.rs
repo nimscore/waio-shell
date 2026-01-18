@@ -5,8 +5,8 @@ use crate::wayland::surfaces::app_state::AppState;
 use layer_shika_domain::value_objects::lock_config::LockConfig;
 use layer_shika_domain::value_objects::lock_state::LockState;
 use layer_shika_domain::value_objects::output_handle::OutputHandle;
-use slint_interpreter::{ComponentInstance, CompilationResult};
 use slint_interpreter::Value;
+use slint_interpreter::{CompilationResult, ComponentInstance};
 use smithay_client_toolkit::reexports::calloop::LoopHandle;
 use std::rc::Rc;
 
@@ -38,7 +38,10 @@ pub trait WaylandSystemOps {
         filter: OutputFilter,
     );
 
-    fn register_session_lock_property_operation(&mut self, property_operation: LockPropertyOperation);
+    fn register_session_lock_property_operation(
+        &mut self,
+        property_operation: LockPropertyOperation,
+    );
 
     fn session_lock_component_name(&self) -> Option<String>;
 

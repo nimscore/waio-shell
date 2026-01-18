@@ -14,7 +14,9 @@ use crate::wayland::session_lock::lock_context::SessionLockContext;
 use crate::wayland::session_lock::manager::callbacks::{
     create_lock_callback, create_lock_callback_with_output_filter,
 };
-use crate::wayland::session_lock::{LockCallback, LockPropertyOperation, OutputFilter, SessionLockManager};
+use crate::wayland::session_lock::{
+    LockCallback, LockPropertyOperation, OutputFilter, SessionLockManager,
+};
 use layer_shika_domain::entities::output_registry::OutputRegistry;
 use layer_shika_domain::value_objects::handle::SurfaceHandle;
 use layer_shika_domain::value_objects::lock_config::LockConfig;

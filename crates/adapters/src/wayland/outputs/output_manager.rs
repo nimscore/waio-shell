@@ -161,11 +161,15 @@ impl OutputManager {
         _output_id: &ObjectId,
         queue_handle: &QueueHandle<AppState>,
     ) -> Result<(SurfaceState, ObjectId)> {
-        let layer_shell = self.context.layer_shell.as_ref().ok_or_else(|| {
-            LayerShikaError::InvalidInput {
-                message: "wlr-layer-shell protocol not available - cannot create layer surfaces".into(),
-            }
-        })?;
+        let layer_shell =
+            self.context
+                .layer_shell
+                .as_ref()
+                .ok_or_else(|| LayerShikaError::InvalidInput {
+                    message:
+                        "wlr-layer-shell protocol not available - cannot create layer surfaces"
+                            .into(),
+                })?;
 
         let setup_params = SurfaceSetupParams {
             compositor: &self.context.compositor,

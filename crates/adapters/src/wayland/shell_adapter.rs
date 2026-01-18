@@ -159,11 +159,15 @@ impl WaylandShellSystem {
         pointer: &Rc<WlPointer>,
         layer_surface_config: &LayerSurfaceConfig,
     ) -> Result<Vec<OutputSetup>> {
-        let layer_shell = global_ctx.layer_shell.as_ref().ok_or_else(|| {
-            LayerShikaError::InvalidInput {
-                message: "wlr-layer-shell protocol not available - cannot create layer surfaces".into(),
-            }
-        })?;
+        let layer_shell =
+            global_ctx
+                .layer_shell
+                .as_ref()
+                .ok_or_else(|| LayerShikaError::InvalidInput {
+                    message:
+                        "wlr-layer-shell protocol not available - cannot create layer surfaces"
+                            .into(),
+                })?;
 
         let mut setups = Vec::new();
 
@@ -473,7 +477,9 @@ impl WaylandShellSystem {
             .map_err(|e| LayerShikaError::PlatformSetup { source: e })?;
         app_state.set_slint_platform(Rc::clone(&platform));
 
-        info!("Minimal state initialized successfully (no layer surfaces, empty Slint platform for session locks)");
+        info!(
+            "Minimal state initialized successfully (no layer surfaces, empty Slint platform for session locks)"
+        );
 
         Ok(app_state)
     }
@@ -485,11 +491,15 @@ impl WaylandShellSystem {
         event_queue: &mut EventQueue<AppState>,
         pointer: &Rc<WlPointer>,
     ) -> Result<Vec<OutputSetup>> {
-        let layer_shell = global_ctx.layer_shell.as_ref().ok_or_else(|| {
-            LayerShikaError::InvalidInput {
-                message: "wlr-layer-shell protocol not available - cannot create layer surfaces".into(),
-            }
-        })?;
+        let layer_shell =
+            global_ctx
+                .layer_shell
+                .as_ref()
+                .ok_or_else(|| LayerShikaError::InvalidInput {
+                    message:
+                        "wlr-layer-shell protocol not available - cannot create layer surfaces"
+                            .into(),
+                })?;
 
         let mut setups = Vec::new();
 
@@ -902,8 +912,12 @@ impl WaylandSystemOps for WaylandShellSystem {
             .register_session_lock_callback_with_filter(callback_name, handler, filter);
     }
 
-    fn register_session_lock_property_operation(&mut self, property_operation: LockPropertyOperation) {
-        self.state.register_session_lock_property_operation(property_operation);
+    fn register_session_lock_property_operation(
+        &mut self,
+        property_operation: LockPropertyOperation,
+    ) {
+        self.state
+            .register_session_lock_property_operation(property_operation);
     }
 
     fn session_lock_component_name(&self) -> Option<String> {
