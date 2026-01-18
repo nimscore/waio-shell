@@ -4,6 +4,7 @@ use crate::wayland::{
     managed_proxies::{ManagedWlKeyboard, ManagedWlPointer},
     ops::WaylandSystemOps,
     outputs::{OutputManager, OutputManagerContext},
+    rendering::RenderableSet,
     session_lock::OutputFilter,
     surfaces::layer_surface::{SurfaceCtx, SurfaceSetupParams},
     surfaces::popup_manager::{PopupContext, PopupManager},
@@ -627,15 +628,10 @@ impl WaylandShellSystem {
 
             update_timers_and_animations();
 
-            for surface in self.state.all_outputs() {
-                surface.window().render_frame_if_dirty().map_err(|e| {
-                    RenderingError::Operation {
-                        message: e.to_string(),
-                    }
-                })?;
+            self.state.render_all_dirty()?;
+            if let Some(lock_manager) = self.state.lock_manager() {
+                lock_manager.render_all_dirty()?;
             }
-
-            self.state.render_lock_frames()?;
         }
 
         info!("Initial configuration complete, requesting final render");
@@ -643,15 +639,10 @@ impl WaylandShellSystem {
             RenderableWindow::request_redraw(surface.window().as_ref());
         }
         update_timers_and_animations();
-        for surface in self.state.all_outputs() {
-            surface
-                .window()
-                .render_frame_if_dirty()
-                .map_err(|e| RenderingError::Operation {
-                    message: e.to_string(),
-                })?;
+        self.state.render_all_dirty()?;
+        if let Some(lock_manager) = self.state.lock_manager() {
+            lock_manager.render_all_dirty()?;
         }
-        self.state.render_lock_frames()?;
         self.connection
             .flush()
             .map_err(|e| LayerShikaError::WaylandProtocol { source: e })?;
@@ -720,7 +711,9 @@ impl WaylandShellSystem {
             }
         }
 
-        shared_data.render_lock_frames()?;
+        if let Some(lock_manager) = shared_data.lock_manager() {
+            lock_manager.render_all_dirty()?;
+        }
 
         connection
             .flush()

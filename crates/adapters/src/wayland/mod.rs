@@ -5,6 +5,7 @@ pub(crate) mod input;
 pub(crate) mod managed_proxies;
 pub mod ops;
 pub(crate) mod outputs;
+pub(crate) mod rendering;
 pub(crate) mod session_lock;
 pub(crate) mod shell_adapter;
 pub(crate) mod surfaces;

@@ -6,6 +6,7 @@ pub mod state;
 
 use crate::errors::{LayerShikaError, Result};
 use crate::rendering::slint_integration::platform::CustomSlintPlatform;
+use crate::wayland::rendering::RenderableSet;
 use crate::wayland::session_lock::lock_context::SessionLockContext;
 use crate::wayland::session_lock::lock_surface::LockSurface;
 use crate::wayland::surfaces::app_state::AppState;
@@ -393,5 +394,11 @@ impl SessionLockManager {
             .iter()
             .filter(|(_, s)| s.component().is_some())
             .count()
+    }
+}
+
+impl RenderableSet for SessionLockManager {
+    fn render_all_dirty(&self) -> Result<()> {
+        rendering::render_frames(&self.lock_surfaces)
     }
 }

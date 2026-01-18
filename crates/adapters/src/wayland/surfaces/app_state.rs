@@ -1,13 +1,15 @@
 use super::event_context::SharedPointerSerial;
 use super::keyboard_state::KeyboardState;
 use super::surface_state::SurfaceState;
-use crate::errors::{LayerShikaError, Result};
+use crate::errors::{LayerShikaError, RenderingError, Result};
 use crate::rendering::egl::context_factory::RenderContextFactory;
+use crate::rendering::femtovg::renderable_window::RenderableWindow;
 use crate::rendering::slint_integration::platform::CustomSlintPlatform;
 use crate::wayland::globals::context::GlobalContext;
 use crate::wayland::input::KeyboardInputState;
 use crate::wayland::managed_proxies::{ManagedWlKeyboard, ManagedWlPointer};
 use crate::wayland::outputs::{OutputManager, OutputMapping};
+use crate::wayland::rendering::RenderableSet;
 use crate::wayland::session_lock::lock_context::SessionLockContext;
 use crate::wayland::session_lock::manager::callbacks::{
     create_lock_callback, create_lock_callback_with_output_filter,
@@ -220,16 +222,6 @@ impl AppState {
         };
 
         manager.deactivate()?;
-        Ok(())
-    }
-
-    pub fn render_lock_frames(&self) -> Result<()> {
-        if let Some(manager) = self.lock_manager.as_ref() {
-            if manager.state() != LockState::Locked && manager.state() != LockState::Locking {
-                return Ok(());
-            }
-            manager.render_frames()?;
-        }
         Ok(())
     }
 
@@ -924,5 +916,19 @@ impl AppState {
             .retain(|_, k| !matching_handles.contains(&k.surface_handle));
 
         removed
+    }
+}
+
+impl RenderableSet for AppState {
+    fn render_all_dirty(&self) -> Result<()> {
+        for surface in self.all_outputs() {
+            surface
+                .window()
+                .render_frame_if_dirty()
+                .map_err(|e| RenderingError::Operation {
+                    message: e.to_string(),
+                })?;
+        }
+        Ok(())
     }
 }
