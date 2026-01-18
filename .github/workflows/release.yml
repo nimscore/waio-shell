@@ -101,6 +101,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Extract version
         id: version
@@ -113,3 +115,4 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          token: ${{ secrets.PAT_TOKEN }}
