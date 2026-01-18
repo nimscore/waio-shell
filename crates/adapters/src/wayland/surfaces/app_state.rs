@@ -5,6 +5,7 @@ use crate::errors::{LayerShikaError, Result};
 use crate::rendering::egl::context_factory::RenderContextFactory;
 use crate::rendering::slint_integration::platform::CustomSlintPlatform;
 use crate::wayland::globals::context::GlobalContext;
+use crate::wayland::input::KeyboardInputState;
 use crate::wayland::managed_proxies::{ManagedWlKeyboard, ManagedWlPointer};
 use crate::wayland::outputs::{OutputManager, OutputMapping};
 use crate::wayland::session_lock::lock_context::SessionLockContext;
@@ -63,7 +64,7 @@ pub struct AppState {
     registry_name_to_output_id: HashMap<u32, ObjectId>,
     active_surface_key: Option<ShellSurfaceKey>,
     keyboard_focus_key: Option<ShellSurfaceKey>,
-    keyboard_focus_surface_id: Option<ObjectId>,
+    keyboard_input_state: KeyboardInputState,
     keyboard_state: KeyboardState,
     lock_manager: Option<SessionLockManager>,
     lock_callbacks: Vec<LockCallback>,
@@ -92,7 +93,7 @@ impl AppState {
             registry_name_to_output_id: HashMap::new(),
             active_surface_key: None,
             keyboard_focus_key: None,
-            keyboard_focus_surface_id: None,
+            keyboard_input_state: KeyboardInputState::new(),
             keyboard_state: KeyboardState::new(),
             lock_manager: None,
             lock_callbacks: Vec::new(),
@@ -626,19 +627,23 @@ impl AppState {
     pub fn handle_keyboard_enter(&mut self, _serial: u32, surface: &WlSurface, _keys: &[u8]) {
         if let Some(manager) = self.lock_manager.as_mut() {
             if manager.handle_keyboard_enter(surface) {
-                self.set_keyboard_focus(None, None);
+                self.set_keyboard_focus(None);
                 return;
             }
         }
 
         let surface_id = surface.id();
         if let Some(key) = self.get_key_by_surface(&surface_id).cloned() {
-            self.set_keyboard_focus(Some(key), Some(surface_id));
+            self.keyboard_input_state
+                .set_focused_surface(Some(surface_id.clone()));
+            self.set_keyboard_focus(Some(key));
             return;
         }
 
         if let Some(key) = self.get_key_by_popup(&surface_id).cloned() {
-            self.set_keyboard_focus(Some(key), Some(surface_id));
+            self.keyboard_input_state
+                .set_focused_surface(Some(surface_id));
+            self.set_keyboard_focus(Some(key));
         }
     }
 
@@ -649,8 +654,10 @@ impl AppState {
             }
         }
 
-        if self.keyboard_focus_surface_id == Some(surface.id()) {
-            self.set_keyboard_focus(None, None);
+        let surface_id = surface.id();
+        if self.keyboard_input_state.focused_surface_id() == Some(&surface_id) {
+            self.keyboard_input_state.reset();
+            self.set_keyboard_focus(None);
         }
     }
 
@@ -664,7 +671,7 @@ impl AppState {
         let Some(focus_key) = self.keyboard_focus_key.clone() else {
             return;
         };
-        let Some(surface_id) = self.keyboard_focus_surface_id.clone() else {
+        let Some(surface_id) = self.keyboard_input_state.focused_surface_id().cloned() else {
             return;
         };
 
@@ -691,12 +698,11 @@ impl AppState {
         self.keyboard_state.repeat_delay = delay;
     }
 
-    fn set_keyboard_focus(&mut self, key: Option<ShellSurfaceKey>, surface_id: Option<ObjectId>) {
+    fn set_keyboard_focus(&mut self, key: Option<ShellSurfaceKey>) {
         if let Some(ref k) = key {
             self.output_registry.set_active(Some(k.output_handle));
         }
         self.keyboard_focus_key = key;
-        self.keyboard_focus_surface_id = surface_id;
     }
 
     pub fn find_output_by_popup(&self, popup_surface_id: &ObjectId) -> Option<&PerOutputSurface> {

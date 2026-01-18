@@ -1,6 +1,7 @@
 pub(crate) mod config;
 pub(crate) mod event_handling;
 pub(crate) mod globals;
+pub(crate) mod input;
 pub(crate) mod managed_proxies;
 pub mod ops;
 pub(crate) mod outputs;

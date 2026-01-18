@@ -273,10 +273,6 @@ impl ActiveLockSurface {
         self.window.window().dispatch_event(event);
     }
 
-    pub fn window_rc(&self) -> Rc<FemtoVGWindow> {
-        Rc::clone(&self.window)
-    }
-
     pub const fn surface(&self) -> &LockSurface {
         &self.surface
     }
