@@ -253,6 +253,65 @@ impl SessionLockManager {
         surface.handle_configure(serial, width, height, &context)
     }
 
+    pub fn handle_surface_configured(
+        &mut self,
+        lock_surface_id: &ObjectId,
+        serial: u32,
+        width: u32,
+        height: u32,
+        output_ctx: LockSurfaceOutputContext,
+    ) {
+        let component_name = self.component_definition.name().to_string();
+
+        let context = LockConfigureContext {
+            scale_factor: self.config.scale_factor.value(),
+            component_definition: self.component_definition.clone(),
+            compilation_result: self.compilation_result.clone(),
+            platform: Rc::clone(&self.platform),
+            callbacks: self.callbacks.clone(),
+            component_name,
+            output_handle: output_ctx.output_handle,
+            output_info: output_ctx.output_info,
+            primary_handle: output_ctx.primary_handle,
+            active_handle: output_ctx.active_handle,
+        };
+
+        let Some(surface) = self.find_surface_by_lock_surface_id_mut(lock_surface_id) else {
+            return;
+        };
+
+        surface.handle_surface_configured(serial, width, height, &context);
+    }
+
+    pub fn initialize_pending_components(&mut self) -> Result<()> {
+        let component_name = self.component_definition.name().to_string();
+
+        for (_, surface) in &mut self.lock_surfaces {
+            if surface.has_pending_initialization() {
+                let Some(output_handle) = surface.output_handle else {
+                    continue;
+                };
+
+                let context = LockConfigureContext {
+                    scale_factor: self.config.scale_factor.value(),
+                    component_definition: self.component_definition.clone(),
+                    compilation_result: self.compilation_result.clone(),
+                    platform: Rc::clone(&self.platform),
+                    callbacks: self.callbacks.clone(),
+                    component_name: component_name.clone(),
+                    output_handle,
+                    output_info: surface.output_info.clone(),
+                    primary_handle: surface.primary_handle,
+                    active_handle: surface.active_handle,
+                };
+
+                surface.initialize_pending_component(&context)?;
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn render_frames(&self) -> Result<()> {
         rendering::render_frames(&self.lock_surfaces)
     }

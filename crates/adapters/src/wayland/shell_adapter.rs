@@ -694,6 +694,10 @@ impl WaylandShellSystem {
 
         update_timers_and_animations();
 
+        if let Some(lock_manager) = shared_data.lock_manager_mut() {
+            lock_manager.initialize_pending_components()?;
+        }
+
         for surface in shared_data.all_outputs() {
             surface
                 .window()

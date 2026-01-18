@@ -677,11 +677,13 @@ impl Dispatch<ExtSessionLockSurfaceV1, ()> for AppState {
             };
 
             if let Some(manager) = state.lock_manager_mut() {
-                if let Err(err) =
-                    manager.handle_configure(&lock_surface_id, serial, width, height, output_ctx)
-                {
-                    info!("Failed to configure session lock surface: {err}");
-                }
+                manager.handle_surface_configured(
+                    &lock_surface_id,
+                    serial,
+                    width,
+                    height,
+                    output_ctx,
+                );
             }
         }
     }

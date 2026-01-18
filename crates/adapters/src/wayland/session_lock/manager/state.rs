@@ -52,11 +52,12 @@ pub struct ActiveLockSurface {
     component: Option<ComponentState>,
     scale_factor: f32,
     has_fractional_scale: bool,
-    output_handle: Option<OutputHandle>,
     component_name: Option<String>,
-    output_info: Option<OutputInfo>,
-    primary_handle: Option<OutputHandle>,
-    active_handle: Option<OutputHandle>,
+    pub(super) output_handle: Option<OutputHandle>,
+    pub(super) output_info: Option<OutputInfo>,
+    pub(super) primary_handle: Option<OutputHandle>,
+    pub(super) active_handle: Option<OutputHandle>,
+    pending_component_initialization: bool,
 }
 
 impl ActiveLockSurface {
@@ -72,16 +73,17 @@ impl ActiveLockSurface {
             output_info: None,
             primary_handle: None,
             active_handle: None,
+            pending_component_initialization: false,
         }
     }
 
-    pub fn handle_configure(
+    pub fn handle_surface_configured(
         &mut self,
         serial: u32,
         width: u32,
         height: u32,
         context: &LockConfigureContext,
-    ) -> Result<()> {
+    ) {
         self.surface.handle_configure(serial, width, height);
         self.scale_factor = context.scale_factor;
         self.output_handle = Some(context.output_handle);
@@ -93,7 +95,7 @@ impl ActiveLockSurface {
             Ok(dimensions) => dimensions,
             Err(err) => {
                 info!("Failed to calculate lock surface dimensions: {err}");
-                return Ok(());
+                return;
             }
         };
         let scaling_mode = self.scaling_mode();
@@ -110,46 +112,72 @@ impl ActiveLockSurface {
         self.configure_surface(&dimensions, scaling_mode);
 
         if self.component.is_none() {
-            context.platform.add_window(Rc::clone(&self.window));
-            let component = ComponentState::new(
-                context.component_definition.clone(),
-                context.compilation_result.clone(),
-                &self.window,
-            )?;
-            self.window
-                .window()
-                .dispatch_event(WindowEvent::WindowActiveChanged(true));
-
-            let callback_context = LockCallbackContext::new(
-                context.component_name.clone(),
-                context.output_handle,
-                context.output_info.clone(),
-                context.primary_handle,
-                context.active_handle,
-            );
-
-            for callback in &context.callbacks {
-                if let Err(err) =
-                    callback.apply_with_context(component.component_instance(), &callback_context)
-                {
-                    info!(
-                        "Failed to register lock callback '{}': {err}",
-                        callback.name()
-                    );
-                } else if callback.should_apply(&callback_context) {
-                    info!("Registered lock callback '{}'", callback.name());
-                } else {
-                    info!(
-                        "Skipping callback '{}' due to selector filter (output {:?})",
-                        callback.name(),
-                        context.output_handle
-                    );
-                }
-            }
-            self.component = Some(component);
+            self.pending_component_initialization = true;
         }
 
         RenderableWindow::request_redraw(self.window.as_ref());
+    }
+
+    pub fn handle_configure(
+        &mut self,
+        serial: u32,
+        width: u32,
+        height: u32,
+        context: &LockConfigureContext,
+    ) -> Result<()> {
+        self.handle_surface_configured(serial, width, height, context);
+
+        if self.pending_component_initialization {
+            self.initialize_component(context)?;
+        }
+
+        Ok(())
+    }
+
+    fn initialize_component(&mut self, context: &LockConfigureContext) -> Result<()> {
+        if self.component.is_some() {
+            return Ok(());
+        }
+
+        context.platform.add_window(Rc::clone(&self.window));
+        let component = ComponentState::new(
+            context.component_definition.clone(),
+            context.compilation_result.clone(),
+            &self.window,
+        )?;
+        self.window
+            .window()
+            .dispatch_event(WindowEvent::WindowActiveChanged(true));
+
+        let callback_context = LockCallbackContext::new(
+            context.component_name.clone(),
+            context.output_handle,
+            context.output_info.clone(),
+            context.primary_handle,
+            context.active_handle,
+        );
+
+        for callback in &context.callbacks {
+            if let Err(err) =
+                callback.apply_with_context(component.component_instance(), &callback_context)
+            {
+                info!(
+                    "Failed to register lock callback '{}': {err}",
+                    callback.name()
+                );
+            } else if callback.should_apply(&callback_context) {
+                info!("Registered lock callback '{}'", callback.name());
+            } else {
+                info!(
+                    "Skipping callback '{}' due to selector filter (output {:?})",
+                    callback.name(),
+                    context.output_handle
+                );
+            }
+        }
+        self.component = Some(component);
+        self.pending_component_initialization = false;
+
         Ok(())
     }
 
@@ -279,5 +307,16 @@ impl ActiveLockSurface {
 
     pub const fn component(&self) -> Option<&ComponentState> {
         self.component.as_ref()
+    }
+
+    pub const fn has_pending_initialization(&self) -> bool {
+        self.pending_component_initialization
+    }
+
+    pub fn initialize_pending_component(&mut self, context: &LockConfigureContext) -> Result<()> {
+        if self.pending_component_initialization {
+            self.initialize_component(context)?;
+        }
+        Ok(())
     }
 }
