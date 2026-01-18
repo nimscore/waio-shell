@@ -1,4 +1,4 @@
-use crate::popup_builder::PopupBuilder;
+use crate::popup_builder::{Bound, PopupBuilder};
 use crate::system::{PopupCommand, ShellCommand, ShellControl};
 use crate::{Error, Result};
 use layer_shika_adapters::platform::calloop::channel;
@@ -17,8 +17,11 @@ impl PopupShell {
         Self { sender }
     }
 
+    /// Creates a popup builder bound to this shell
+    ///
+    /// The returned builder can call `.show()` directly because it's bound to a shell.
     #[must_use]
-    pub fn builder(&self, component: impl Into<String>) -> PopupBuilder {
+    pub fn builder(&self, component: impl Into<String>) -> PopupBuilder<Bound> {
         PopupBuilder::new(component).with_shell(self.clone())
     }
 

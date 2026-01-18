@@ -1,7 +1,6 @@
+use crate::Result;
 use crate::popup::PopupShell;
-use crate::{Error, Result};
 use layer_shika_domain::dimensions::LogicalRect;
-use layer_shika_domain::errors::DomainError;
 use layer_shika_domain::value_objects::handle::PopupHandle;
 use layer_shika_domain::value_objects::output_target::OutputTarget;
 use layer_shika_domain::value_objects::popup_behavior::ConstraintAdjustment;
@@ -11,9 +10,19 @@ use layer_shika_domain::value_objects::popup_position::{
 };
 use layer_shika_domain::value_objects::popup_size::PopupSize;
 
+/// Type state indicating the builder is not bound to a shell
+pub struct Unbound;
+
+/// Type state indicating the builder is bound to a shell
+pub struct Bound {
+    shell: PopupShell,
+}
+
 /// Builder for configuring popups
 ///
-/// Produces a [`PopupConfig`] and can show it via [`PopupShell`].
+/// The builder uses phantom types to ensure compile-time safety:
+/// - [`PopupBuilder<Unbound>`] - Configuration only, cannot show popups
+/// - [`PopupBuilder<Bound>`] - Has shell reference, can show popups
 ///
 /// # Example
 /// ```rust,ignore
@@ -25,27 +34,34 @@ use layer_shika_domain::value_objects::popup_size::PopupSize;
 ///         .show()?;
 /// });
 /// ```
-pub struct PopupBuilder {
-    shell: Option<PopupShell>,
+pub struct PopupBuilder<State = Unbound> {
+    state: State,
     config: PopupConfig,
 }
 
-impl PopupBuilder {
+impl PopupBuilder<Unbound> {
     /// Creates a new popup builder for the specified component
+    ///
+    /// This builder is unbound and cannot show popups directly.
+    /// Use [`PopupShell::builder`] to create a bound builder that can call `.show()`.
     #[must_use]
     pub fn new(component: impl Into<String>) -> Self {
         Self {
-            shell: None,
+            state: Unbound,
             config: PopupConfig::new(component),
         }
     }
 
     #[must_use]
-    pub(crate) fn with_shell(mut self, shell: PopupShell) -> Self {
-        self.shell = Some(shell);
-        self
+    pub(crate) fn with_shell(self, shell: PopupShell) -> PopupBuilder<Bound> {
+        PopupBuilder {
+            state: Bound { shell },
+            config: self.config,
+        }
     }
+}
 
+impl<State> PopupBuilder<State> {
     #[must_use]
     pub fn position(mut self, position: PopupPosition) -> Self {
         self.config.position = position;
@@ -203,21 +219,21 @@ impl PopupBuilder {
         self
     }
 
+    /// Builds the configuration without showing the popup
+    ///
+    /// Returns a [`PopupConfig`] that can be shown later using [`PopupShell::show`].
     #[must_use]
     pub fn build(self) -> PopupConfig {
         self.config
     }
+}
 
+impl PopupBuilder<Bound> {
+    /// Shows the popup with the configured settings
+    ///
+    /// This method is only available on builders created via [`PopupShell::builder`],
+    /// ensuring at compile time that the builder has access to a shell.
     pub fn show(self) -> Result<PopupHandle> {
-        let Some(shell) = self.shell else {
-            return Err(Error::Domain(DomainError::Configuration {
-                message: "PopupBuilder::show() requires a builder created via `shell.popups().builder(...)`".to_string(),
-            }));
-        };
-        shell.show(self.config)
-    }
-
-    pub fn show_with_shell(self, shell: &PopupShell) -> Result<PopupHandle> {
-        shell.show(self.build())
+        self.state.shell.show(self.config)
     }
 }

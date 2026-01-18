@@ -42,7 +42,7 @@ pub use layer_shika_domain::value_objects::{
 pub use layer_surface::{LayerSurfaceHandle, ShellSurfaceConfigHandler};
 pub use lock_selection::LockSelection;
 pub use popup::PopupShell;
-pub use popup_builder::PopupBuilder;
+pub use popup_builder::{Bound, PopupBuilder, Unbound};
 pub use selection::{PropertyError, Selection, SelectionResult};
 pub use selector::{Output, Selector, Surface, SurfaceInfo};
 pub use session_lock::{SessionLock, SessionLockBuilder};
