@@ -1,6 +1,7 @@
 use crate::errors::{LayerShikaError, Result};
 use crate::rendering::egl::context_factory::RenderContextFactory;
-use crate::rendering::femtovg::{popup_window::PopupWindow, renderable_window::RenderableWindow};
+use crate::rendering::femtovg::popup_window::PopupWindow;
+use crate::rendering::femtovg::renderable_window::{FractionalScaleConfig, RenderableWindow};
 use crate::wayland::surfaces::display_metrics::{DisplayMetrics, SharedDisplayMetrics};
 use layer_shika_domain::dimensions::LogicalSize as DomainLogicalSize;
 use layer_shika_domain::surface_dimensions::SurfaceDimensions;
@@ -9,7 +10,7 @@ use layer_shika_domain::value_objects::popup_behavior::ConstraintAdjustment;
 use layer_shika_domain::value_objects::popup_config::PopupConfig;
 use layer_shika_domain::value_objects::popup_position::PopupPosition;
 use log::info;
-use slint::{platform::femtovg_renderer::FemtoVGRenderer, PhysicalSize, WindowSize};
+use slint::{platform::femtovg_renderer::FemtoVGRenderer, PhysicalSize};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, VecDeque};
@@ -200,8 +201,9 @@ impl PopupManager {
     pub fn update_scale_factor(&self, scale_factor: f32) {
         self.scale_factor.set(scale_factor);
 
+        let render_scale = FractionalScaleConfig::render_scale(scale_factor);
         for popup in self.state.borrow().popups.values() {
-            popup.window.set_scale_factor(scale_factor);
+            popup.window.set_scale_factor(render_scale);
         }
         self.mark_all_popups_dirty();
     }
@@ -322,11 +324,16 @@ impl PopupManager {
 
         let popup_window = PopupWindow::new_with_callback(renderer, on_close);
         popup_window.set_popup_id(popup_id.to_handle());
-        popup_window.set_scale_factor(scale_factor);
-        popup_window.set_size(WindowSize::Logical(slint::LogicalSize::new(
-            params.width,
-            params.height,
-        )));
+
+        let config = FractionalScaleConfig::new(params.width, params.height, scale_factor);
+        info!(
+            "Popup using render scale {} (from {}), render_physical {}x{}",
+            config.render_scale,
+            scale_factor,
+            config.render_physical_size.width,
+            config.render_physical_size.height
+        );
+        config.apply_to(popup_window.as_ref());
 
         let mut state = self.state.borrow_mut();
         state.popups.insert(
@@ -489,7 +496,6 @@ impl PopupManager {
         ActiveWindow::None
     }
 
-    #[allow(clippy::cast_precision_loss)]
     pub fn update_scale_for_fractional_scale_object(
         &self,
         fractional_scale_proxy: &WpFractionalScaleV1,
@@ -500,8 +506,12 @@ impl PopupManager {
         if let Some(popup_key) = self.find_popup_key_by_fractional_scale_id(&fractional_scale_id) {
             if let Some(popup_surface) = self.get_popup_window(popup_key) {
                 let new_scale_factor = DisplayMetrics::scale_factor_from_120ths(scale_120ths);
-                info!("Updating popup scale factor to {new_scale_factor} ({scale_120ths}x)");
-                popup_surface.set_scale_factor(new_scale_factor);
+                let render_scale = FractionalScaleConfig::render_scale(new_scale_factor);
+                info!(
+                    "Updating popup scale factor to {} (render scale {}, from {}x)",
+                    new_scale_factor, render_scale, scale_120ths
+                );
+                popup_surface.set_scale_factor(render_scale);
                 popup_surface.request_redraw();
             }
         }

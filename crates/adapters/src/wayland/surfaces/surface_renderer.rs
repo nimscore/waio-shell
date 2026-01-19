@@ -1,5 +1,5 @@
 use crate::errors::Result;
-use crate::rendering::femtovg::renderable_window::RenderableWindow;
+use crate::rendering::femtovg::renderable_window::{FractionalScaleConfig, RenderableWindow};
 use crate::wayland::managed_proxies::{
     ManagedWlSurface, ManagedZwlrLayerSurfaceV1, ManagedWpFractionalScaleV1, ManagedWpViewport,
 };
@@ -92,12 +92,19 @@ impl<W: RenderableWindow> SurfaceRenderer<W> {
     ) {
         match mode {
             ScalingMode::FractionalWithViewport => {
-                self.window.set_scale_factor(scale_factor);
-                self.window
-                    .set_size(slint::WindowSize::Logical(slint::LogicalSize::new(
-                        dimensions.logical_width() as f32,
-                        dimensions.logical_height() as f32,
-                    )));
+                let config = FractionalScaleConfig::new(
+                    dimensions.logical_width() as f32,
+                    dimensions.logical_height() as f32,
+                    scale_factor,
+                );
+                info!(
+                    "FractionalWithViewport: render scale {} (from {}), physical {}x{}",
+                    config.render_scale,
+                    scale_factor,
+                    config.render_physical_size.width,
+                    config.render_physical_size.height
+                );
+                config.apply_to(self.window.as_ref());
             }
             ScalingMode::FractionalOnly => {
                 self.window
@@ -154,15 +161,30 @@ impl<W: RenderableWindow> SurfaceRenderer<W> {
         self.apply_surface_dimensions(dimensions, scale_factor);
     }
 
+    #[allow(clippy::cast_precision_loss)]
     pub fn apply_surface_dimensions(&mut self, dimensions: SurfaceDimensions, scale_factor: f32) {
         let scaling_mode = self.determine_scaling_mode();
 
+        let render_physical_size = match scaling_mode {
+            ScalingMode::FractionalWithViewport => {
+                FractionalScaleConfig::new(
+                    dimensions.logical_width() as f32,
+                    dimensions.logical_height() as f32,
+                    scale_factor,
+                )
+                .render_physical_size
+            }
+            _ => dimensions.to_slint_physical_size(),
+        };
+
         info!(
-            "Updating window size: logical {}x{}, physical {}x{}, scale {}, buffer_scale {}, mode {:?}",
+            "Updating window size: logical {}x{}, physical {}x{}, render_physical {}x{}, scale {}, buffer_scale {}, mode {:?}",
             dimensions.logical_width(),
             dimensions.logical_height(),
             dimensions.physical_width(),
             dimensions.physical_height(),
+            render_physical_size.width,
+            render_physical_size.height,
             scale_factor,
             dimensions.buffer_scale(),
             scaling_mode
@@ -173,7 +195,7 @@ impl<W: RenderableWindow> SurfaceRenderer<W> {
 
         info!("Window physical size: {:?}", self.window.size());
 
-        self.size = dimensions.to_slint_physical_size();
+        self.size = render_physical_size;
         self.logical_size = dimensions.to_slint_logical_size();
         RenderableWindow::request_redraw(self.window.as_ref());
     }

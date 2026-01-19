@@ -1,7 +1,7 @@
 use super::callbacks::{LockCallbackContext, LockCallbackExt, LockPropertyOperationExt};
 use crate::errors::Result;
 use crate::rendering::femtovg::main_window::FemtoVGWindow;
-use crate::rendering::femtovg::renderable_window::RenderableWindow;
+use crate::rendering::femtovg::renderable_window::{FractionalScaleConfig, RenderableWindow};
 use crate::rendering::slint_integration::platform::CustomSlintPlatform;
 use crate::wayland::session_lock::lock_surface::LockSurface;
 use crate::wayland::surfaces::component_state::ComponentState;
@@ -308,7 +308,22 @@ impl ActiveLockSurface {
         scale_factor: f32,
     ) {
         match mode {
-            LockScalingMode::FractionalWithViewport | LockScalingMode::FractionalOnly => {
+            LockScalingMode::FractionalWithViewport => {
+                let config = FractionalScaleConfig::new(
+                    dimensions.logical_width() as f32,
+                    dimensions.logical_height() as f32,
+                    scale_factor,
+                );
+                info!(
+                    "Lock FractionalWithViewport: render scale {} (from {}), physical {}x{}",
+                    config.render_scale,
+                    scale_factor,
+                    config.render_physical_size.width,
+                    config.render_physical_size.height
+                );
+                config.apply_to(self.window.as_ref());
+            }
+            LockScalingMode::FractionalOnly => {
                 RenderableWindow::set_scale_factor(self.window.as_ref(), scale_factor);
                 self.window.set_size(WindowSize::Logical(LogicalSize::new(
                     dimensions.logical_width() as f32,
