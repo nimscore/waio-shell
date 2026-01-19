@@ -11,6 +11,7 @@ use crate::wayland::session_lock::lock_context::SessionLockContext;
 use crate::wayland::session_lock::lock_surface::LockSurface;
 use crate::wayland::surfaces::app_state::AppState;
 use crate::wayland::surfaces::keyboard_state::KeyboardState;
+use layer_shika_domain::prelude::OutputInfo;
 use layer_shika_domain::value_objects::lock_config::LockConfig;
 use layer_shika_domain::value_objects::lock_state::LockState;
 use log::info;
@@ -238,8 +239,16 @@ impl SessionLockManager {
     ) -> Result<()> {
         let component_name = self.component_definition.name().to_string();
 
+        // Use output's integer scale as fallback when fractional scale isn't available
+        #[allow(clippy::cast_precision_loss)]
+        let scale_factor = output_ctx
+            .output_info
+            .as_ref()
+            .and_then(OutputInfo::scale)
+            .map_or(self.config.scale_factor.value(), |s| s as f32);
+
         let context = LockConfigureContext {
-            scale_factor: self.config.scale_factor.value(),
+            scale_factor,
             component_definition: self.component_definition.clone(),
             compilation_result: self.compilation_result.clone(),
             platform: Rc::clone(&self.platform),
@@ -269,8 +278,17 @@ impl SessionLockManager {
     ) {
         let component_name = self.component_definition.name().to_string();
 
+        let output_scale = output_ctx.output_info.as_ref().and_then(OutputInfo::scale);
+        info!(
+            "Lock configure: output_info present={}, output_scale={:?}",
+            output_ctx.output_info.is_some(),
+            output_scale
+        );
+        #[allow(clippy::cast_precision_loss)]
+        let scale_factor = output_scale.map_or(self.config.scale_factor.value(), |s| s as f32);
+
         let context = LockConfigureContext {
-            scale_factor: self.config.scale_factor.value(),
+            scale_factor,
             component_definition: self.component_definition.clone(),
             compilation_result: self.compilation_result.clone(),
             platform: Rc::clone(&self.platform),
@@ -299,8 +317,16 @@ impl SessionLockManager {
                     continue;
                 };
 
+                // Use output's integer scale as fallback when fractional scale isn't available
+                #[allow(clippy::cast_precision_loss)]
+                let scale_factor = surface
+                    .output_info
+                    .as_ref()
+                    .and_then(OutputInfo::scale)
+                    .map_or(self.config.scale_factor.value(), |s| s as f32);
+
                 let context = LockConfigureContext {
-                    scale_factor: self.config.scale_factor.value(),
+                    scale_factor,
                     component_definition: self.component_definition.clone(),
                     compilation_result: self.compilation_result.clone(),
                     platform: Rc::clone(&self.platform),

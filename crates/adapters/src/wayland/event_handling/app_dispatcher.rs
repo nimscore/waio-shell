@@ -95,7 +95,12 @@ impl Dispatch<WlOutput, ()> for AppState {
         qhandle: &QueueHandle<Self>,
     ) {
         let output_id = proxy.id();
-        let handle = state.get_handle_by_output_id(&output_id);
+
+        let handle = if state.output_manager().is_none() {
+            Some(state.ensure_output_registered(&output_id))
+        } else {
+            state.get_handle_by_output_id(&output_id)
+        };
 
         match event {
             wl_output::Event::Mode {

@@ -547,6 +547,17 @@ impl AppState {
         self.output_mapping.get(output_id)
     }
 
+    pub fn ensure_output_registered(&mut self, output_id: &ObjectId) -> OutputHandle {
+        self.output_mapping.get(output_id).unwrap_or_else(|| {
+            let h = self.output_mapping.insert(output_id.clone());
+            let is_primary = self.output_registry.is_empty();
+            let mut info = OutputInfo::new(h);
+            info.set_primary(is_primary);
+            self.output_registry.add(info);
+            h
+        })
+    }
+
     pub fn set_active_output_handle(&mut self, handle: Option<OutputHandle>) {
         self.output_registry.set_active(handle);
     }
