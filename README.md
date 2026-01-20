@@ -6,6 +6,10 @@
   <p><b><a href="https://codeberg.org/waydeer/layer-shika">Main repo</a> | <a href="https://git.dren.dog/waydeer/layer-shika">Mirror</a> | <a href="https://github.com/waydeerwm/layer-shika">Temp mirror (github)</a></b></p>
 </div>
 
+<p align="center">
+  <a href="https://docs.rs/layer-shika/latest/layer_shika/"><img src="https://img.shields.io/docsrs/layer-shika" alt="docs.rs"></a>
+</p>
+
 Oh deer! 🦌 You've stumbled upon `layer-shika`, a Rust library providing Wayland layer shell integration with Slint UI. Create overlay windows, status bars, panels, popups, and more, that integrate seamlessly with Wayland compositors.
 
 > [!CAUTION]
