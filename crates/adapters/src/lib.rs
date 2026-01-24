@@ -5,7 +5,6 @@ pub(crate) mod rendering;
 pub(crate) mod wayland;
 
 pub use rendering::femtovg::popup_window::PopupWindow;
-
 pub use wayland::config::{MultiSurfaceConfig, ShellSurfaceConfig, WaylandSurfaceConfig};
 pub use wayland::ops::WaylandSystemOps;
 pub use wayland::session_lock::{
@@ -28,15 +27,13 @@ pub(crate) mod logger {
 }
 
 pub mod platform {
-    pub use slint;
-    pub use slint_interpreter;
+    pub use {slint, slint_interpreter};
 
     pub mod calloop {
-        pub use smithay_client_toolkit::reexports::calloop::channel;
         pub use smithay_client_toolkit::reexports::calloop::generic::Generic;
         pub use smithay_client_toolkit::reexports::calloop::timer::{TimeoutAction, Timer};
         pub use smithay_client_toolkit::reexports::calloop::{
-            EventSource, InsertError, Interest, Mode, PostAction, RegistrationToken,
+            EventSource, InsertError, Interest, Mode, PostAction, RegistrationToken, channel,
         };
     }
 
