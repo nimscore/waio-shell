@@ -27,15 +27,15 @@ jobs:
             libgles2-mesa-dev \
             libfontconfig1-dev
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
       - name: Install Rust nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Cache cargo registry
         uses: actions/cache@v4
