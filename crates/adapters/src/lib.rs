@@ -21,7 +21,6 @@ pub(crate) mod logger {
 
     #[cfg(feature = "log")]
     pub use log::{debug, error, info, warn};
-
     #[cfg(feature = "tracing")]
     pub use tracing::{debug, error, info, warn};
 }
