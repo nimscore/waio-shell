@@ -699,12 +699,17 @@ impl Shell {
             width,
             height
         );
-        let region = &ctx.create_region();
+        let region = ctx.create_region();
+        if let Some(r) = &region {
+            r.add(x, y, width, height);
+        }
         for surface in Self::resolve_surface_target(ctx, target) {
-            if let Some(r) = region {
-                r.add(x, y, width, height);
+            if let Some(r) = &region {
                 surface.set_input_region(r);
             }
+        }
+        if let Some(r) = region {
+            r.destroy();
         }
     }
 

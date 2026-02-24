@@ -205,8 +205,6 @@ impl SurfaceState {
     pub fn set_input_region(&mut self, region: &WlRegion) {
         self.rendering.surface().set_input_region(Some(region));
         self.rendering.surface().commit();
-
-        region.destroy();
     }
 
     pub fn output_size(&self) -> PhysicalSize {
