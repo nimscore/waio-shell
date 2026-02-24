@@ -22,6 +22,7 @@ use layer_shika_domain::value_objects::popup_config::PopupConfig;
 use layer_shika_domain::value_objects::popup_position::PopupPosition;
 use layer_shika_domain::value_objects::popup_size::PopupSize;
 use layer_shika_domain::value_objects::surface_instance_id::SurfaceInstanceId;
+use smithay_client_toolkit::reexports::client::protocol::wl_region::WlRegion;
 
 use crate::event_loop::FromAppState;
 use crate::layer_surface::LayerSurfaceHandle;
@@ -73,6 +74,13 @@ pub enum SurfaceCommand {
     SetOutputPolicy {
         target: SurfaceTarget,
         policy: OutputPolicy,
+    },
+    SetInputRegion {
+        target: SurfaceTarget,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
     },
     SetScaleFactor {
         target: SurfaceTarget,
@@ -390,6 +398,19 @@ impl SurfaceControlHandle {
             .send(ShellCommand::Surface(SurfaceCommand::SetOutputPolicy {
                 target: self.target.clone(),
                 policy,
+            }))
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))
+    }
+
+    /// Sets the input region for the surface
+    pub fn set_input_region(&self, x: i32, y: i32, width: i32, height: i32) -> Result<()> {
+        self.sender
+            .send(ShellCommand::Surface(SurfaceCommand::SetInputRegion {
+                target: self.target.clone(),
+                x,
+                y,
+                width,
+                height,
             }))
             .map_err(|_| Error::Domain(DomainError::ChannelClosed))
     }
@@ -1047,5 +1068,9 @@ impl EventDispatchContext<'_> {
             let component = surface.component_instance();
             f(component, handle);
         }
+    }
+
+    pub fn create_region(&self) -> Option<WlRegion> {
+        self.app_state.create_region()
     }
 }

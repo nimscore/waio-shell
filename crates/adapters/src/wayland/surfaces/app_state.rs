@@ -14,6 +14,7 @@ use wayland_client::Proxy;
 use wayland_client::backend::ObjectId;
 use wayland_client::protocol::wl_keyboard;
 use wayland_client::protocol::wl_output::WlOutput;
+use wayland_client::protocol::wl_region::WlRegion;
 use wayland_client::protocol::wl_surface::WlSurface;
 use xkbcommon::xkb;
 
@@ -957,6 +958,13 @@ impl AppState {
             .retain(|_, k| !matching_handles.contains(&k.surface_handle));
 
         removed
+    }
+
+    pub fn create_region(&self) -> Option<WlRegion> {
+        let queue = self.queue_handle.as_ref()?;
+        let ctx = self.global_context.as_ref()?;
+        let region = ctx.compositor.create_region(queue, ());
+        Some(region)
     }
 }
 
