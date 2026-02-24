@@ -53,21 +53,21 @@ glutin = { version = "0.32.3", default-features = false, features = [
     "wayland",
 ] }
 spin_on = "0.1"
-log = "0.4.28"
+log = "0.4.29"
 raw-window-handle = "0.6.2"
-slint = { version = "1.14.1", default-features = false, features = [
+slint = { version = "1.15.1", default-features = false, features = [
     "compat-1-2",
     "renderer-femtovg",
     "backend-winit-wayland",
 ] }
-slint-interpreter = { version = "1.14.1", default-features = false, features = [
+slint-interpreter = { version = "1.15.1", default-features = false, features = [
     "compat-1-2",
 ] }
 smithay-client-toolkit = "0.20.0"
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 tracing = { version = "0.1.44", default-features = false, features = ["std"] }
-wayland-client = "0.31.11"
-wayland-protocols = { version = "0.32.9", features = ["client", "staging"] }
+wayland-client = "0.31.12"
+wayland-protocols = { version = "0.32.10", features = ["client", "staging"] }
 xkbcommon = { version = "0.9.0", features = ["wayland"] }
 
 layer-shika-domain = { version = "0.3.1", path = "crates/domain" }
