@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::result::Result as StdResult;
 
-use layer_shika_domain::errors::DomainError;
+use waio_shell_domain::errors::DomainError;
 use slint::PlatformError;
 use slint::platform::SetPlatformError;
 use smithay_client_toolkit::reexports::calloop;
@@ -10,7 +10,7 @@ use wayland_client::backend::WaylandError;
 use wayland_client::globals::{BindError, GlobalError};
 use wayland_client::{ConnectError, DispatchError};
 
-pub type Result<T> = StdResult<T, LayerShikaError>;
+pub type Result<T> = StdResult<T, WaioShellError>;
 
 #[derive(Error, Debug)]
 pub enum RenderingError {
@@ -91,7 +91,7 @@ pub enum EventLoopError {
 }
 
 #[derive(Error, Debug)]
-pub enum LayerShikaError {
+pub enum WaioShellError {
     #[error("domain error")]
     Domain {
         #[from]

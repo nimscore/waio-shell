@@ -1,5 +1,5 @@
 use crate::{
-    bind_globals, errors::LayerShikaError,
+    bind_globals, errors::WaioShellError,
     rendering::egl::render_context_manager::RenderContextManager,
 logger};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1;
@@ -32,10 +32,10 @@ impl GlobalContext {
     pub fn initialize(
         connection: &Connection,
         queue_handle: &QueueHandle<AppState>,
-    ) -> Result<Self, LayerShikaError> {
+    ) -> Result<Self, WaioShellError> {
         let global_list = registry_queue_init::<AppState>(connection)
             .map(|(global_list, _)| global_list)
-            .map_err(|e| LayerShikaError::GlobalInitialization { source: e })?;
+            .map_err(|e| WaioShellError::GlobalInitialization { source: e })?;
 
         let (compositor, seat) = bind_globals!(
             &global_list,
@@ -79,7 +79,7 @@ impl GlobalContext {
             .collect();
 
         if outputs.is_empty() {
-            return Err(LayerShikaError::InvalidInput {
+            return Err(WaioShellError::InvalidInput {
                 message: "No outputs found".into(),
             });
         }

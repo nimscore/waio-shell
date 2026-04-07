@@ -1,10 +1,10 @@
-use layer_shika_domain::config::SurfaceConfig as DomainSurfaceConfig;
-use layer_shika_domain::value_objects::anchor::AnchorEdges;
-use layer_shika_domain::value_objects::handle::SurfaceHandle;
-use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteractivity as DomainKeyboardInteractivity;
-use layer_shika_domain::value_objects::layer::Layer;
-use layer_shika_domain::value_objects::margins::Margins;
-use layer_shika_domain::value_objects::output_policy::OutputPolicy;
+use waio_shell_domain::config::SurfaceConfig as DomainSurfaceConfig;
+use waio_shell_domain::value_objects::anchor::AnchorEdges;
+use waio_shell_domain::value_objects::handle::SurfaceHandle;
+use waio_shell_domain::value_objects::keyboard_interactivity::KeyboardInteractivity as DomainKeyboardInteractivity;
+use waio_shell_domain::value_objects::layer::Layer;
+use waio_shell_domain::value_objects::margins::Margins;
+use waio_shell_domain::value_objects::output_policy::OutputPolicy;
 use slint_interpreter::{CompilationResult, ComponentDefinition};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::{self},

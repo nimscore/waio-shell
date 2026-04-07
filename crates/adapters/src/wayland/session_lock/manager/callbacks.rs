@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
-use layer_shika_domain::value_objects::output_handle::OutputHandle;
-use layer_shika_domain::value_objects::output_info::OutputInfo;
+use waio_shell_domain::value_objects::output_handle::OutputHandle;
+use waio_shell_domain::value_objects::output_info::OutputInfo;
 use slint_interpreter::{ComponentInstance, Value};
 
-use crate::errors::{LayerShikaError, Result};
+use crate::errors::{WaioShellError, Result};
 
 pub(crate) trait FilterContext {
     fn matches_filter(&self, filter: &dyn Fn(&Self) -> bool) -> bool {
@@ -153,7 +153,7 @@ impl LockCallbackExt for LockCallbackEntry {
         let handler = Rc::clone(self.handler());
         component
             .set_callback(self.name(), move |args| handler(args))
-            .map_err(|e| LayerShikaError::InvalidInput {
+            .map_err(|e| WaioShellError::InvalidInput {
                 message: format!("Failed to register callback '{}': {e}", self.name()),
             })
     }
@@ -261,7 +261,7 @@ impl LockPropertyOperationExt for LockPropertyOperation {
     fn apply_to_component(&self, component: &ComponentInstance) -> Result<()> {
         component
             .set_property(self.name(), self.value().clone())
-            .map_err(|e| LayerShikaError::InvalidInput {
+            .map_err(|e| WaioShellError::InvalidInput {
                 message: format!("Failed to set property '{}': {e}", self.name()),
             })
     }

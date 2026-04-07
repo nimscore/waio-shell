@@ -3,8 +3,8 @@ use crate::wayland::session_lock::LockSurfaceOutputContext;
 use crate::wayland::surfaces::app_state::AppState;
 use crate::wayland::surfaces::display_metrics::DisplayMetrics;
 use crate::wayland::surfaces::surface_state::SurfaceState;
-use layer_shika_domain::value_objects::output_handle::OutputHandle;
-use layer_shika_domain::value_objects::output_info::OutputGeometry;
+use waio_shell_domain::value_objects::output_handle::OutputHandle;
+use waio_shell_domain::value_objects::output_info::OutputGeometry;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::ZwlrLayerShellV1,
     zwlr_layer_surface_v1::{self, ZwlrLayerSurfaceV1},

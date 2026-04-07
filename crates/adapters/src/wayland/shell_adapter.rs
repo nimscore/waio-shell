@@ -8,10 +8,10 @@ use crate::{logger, wayland::{
     session_lock::{LockPropertyOperation, OutputFilter},
     surfaces::{app_state::AppState, event_context::SharedPointerSerial, layer_surface::{SurfaceCtx, SurfaceSetupParams}, popup_manager::{PopupContext, PopupManager}, surface_builder::{PlatformWrapper, SurfaceStateBuilder}, surface_state::SurfaceState},
 }};
-use layer_shika_domain::value_objects::handle::SurfaceHandle;
+use waio_shell_domain::value_objects::handle::SurfaceHandle;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use crate::{
-    errors::{EventLoopError, LayerShikaError, RenderingError, Result},
+    errors::{EventLoopError, WaioShellError, RenderingError, Result},
     rendering::{
         egl::context_factory::RenderContextFactory,
         femtovg::{main_window::FemtoVGWindow, renderable_window::RenderableWindow},
@@ -19,12 +19,12 @@ use crate::{
     },
 };
 use core::result::Result as CoreResult;
-use layer_shika_domain::errors::DomainError;
-use layer_shika_domain::ports::shell::ShellSystemPort;
-use layer_shika_domain::value_objects::lock_config::LockConfig;
-use layer_shika_domain::value_objects::lock_state::LockState;
-use layer_shika_domain::value_objects::output_handle::OutputHandle;
-use layer_shika_domain::value_objects::output_info::OutputInfo;
+use waio_shell_domain::errors::DomainError;
+use waio_shell_domain::ports::shell::ShellSystemPort;
+use waio_shell_domain::value_objects::lock_config::LockConfig;
+use waio_shell_domain::value_objects::lock_state::LockState;
+use waio_shell_domain::value_objects::output_handle::OutputHandle;
+use waio_shell_domain::value_objects::output_info::OutputInfo;
 use slint::{
     LogicalPosition, PhysicalSize, PlatformError, WindowPosition,
     platform::{WindowAdapter, femtovg_renderer::FemtoVGRenderer, set_platform, update_timers_and_animations},
@@ -155,7 +155,7 @@ impl WaylandShellSystem {
             global_ctx
                 .layer_shell
                 .as_ref()
-                .ok_or_else(|| LayerShikaError::InvalidInput {
+                .ok_or_else(|| WaioShellError::InvalidInput {
                     message:
                         "wlr-layer-shell protocol not available - cannot create layer surfaces"
                             .into(),
@@ -232,7 +232,7 @@ impl WaylandShellSystem {
     fn setup_platform(setups: &[OutputSetup]) -> Result<Rc<CustomSlintPlatform>> {
         let first_setup = setups
             .first()
-            .ok_or_else(|| LayerShikaError::InvalidInput {
+            .ok_or_else(|| WaioShellError::InvalidInput {
                 message: "No outputs available".into(),
             })?;
 
@@ -243,7 +243,7 @@ impl WaylandShellSystem {
         }
 
         set_platform(Box::new(PlatformWrapper(Rc::clone(&platform))))
-            .map_err(|e| LayerShikaError::PlatformSetup { source: e })?;
+            .map_err(|e| WaioShellError::PlatformSetup { source: e })?;
 
         Ok(platform)
     }
@@ -259,7 +259,7 @@ impl WaylandShellSystem {
 
         for setup in setups {
             let mut per_output_surface = SurfaceState::new(setup.builder).map_err(|e| {
-                LayerShikaError::WindowConfiguration {
+                WaioShellError::WindowConfiguration {
                     message: e.to_string(),
                 }
             })?;
@@ -466,7 +466,7 @@ impl WaylandShellSystem {
 
         let platform = CustomSlintPlatform::new_empty();
         set_platform(Box::new(PlatformWrapper(Rc::clone(&platform))))
-            .map_err(|e| LayerShikaError::PlatformSetup { source: e })?;
+            .map_err(|e| WaioShellError::PlatformSetup { source: e })?;
         app_state.set_slint_platform(Rc::clone(&platform));
 
         logger::info!(
@@ -487,7 +487,7 @@ impl WaylandShellSystem {
             global_ctx
                 .layer_shell
                 .as_ref()
-                .ok_or_else(|| LayerShikaError::InvalidInput {
+                .ok_or_else(|| WaioShellError::InvalidInput {
                     message:
                         "wlr-layer-shell protocol not available - cannot create layer surfaces"
                             .into(),
@@ -660,7 +660,7 @@ impl WaylandShellSystem {
         let context = render_factory.create_context(&surface.id(), init_size)?;
 
         let renderer = FemtoVGRenderer::new(context)
-            .map_err(|e| LayerShikaError::FemtoVGRendererCreation { source: e })?;
+            .map_err(|e| WaioShellError::FemtoVGRendererCreation { source: e })?;
 
         let femtovg_window = FemtoVGWindow::new(renderer);
         femtovg_window.set_size(slint::WindowSize::Physical(init_size));
@@ -686,7 +686,7 @@ impl WaylandShellSystem {
 
             self.connection
                 .flush()
-                .map_err(|e| LayerShikaError::WaylandProtocol { source: e })?;
+                .map_err(|e| WaioShellError::WaylandProtocol { source: e })?;
 
             update_timers_and_animations();
 
@@ -707,7 +707,7 @@ impl WaylandShellSystem {
         }
         self.connection
             .flush()
-            .map_err(|e| LayerShikaError::WaylandProtocol { source: e })?;
+            .map_err(|e| WaioShellError::WaylandProtocol { source: e })?;
 
         self.setup_wayland_event_source()?;
 
@@ -749,7 +749,7 @@ impl WaylandShellSystem {
         if let Some(guard) = event_queue.prepare_read() {
             guard
                 .read()
-                .map_err(|e| LayerShikaError::WaylandProtocol { source: e })?;
+                .map_err(|e| WaioShellError::WaylandProtocol { source: e })?;
         }
 
         event_queue.dispatch_pending(shared_data)?;
@@ -783,7 +783,7 @@ impl WaylandShellSystem {
 
         connection
             .flush()
-            .map_err(|e| LayerShikaError::WaylandProtocol { source: e })?;
+            .map_err(|e| WaioShellError::WaylandProtocol { source: e })?;
 
         Ok(())
     }
@@ -791,7 +791,7 @@ impl WaylandShellSystem {
     pub fn component_instance(&self) -> Result<&ComponentInstance> {
         self.state
             .primary_output()
-            .ok_or_else(|| LayerShikaError::InvalidInput {
+            .ok_or_else(|| WaioShellError::InvalidInput {
                 message: "No outputs available".into(),
             })
             .map(SurfaceState::component_instance)
@@ -800,7 +800,7 @@ impl WaylandShellSystem {
     pub fn state(&self) -> Result<&SurfaceState> {
         self.state
             .primary_output()
-            .ok_or_else(|| LayerShikaError::InvalidInput {
+            .ok_or_else(|| WaioShellError::InvalidInput {
                 message: "No outputs available".into(),
             })
     }

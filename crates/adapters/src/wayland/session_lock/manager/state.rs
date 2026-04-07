@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
-use layer_shika_domain::surface_dimensions::SurfaceDimensions;
-use layer_shika_domain::value_objects::output_handle::OutputHandle;
-use layer_shika_domain::value_objects::output_info::OutputInfo;
+use waio_shell_domain::surface_dimensions::SurfaceDimensions;
+use waio_shell_domain::value_objects::output_handle::OutputHandle;
+use waio_shell_domain::value_objects::output_info::OutputInfo;
 use slint::platform::{WindowAdapter, WindowEvent};
 use slint::{LogicalPosition, LogicalSize, WindowSize};
 use slint_interpreter::{CompilationResult, ComponentDefinition};

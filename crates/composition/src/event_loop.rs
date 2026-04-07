@@ -3,12 +3,12 @@ use std::os::unix::io::AsFd;
 use std::rc::{Rc, Weak};
 use std::time::{Duration, Instant};
 
-use layer_shika_adapters::errors::EventLoopError;
-use layer_shika_adapters::platform::calloop::{
+use waio_shell_adapters::errors::EventLoopError;
+use waio_shell_adapters::platform::calloop::{
     EventSource, Generic, Interest, Mode, PostAction, RegistrationToken, TimeoutAction, Timer,
     channel,
 };
-use layer_shika_adapters::{AppState, WaylandSystemOps};
+use waio_shell_adapters::{AppState, WaylandSystemOps};
 
 use crate::{Error, Result};
 

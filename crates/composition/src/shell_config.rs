@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use layer_shika_adapters::platform::slint_interpreter::CompilationResult;
-use layer_shika_domain::prelude::{SurfaceConfig, UiSource};
+use waio_shell_adapters::platform::slint_interpreter::CompilationResult;
+use waio_shell_domain::prelude::{SurfaceConfig, UiSource};
 
 /// Source for Slint UI definition
 ///

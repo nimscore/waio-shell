@@ -3,12 +3,12 @@
 //! Import this module to get access to the most commonly used types:
 //!
 //! ```rust
-//! use layer_shika::prelude::*;
+//! use waio_shell::prelude::*;
 //! ```
 
 #![allow(clippy::pub_use)]
 
-pub use layer_shika_composition::prelude::{
+pub use waio_shell_composition::prelude::{
     Anchor, LogicalPosition, LogicalRect, LogicalSize, Margins, PhysicalSize, ScaleFactor,
     SurfaceConfig, SurfaceDimension, UiSource,
 };

@@ -20,7 +20,7 @@ use slint::PhysicalSize;
 use slint::platform::femtovg_renderer::OpenGLInterface;
 use wayland_client::backend::ObjectId;
 
-use crate::errors::{EGLError, LayerShikaError, Result};
+use crate::errors::{EGLError, WaioShellError, Result};
 use crate::logger;
 
 pub struct EGLContext {
@@ -64,15 +64,15 @@ impl EGLContextBuilder {
     pub fn build(self) -> Result<EGLContext> {
         let display_id = self
             .display_id
-            .ok_or_else(|| LayerShikaError::InvalidInput {
+            .ok_or_else(|| WaioShellError::InvalidInput {
                 message: "Display ID is required".into(),
             })?;
         let surface_id = self
             .surface_id
-            .ok_or_else(|| LayerShikaError::InvalidInput {
+            .ok_or_else(|| WaioShellError::InvalidInput {
                 message: "Surface ID is required".into(),
             })?;
-        let size = self.size.ok_or_else(|| LayerShikaError::InvalidInput {
+        let size = self.size.ok_or_else(|| WaioShellError::InvalidInput {
             message: "Size is required".into(),
         })?;
 
@@ -137,7 +137,7 @@ impl Drop for EGLContext {
 
 fn create_wayland_display_handle(display_id: &ObjectId) -> Result<RawDisplayHandle> {
     let display = NonNull::new(display_id.as_ptr().cast::<c_void>()).ok_or_else(|| {
-        LayerShikaError::InvalidInput {
+        WaioShellError::InvalidInput {
             message: "Failed to create NonNull pointer for display".into(),
         }
     })?;
@@ -167,7 +167,7 @@ fn create_context(
 
 fn create_surface_handle(surface_id: &ObjectId) -> Result<RawWindowHandle> {
     let surface = NonNull::new(surface_id.as_ptr().cast::<c_void>()).ok_or_else(|| {
-        LayerShikaError::InvalidInput {
+        WaioShellError::InvalidInput {
             message: "Failed to create NonNull pointer for surface".into(),
         }
     })?;
@@ -181,11 +181,11 @@ fn create_surface(
     surface_handle: RawWindowHandle,
     size: PhysicalSize,
 ) -> Result<Surface<WindowSurface>> {
-    let width = NonZeroU32::new(size.width).ok_or_else(|| LayerShikaError::InvalidInput {
+    let width = NonZeroU32::new(size.width).ok_or_else(|| WaioShellError::InvalidInput {
         message: "Width cannot be zero".into(),
     })?;
 
-    let height = NonZeroU32::new(size.height).ok_or_else(|| LayerShikaError::InvalidInput {
+    let height = NonZeroU32::new(size.height).ok_or_else(|| WaioShellError::InvalidInput {
         message: "Height cannot be zero".into(),
     })?;
 

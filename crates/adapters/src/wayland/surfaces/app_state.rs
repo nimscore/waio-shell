@@ -3,12 +3,12 @@ use std::collections::HashMap;
 use std::os::fd::BorrowedFd;
 use std::rc::Rc;
 
-use layer_shika_domain::entities::output_registry::OutputRegistry;
-use layer_shika_domain::value_objects::handle::SurfaceHandle;
-use layer_shika_domain::value_objects::lock_config::LockConfig;
-use layer_shika_domain::value_objects::lock_state::LockState;
-use layer_shika_domain::value_objects::output_handle::OutputHandle;
-use layer_shika_domain::value_objects::output_info::OutputInfo;
+use waio_shell_domain::entities::output_registry::OutputRegistry;
+use waio_shell_domain::value_objects::handle::SurfaceHandle;
+use waio_shell_domain::value_objects::lock_config::LockConfig;
+use waio_shell_domain::value_objects::lock_state::LockState;
+use waio_shell_domain::value_objects::output_handle::OutputHandle;
+use waio_shell_domain::value_objects::output_info::OutputInfo;
 use slint_interpreter::{CompilationResult, ComponentDefinition, Value};
 use wayland_client::Proxy;
 use wayland_client::backend::ObjectId;
@@ -21,7 +21,7 @@ use xkbcommon::xkb;
 use super::event_context::SharedPointerSerial;
 use super::keyboard_state::KeyboardState;
 use super::surface_state::SurfaceState;
-use crate::errors::{LayerShikaError, RenderingError, Result};
+use crate::errors::{WaioShellError, RenderingError, Result};
 use crate::rendering::egl::context_factory::RenderContextFactory;
 use crate::rendering::femtovg::renderable_window::RenderableWindow;
 use crate::rendering::slint_integration::platform::CustomSlintPlatform;
@@ -200,7 +200,7 @@ impl AppState {
         config: LockConfig,
     ) -> Result<()> {
         if self.lock_manager.is_some() {
-            return Err(LayerShikaError::InvalidInput {
+            return Err(WaioShellError::InvalidInput {
                 message: "Session lock already active".to_string(),
             });
         }
@@ -208,7 +208,7 @@ impl AppState {
         let queue_handle =
             self.queue_handle
                 .as_ref()
-                .ok_or_else(|| LayerShikaError::InvalidInput {
+                .ok_or_else(|| WaioShellError::InvalidInput {
                     message: "Queue handle not initialized".to_string(),
                 })?;
 
@@ -217,7 +217,7 @@ impl AppState {
         let platform =
             self.slint_platform
                 .as_ref()
-                .ok_or_else(|| LayerShikaError::InvalidInput {
+                .ok_or_else(|| WaioShellError::InvalidInput {
                     message: "Slint platform not initialized".to_string(),
                 })?;
         let mut manager = SessionLockManager::new(
@@ -243,7 +243,7 @@ impl AppState {
 
     pub fn deactivate_session_lock(&mut self) -> Result<()> {
         let Some(mut manager) = self.lock_manager.take() else {
-            return Err(LayerShikaError::InvalidInput {
+            return Err(WaioShellError::InvalidInput {
                 message: "No session lock active".to_string(),
             });
         };
@@ -288,13 +288,13 @@ impl AppState {
                 self.primary_output()
                     .and_then(SurfaceState::compilation_result)
             })
-            .ok_or_else(|| LayerShikaError::InvalidInput {
+            .ok_or_else(|| WaioShellError::InvalidInput {
                 message: "No compilation result available for session lock".to_string(),
             })?;
 
         let definition = compilation_result
             .component(component_name)
-            .ok_or_else(|| LayerShikaError::InvalidInput {
+            .ok_or_else(|| WaioShellError::InvalidInput {
                 message: format!("Component '{component_name}' not found in compilation result"),
             })?;
 
@@ -303,13 +303,13 @@ impl AppState {
 
     fn create_lock_context(&self) -> Result<Rc<SessionLockContext>> {
         let Some(global_ctx) = self.global_context.as_ref() else {
-            return Err(LayerShikaError::InvalidInput {
+            return Err(WaioShellError::InvalidInput {
                 message: "Global context not available for session lock".to_string(),
             });
         };
 
         let Some(lock_manager) = global_ctx.session_lock_manager.as_ref() else {
-            return Err(LayerShikaError::InvalidInput {
+            return Err(WaioShellError::InvalidInput {
                 message: "Session lock protocol not available".to_string(),
             });
         };

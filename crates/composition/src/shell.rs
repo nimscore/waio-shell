@@ -2,24 +2,24 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak};
 
-use layer_shika_adapters::errors::EventLoopError;
-use layer_shika_adapters::platform::calloop::channel;
-use layer_shika_adapters::platform::slint_interpreter::{
+use waio_shell_adapters::errors::EventLoopError;
+use waio_shell_adapters::platform::calloop::channel;
+use waio_shell_adapters::platform::slint_interpreter::{
     CompilationResult, Compiler, ComponentInstance, Value,
 };
-use layer_shika_adapters::{
+use waio_shell_adapters::{
     AppState, ShellSurfaceConfig, SurfaceState, WaylandSurfaceConfig, WaylandSystemOps,
 };
-use layer_shika_domain::config::SurfaceConfig;
-use layer_shika_domain::entities::output_registry::OutputRegistry;
-use layer_shika_domain::errors::DomainError;
-use layer_shika_domain::prelude::{
+use waio_shell_domain::config::SurfaceConfig;
+use waio_shell_domain::entities::output_registry::OutputRegistry;
+use waio_shell_domain::errors::DomainError;
+use waio_shell_domain::prelude::{
     AnchorEdges, KeyboardInteractivity, Layer, Margins, OutputPolicy, ScaleFactor, SurfaceDimension,
 };
-use layer_shika_domain::value_objects::handle::SurfaceHandle;
-use layer_shika_domain::value_objects::output_handle::OutputHandle;
-use layer_shika_domain::value_objects::output_info::OutputInfo;
-use layer_shika_domain::value_objects::surface_instance_id::SurfaceInstanceId;
+use waio_shell_domain::value_objects::handle::SurfaceHandle;
+use waio_shell_domain::value_objects::output_handle::OutputHandle;
+use waio_shell_domain::value_objects::output_info::OutputInfo;
+use waio_shell_domain::value_objects::surface_instance_id::SurfaceInstanceId;
 use spin_on::spin_on;
 
 use crate::event_loop::{EventLoopHandle, FromAppState};
@@ -439,7 +439,7 @@ impl Shell {
             definition.config.clone(),
         );
 
-        let inner = layer_shika_adapters::WaylandShellSystem::new(&wayland_config)?;
+        let inner = waio_shell_adapters::WaylandShellSystem::new(&wayland_config)?;
         let inner_rc: Rc<RefCell<dyn WaylandSystemOps>> = Rc::new(RefCell::new(inner));
 
         let (sender, receiver) = channel::channel();
@@ -503,7 +503,7 @@ impl Shell {
             .map(|(_, cfg)| cfg.clone())
             .collect();
 
-        let inner = layer_shika_adapters::WaylandShellSystem::new_multi(&shell_configs)?;
+        let inner = waio_shell_adapters::WaylandShellSystem::new_multi(&shell_configs)?;
         let inner_rc: Rc<RefCell<dyn WaylandSystemOps>> = Rc::new(RefCell::new(inner));
 
         let (sender, receiver) = channel::channel();
@@ -535,7 +535,7 @@ impl Shell {
     }
 
     fn new_minimal(compilation_result: Rc<CompilationResult>) -> Result<Self> {
-        let inner = layer_shika_adapters::WaylandShellSystem::new_minimal()?;
+        let inner = waio_shell_adapters::WaylandShellSystem::new_minimal()?;
         let inner_rc: Rc<RefCell<dyn WaylandSystemOps>> = Rc::new(RefCell::new(inner));
 
         inner_rc
@@ -1382,7 +1382,7 @@ impl Shell {
         crate::LockSelection::new(self, selector.into())
     }
 
-    fn selector_to_output_filter(selector: &crate::Selector) -> layer_shika_adapters::OutputFilter {
+    fn selector_to_output_filter(selector: &crate::Selector) -> waio_shell_adapters::OutputFilter {
         let selector = selector.clone();
 
         Rc::new(
@@ -1467,7 +1467,7 @@ impl Shell {
         property_name: &str,
         value: Value,
     ) {
-        use layer_shika_adapters::create_lock_property_operation_with_output_filter;
+        use waio_shell_adapters::create_lock_property_operation_with_output_filter;
 
         let filter = Self::selector_to_output_filter(selector);
         let property_operation = create_lock_property_operation_with_output_filter(

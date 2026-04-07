@@ -1,7 +1,7 @@
-use layer_shika_adapters::platform::calloop::channel;
-use layer_shika_domain::errors::DomainError;
-use layer_shika_domain::value_objects::handle::PopupHandle;
-use layer_shika_domain::value_objects::popup_config::PopupConfig;
+use waio_shell_adapters::platform::calloop::channel;
+use waio_shell_domain::errors::DomainError;
+use waio_shell_domain::value_objects::handle::PopupHandle;
+use waio_shell_domain::value_objects::popup_config::PopupConfig;
 
 use crate::popup_builder::{Bound, PopupBuilder};
 use crate::system::{PopupCommand, ShellCommand, ShellControl};

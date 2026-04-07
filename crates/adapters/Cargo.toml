@@ -1,5 +1,5 @@
 [package]
-name = "layer-shika-adapters"
+name = "waio-shell-adapters"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,7 +7,7 @@ repository.workspace = true
 rust-version.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Adapters layer for layer-shika (internal implementation crate)"
+description = "Adapters layer for waio-shell (internal implementation crate)"
 readme = "../../README.md"
 
 [lints]
@@ -15,7 +15,7 @@ workspace = true
 
 [dependencies]
 glutin.workspace = true
-layer-shika-domain.workspace = true
+waio-shell-domain.workspace = true
 log = { workspace = true, optional = true }
 raw-window-handle.workspace = true
 slint.workspace = true

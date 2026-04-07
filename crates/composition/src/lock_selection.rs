@@ -1,6 +1,6 @@
 // TODO: Maybe refactor to reuse the layer shell selector
 
-use layer_shika_domain::errors::DomainError;
+use waio_shell_domain::errors::DomainError;
 
 use crate::selector::{Selector, SurfaceInfo};
 use crate::slint_interpreter::{ComponentInstance, Value};

@@ -1,4 +1,4 @@
-use layer_shika_adapters::platform::slint_interpreter::Value;
+use waio_shell_adapters::platform::slint_interpreter::Value;
 
 /// Trait for callback return types
 pub trait IntoValue {

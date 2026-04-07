@@ -17,7 +17,7 @@ impl LockConfig {
         Self {
             scale_factor: ScaleFactor::default(),
             margin: Margins::default(),
-            namespace: "layer-shika-lock".to_string(),
+            namespace: "waio-shell-lock".to_string(),
             output_policy: OutputPolicy::AllOutputs,
         }
     }

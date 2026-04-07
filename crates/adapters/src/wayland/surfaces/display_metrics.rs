@@ -1,12 +1,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use layer_shika_domain::dimensions::{
+use waio_shell_domain::dimensions::{
     LogicalSize as DomainLogicalSize, PhysicalSize as DomainPhysicalSize,
     ScaleFactor as DomainScaleFactor,
 };
-use layer_shika_domain::errors::Result as DomainResult;
-use layer_shika_domain::surface_dimensions::SurfaceDimensions;
+use waio_shell_domain::errors::Result as DomainResult;
+use waio_shell_domain::surface_dimensions::SurfaceDimensions;
 use slint::PhysicalSize;
 
 use crate::logger;

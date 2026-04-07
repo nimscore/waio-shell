@@ -1,5 +1,5 @@
-use layer_shika_domain::errors::DomainError;
-use layer_shika_domain::value_objects::surface_instance_id::SurfaceInstanceId;
+use waio_shell_domain::errors::DomainError;
+use waio_shell_domain::value_objects::surface_instance_id::SurfaceInstanceId;
 
 use crate::selector::{Selector, SurfaceInfo};
 use crate::slint_interpreter::{ComponentInstance, Value};

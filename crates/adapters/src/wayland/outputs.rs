@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use layer_shika_domain::value_objects::output_handle::OutputHandle;
+use waio_shell_domain::value_objects::output_handle::OutputHandle;
 pub(crate) use output_manager::{OutputManager, OutputManagerContext};
 use wayland_client::backend::ObjectId;
 pub(crate) mod output_manager;

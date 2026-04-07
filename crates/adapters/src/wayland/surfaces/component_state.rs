@@ -3,7 +3,7 @@ use std::rc::Rc;
 use slint::ComponentHandle;
 use slint_interpreter::{CompilationResult, ComponentDefinition, ComponentInstance};
 
-use crate::errors::{LayerShikaError, Result};
+use crate::errors::{WaioShellError, Result};
 use crate::rendering::femtovg::main_window::FemtoVGWindow;
 
 pub struct ComponentState {
@@ -20,11 +20,11 @@ impl ComponentState {
     ) -> Result<Self> {
         let component_instance = component_definition
             .create()
-            .map_err(|e| LayerShikaError::SlintComponentCreation { source: e })?;
+            .map_err(|e| WaioShellError::SlintComponentCreation { source: e })?;
 
         component_instance
             .show()
-            .map_err(|e| LayerShikaError::SlintComponentCreation { source: e })?;
+            .map_err(|e| WaioShellError::SlintComponentCreation { source: e })?;
 
         window.request_redraw();
 

@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
-use layer_shika_domain::value_objects::lock_config::LockConfig;
-use layer_shika_domain::value_objects::lock_state::LockState;
-use layer_shika_domain::value_objects::output_handle::OutputHandle;
+use waio_shell_domain::value_objects::lock_config::LockConfig;
+use waio_shell_domain::value_objects::lock_state::LockState;
+use waio_shell_domain::value_objects::output_handle::OutputHandle;
 use slint_interpreter::{CompilationResult, ComponentInstance, Value};
 use smithay_client_toolkit::reexports::calloop::LoopHandle;
 

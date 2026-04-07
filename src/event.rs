@@ -1,1 +1,1 @@
-pub use layer_shika_composition::{EventDispatchContext, EventLoopHandle, ShellEventLoop};
+pub use waio_shell_composition::{EventDispatchContext, EventLoopHandle, ShellEventLoop};

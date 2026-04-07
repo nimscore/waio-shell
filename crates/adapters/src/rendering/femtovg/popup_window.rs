@@ -2,8 +2,8 @@ use core::ops::Deref;
 use std::cell::{Cell, OnceCell, RefCell};
 use std::rc::{Rc, Weak};
 
-use layer_shika_domain::dimensions::LogicalSize;
-use layer_shika_domain::value_objects::handle::PopupHandle;
+use waio_shell_domain::dimensions::LogicalSize;
+use waio_shell_domain::value_objects::handle::PopupHandle;
 use slint::platform::femtovg_renderer::FemtoVGRenderer;
 use slint::platform::{Renderer, WindowAdapter, WindowEvent};
 use slint::{PhysicalSize, Window, WindowSize};

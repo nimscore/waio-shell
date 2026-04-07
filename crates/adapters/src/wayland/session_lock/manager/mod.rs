@@ -10,9 +10,9 @@ pub use callbacks::{
     LockCallback, LockPropertyOperation, OutputFilter,
     create_lock_property_operation_with_output_filter,
 };
-use layer_shika_domain::prelude::OutputInfo;
-use layer_shika_domain::value_objects::lock_config::LockConfig;
-use layer_shika_domain::value_objects::lock_state::LockState;
+use waio_shell_domain::prelude::OutputInfo;
+use waio_shell_domain::value_objects::lock_config::LockConfig;
+use waio_shell_domain::value_objects::lock_state::LockState;
 use slint_interpreter::{CompilationResult, ComponentDefinition, ComponentInstance};
 pub use state::{ActiveLockSurface, LockConfigureContext, LockSurfaceOutputContext};
 use wayland_client::backend::ObjectId;
@@ -23,7 +23,7 @@ use wayland_client::{Proxy, QueueHandle, WEnum};
 use wayland_protocols::ext::session_lock::v1::client::ext_session_lock_v1::ExtSessionLockV1;
 
 use self::input_handling::InputState;
-use crate::errors::{LayerShikaError, Result};
+use crate::errors::{WaioShellError, Result};
 use crate::logger;
 use crate::rendering::slint_integration::platform::CustomSlintPlatform;
 use crate::wayland::rendering::RenderableSet;
@@ -81,7 +81,7 @@ impl SessionLockManager {
         queue_handle: &QueueHandle<AppState>,
     ) -> Result<()> {
         if !self.state.can_activate() {
-            return Err(LayerShikaError::InvalidInput {
+            return Err(WaioShellError::InvalidInput {
                 message: format!("Session lock cannot activate in state {:?}", self.state),
             });
         }
@@ -124,13 +124,13 @@ impl SessionLockManager {
 
     pub fn deactivate(&mut self) -> Result<()> {
         if !self.state.can_deactivate() {
-            return Err(LayerShikaError::InvalidInput {
+            return Err(WaioShellError::InvalidInput {
                 message: format!("Session lock cannot deactivate in state {:?}", self.state),
             });
         }
 
         let Some(session_lock) = self.session_lock.take() else {
-            return Err(LayerShikaError::InvalidInput {
+            return Err(WaioShellError::InvalidInput {
                 message: "Session lock object missing during deactivate".to_string(),
             });
         };
@@ -168,7 +168,7 @@ impl SessionLockManager {
         }
 
         let Some(session_lock) = self.session_lock.as_ref() else {
-            return Err(LayerShikaError::InvalidInput {
+            return Err(WaioShellError::InvalidInput {
                 message: "Session lock object missing during output hotplug".to_string(),
             });
         };

@@ -18,29 +18,29 @@ pub mod value_conversion;
 use std::result::Result as StdResult;
 
 pub use event_loop::{EventLoopHandle, ShellEventLoop};
-pub use layer_shika_adapters::PopupWindow;
-use layer_shika_adapters::errors::LayerShikaError;
-pub use layer_shika_adapters::platform::{slint, slint_interpreter};
-pub use layer_shika_domain::entities::output_registry::OutputRegistry;
-use layer_shika_domain::errors::DomainError;
-pub use layer_shika_domain::prelude::AnchorStrategy;
-pub use layer_shika_domain::value_objects::anchor::AnchorEdges;
-pub use layer_shika_domain::value_objects::handle::{Handle, PopupHandle, SurfaceHandle};
-pub use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteractivity;
-pub use layer_shika_domain::value_objects::layer::Layer;
-pub use layer_shika_domain::value_objects::output_handle::OutputHandle;
-pub use layer_shika_domain::value_objects::output_info::{OutputGeometry, OutputInfo};
-pub use layer_shika_domain::value_objects::output_policy::OutputPolicy;
-pub use layer_shika_domain::value_objects::output_target::OutputTarget;
-pub use layer_shika_domain::value_objects::popup_behavior::{
+pub use waio_shell_adapters::PopupWindow;
+use waio_shell_adapters::errors::WaioShellError;
+pub use waio_shell_adapters::platform::{slint, slint_interpreter};
+pub use waio_shell_domain::entities::output_registry::OutputRegistry;
+use waio_shell_domain::errors::DomainError;
+pub use waio_shell_domain::prelude::AnchorStrategy;
+pub use waio_shell_domain::value_objects::anchor::AnchorEdges;
+pub use waio_shell_domain::value_objects::handle::{Handle, PopupHandle, SurfaceHandle};
+pub use waio_shell_domain::value_objects::keyboard_interactivity::KeyboardInteractivity;
+pub use waio_shell_domain::value_objects::layer::Layer;
+pub use waio_shell_domain::value_objects::output_handle::OutputHandle;
+pub use waio_shell_domain::value_objects::output_info::{OutputGeometry, OutputInfo};
+pub use waio_shell_domain::value_objects::output_policy::OutputPolicy;
+pub use waio_shell_domain::value_objects::output_target::OutputTarget;
+pub use waio_shell_domain::value_objects::popup_behavior::{
     ConstraintAdjustment, OutputMigrationPolicy, PopupBehavior,
 };
-pub use layer_shika_domain::value_objects::popup_config::PopupConfig;
-pub use layer_shika_domain::value_objects::popup_position::{
+pub use waio_shell_domain::value_objects::popup_config::PopupConfig;
+pub use waio_shell_domain::value_objects::popup_position::{
     Alignment, AnchorPoint, Offset, PopupPosition,
 };
-pub use layer_shika_domain::value_objects::popup_size::PopupSize;
-pub use layer_shika_domain::value_objects::surface_instance_id::SurfaceInstanceId;
+pub use waio_shell_domain::value_objects::popup_size::PopupSize;
+pub use waio_shell_domain::value_objects::surface_instance_id::SurfaceInstanceId;
 pub use layer_surface::{LayerSurfaceHandle, ShellSurfaceConfigHandler};
 pub use lock_selection::LockSelection;
 pub use popup::PopupShell;
@@ -71,17 +71,17 @@ pub(crate) mod logger {
 }
 
 pub mod calloop {
-    pub use layer_shika_adapters::platform::calloop::*;
+    pub use waio_shell_adapters::platform::calloop::*;
 }
 
-/// Result type alias using layer-shika's Error
+/// Result type alias using waio-shell's Error
 pub type Result<T> = StdResult<T, Error>;
 
-/// Error types for layer-shika operations
+/// Error types for waio-shell operations
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Adapter error: {0}")]
-    Adapter(#[from] LayerShikaError),
+    Adapter(#[from] WaioShellError),
 
     #[error("Domain error: {0}")]
     Domain(#[from] DomainError),
@@ -97,8 +97,8 @@ pub enum Error {
 }
 
 pub mod prelude {
-    pub use layer_shika_adapters::platform::wayland::Anchor;
-    pub use layer_shika_domain::prelude::{
+    pub use waio_shell_adapters::platform::wayland::Anchor;
+    pub use waio_shell_domain::prelude::{
         LogicalPosition, LogicalRect, LogicalSize, Margins, PhysicalSize, ScaleFactor,
         SurfaceConfig, SurfaceDimension, UiSource,
     };

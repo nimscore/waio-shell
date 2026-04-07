@@ -9,7 +9,7 @@ use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::z
 use wayland_client::{protocol::{wl_pointer::WlPointer, wl_surface::WlSurface}, Connection};
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
-use crate::errors::{LayerShikaError, Result};
+use crate::errors::{WaioShellError, Result};
 use crate::rendering::femtovg::main_window::FemtoVGWindow;
 use crate::rendering::slint_integration::platform::CustomSlintPlatform;
 
@@ -142,12 +142,12 @@ impl SurfaceStateBuilder {
 
     pub fn build(self) -> Result<(SurfaceState, Rc<CustomSlintPlatform>)> {
         let platform = CustomSlintPlatform::new(self.window.as_ref().ok_or_else(|| {
-            LayerShikaError::InvalidInput {
+            WaioShellError::InvalidInput {
                 message: "Window is required".into(),
             }
         })?);
         set_platform(Box::new(PlatformWrapper(Rc::clone(&platform))))
-            .map_err(|e| LayerShikaError::PlatformSetup { source: e })?;
+            .map_err(|e| WaioShellError::PlatformSetup { source: e })?;
 
         let state = SurfaceState::new(self)?;
         Ok((state, platform))

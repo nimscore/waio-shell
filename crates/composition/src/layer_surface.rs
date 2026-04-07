@@ -1,10 +1,10 @@
-use layer_shika_adapters::SurfaceState;
-use layer_shika_adapters::platform::slint_interpreter::ComponentInstance;
-use layer_shika_adapters::platform::wayland::{Anchor, WaylandKeyboardInteractivity, WaylandLayer};
-use layer_shika_domain::value_objects::anchor::AnchorEdges;
-use layer_shika_domain::value_objects::keyboard_interactivity::KeyboardInteractivity;
-use layer_shika_domain::value_objects::layer::Layer;
-use layer_shika_domain::value_objects::margins::Margins;
+use waio_shell_adapters::SurfaceState;
+use waio_shell_adapters::platform::slint_interpreter::ComponentInstance;
+use waio_shell_adapters::platform::wayland::{Anchor, WaylandKeyboardInteractivity, WaylandLayer};
+use waio_shell_domain::value_objects::anchor::AnchorEdges;
+use waio_shell_domain::value_objects::keyboard_interactivity::KeyboardInteractivity;
+use waio_shell_domain::value_objects::layer::Layer;
+use waio_shell_domain::value_objects::margins::Margins;
 
 /// Low-level handle for configuring layer-shell surface properties
 ///

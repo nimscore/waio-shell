@@ -1,15 +1,15 @@
-use crate::errors::{LayerShikaError, Result};
+use crate::errors::{WaioShellError, Result};
 use crate::rendering::egl::context_factory::RenderContextFactory;
 use crate::rendering::femtovg::popup_window::PopupWindow;
 use crate::rendering::femtovg::renderable_window::{FractionalScaleConfig, RenderableWindow};
 use crate::wayland::surfaces::display_metrics::{DisplayMetrics, SharedDisplayMetrics};
 use crate::logger;
-use layer_shika_domain::dimensions::LogicalSize as DomainLogicalSize;
-use layer_shika_domain::surface_dimensions::SurfaceDimensions;
-use layer_shika_domain::value_objects::handle::PopupHandle;
-use layer_shika_domain::value_objects::popup_behavior::ConstraintAdjustment;
-use layer_shika_domain::value_objects::popup_config::PopupConfig;
-use layer_shika_domain::value_objects::popup_position::PopupPosition;
+use waio_shell_domain::dimensions::LogicalSize as DomainLogicalSize;
+use waio_shell_domain::surface_dimensions::SurfaceDimensions;
+use waio_shell_domain::value_objects::handle::PopupHandle;
+use waio_shell_domain::value_objects::popup_behavior::ConstraintAdjustment;
+use waio_shell_domain::value_objects::popup_config::PopupConfig;
+use waio_shell_domain::value_objects::popup_position::PopupPosition;
 use slint::{platform::femtovg_renderer::FemtoVGRenderer, PhysicalSize};
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use std::cell::{Cell, RefCell};
@@ -223,7 +223,7 @@ impl PopupManager {
         last_pointer_serial: u32,
     ) -> Result<Rc<PopupWindow>> {
         let (id, config, width, height) = self.take_pending_popup_params().ok_or_else(|| {
-            LayerShikaError::WindowConfiguration {
+            WaioShellError::WindowConfiguration {
                 message: "No pending popup request available".into(),
             }
         })?;
@@ -248,7 +248,7 @@ impl PopupManager {
         popup_id: PopupId,
     ) -> Result<Rc<PopupWindow>> {
         let xdg_wm_base = self.context.xdg_wm_base.as_ref().ok_or_else(|| {
-            LayerShikaError::WindowConfiguration {
+            WaioShellError::WindowConfiguration {
                 message: "xdg-shell not available for popups".into(),
             }
         })?;
@@ -312,7 +312,7 @@ impl PopupManager {
             .create_context(&wayland_popup_surface.surface.id(), popup_size)?;
 
         let renderer = FemtoVGRenderer::new(context)
-            .map_err(|e| LayerShikaError::FemtoVGRendererCreation { source: e })?;
+            .map_err(|e| WaioShellError::FemtoVGRendererCreation { source: e })?;
 
         let on_close: OnCloseCallback = {
             let weak_self = Rc::downgrade(self);

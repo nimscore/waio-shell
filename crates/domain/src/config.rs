@@ -39,7 +39,7 @@ impl SurfaceConfig {
             dimensions: SurfaceDimension::default(),
             margin: Margins::default(),
             exclusive_zone: -1,
-            namespace: "layer-shika".to_owned(),
+            namespace: "waio-shell".to_owned(),
             scale_factor: ScaleFactor::default(),
             layer: Layer::default(),
             anchor: AnchorEdges::default(),

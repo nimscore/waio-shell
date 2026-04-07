@@ -1,13 +1,13 @@
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
-use layer_shika_adapters::WaylandSystemOps;
-use layer_shika_domain::dimensions::ScaleFactor;
-use layer_shika_domain::errors::DomainError;
-use layer_shika_domain::value_objects::lock_config::LockConfig;
-use layer_shika_domain::value_objects::lock_state::LockState;
-use layer_shika_domain::value_objects::margins::Margins;
-use layer_shika_domain::value_objects::output_policy::OutputPolicy;
+use waio_shell_adapters::WaylandSystemOps;
+use waio_shell_domain::dimensions::ScaleFactor;
+use waio_shell_domain::errors::DomainError;
+use waio_shell_domain::value_objects::lock_config::LockConfig;
+use waio_shell_domain::value_objects::lock_state::LockState;
+use waio_shell_domain::value_objects::margins::Margins;
+use waio_shell_domain::value_objects::output_policy::OutputPolicy;
 
 use crate::calloop::channel;
 use crate::slint_interpreter::Value;

@@ -5,7 +5,7 @@ use crate::wayland::managed_proxies::{
 };
 use crate::wayland::surfaces::dimensions::SurfaceDimensionsExt;
 use crate::logger;
-use layer_shika_domain::surface_dimensions::SurfaceDimensions;
+use waio_shell_domain::surface_dimensions::SurfaceDimensions;
 use slint::PhysicalSize;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use wayland_client::protocol::wl_surface::WlSurface;

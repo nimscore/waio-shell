@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use layer_shika_adapters::platform::slint_interpreter::ComponentInstance;
-use layer_shika_domain::config::SurfaceConfig;
-use layer_shika_domain::value_objects::handle::SurfaceHandle;
-use layer_shika_domain::value_objects::output_handle::OutputHandle;
+use waio_shell_adapters::platform::slint_interpreter::ComponentInstance;
+use waio_shell_domain::config::SurfaceConfig;
+use waio_shell_domain::value_objects::handle::SurfaceHandle;
+use waio_shell_domain::value_objects::output_handle::OutputHandle;
 
 use crate::Result;
 

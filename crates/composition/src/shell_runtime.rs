@@ -1,4 +1,4 @@
-use layer_shika_adapters::platform::slint_interpreter::ComponentInstance;
+use waio_shell_adapters::platform::slint_interpreter::ComponentInstance;
 
 /// Default surface name used internally
 pub const DEFAULT_SURFACE_NAME: &str = "main";

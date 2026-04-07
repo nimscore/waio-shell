@@ -12,10 +12,10 @@ use crate::wayland::managed_proxies::{
     ManagedWpFractionalScaleV1, ManagedWpViewport,
 };
 use crate::rendering::femtovg::main_window::FemtoVGWindow;
-use crate::errors::{LayerShikaError, Result};
+use crate::errors::{WaioShellError, Result};
 use core::result::Result as CoreResult;
-use layer_shika_domain::errors::DomainError;
-use layer_shika_domain::ports::shell::ShellContextPort;
+use waio_shell_domain::errors::DomainError;
+use waio_shell_domain::ports::shell::ShellContextPort;
 use slint::{LogicalPosition, PhysicalSize};
 use slint::platform::WindowEvent;
 use slint_interpreter::{ComponentInstance, CompilationResult};
@@ -42,12 +42,12 @@ impl SurfaceState {
         let component_definition =
             builder
                 .component_definition
-                .ok_or_else(|| LayerShikaError::InvalidInput {
+                .ok_or_else(|| WaioShellError::InvalidInput {
                     message: "Component definition is required".into(),
                 })?;
         let window = builder
             .window
-            .ok_or_else(|| LayerShikaError::InvalidInput {
+            .ok_or_else(|| WaioShellError::InvalidInput {
                 message: "Window is required".into(),
             })?;
 
@@ -56,24 +56,24 @@ impl SurfaceState {
 
         let connection = builder
             .connection
-            .ok_or_else(|| LayerShikaError::InvalidInput {
+            .ok_or_else(|| WaioShellError::InvalidInput {
                 message: "Connection is required".into(),
             })?;
 
         let surface_rc = builder
             .surface
-            .ok_or_else(|| LayerShikaError::InvalidInput {
+            .ok_or_else(|| WaioShellError::InvalidInput {
                 message: "Surface is required".into(),
             })?;
         let layer_surface_rc =
             builder
                 .layer_surface
-                .ok_or_else(|| LayerShikaError::InvalidInput {
+                .ok_or_else(|| WaioShellError::InvalidInput {
                     message: "Layer surface is required".into(),
                 })?;
         let pointer_rc = builder
             .pointer
-            .ok_or_else(|| LayerShikaError::InvalidInput {
+            .ok_or_else(|| WaioShellError::InvalidInput {
                 message: "Pointer is required".into(),
             })?;
 

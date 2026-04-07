@@ -11,7 +11,7 @@ use glutin::prelude::*;
 use raw_window_handle::{RawDisplayHandle, WaylandDisplayHandle};
 use wayland_client::backend::ObjectId;
 
-use crate::errors::{EGLError, LayerShikaError, Result};
+use crate::errors::{EGLError, WaioShellError, Result};
 use crate::logger;
 
 pub struct RenderContextManager {
@@ -97,7 +97,7 @@ impl RenderContextManager {
 
 fn create_wayland_display_handle(display_id: &ObjectId) -> Result<RawDisplayHandle> {
     let display = NonNull::new(display_id.as_ptr().cast::<c_void>()).ok_or_else(|| {
-        LayerShikaError::InvalidInput {
+        WaioShellError::InvalidInput {
             message: "Failed to create NonNull pointer for display".into(),
         }
     })?;

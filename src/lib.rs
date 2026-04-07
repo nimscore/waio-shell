@@ -1,4 +1,4 @@
-//! layer-shika: A Wayland layer shell library with Slint UI integration
+//! waio-shell: A Wayland layer shell library with Slint UI integration
 //!
 //! This crate provides a high-level API for creating Wayland widget components
 //! with Slint-based user interfaces. It's built on a clean architecture with three
@@ -7,11 +7,11 @@
 //!
 //! # Architecture Note
 //!
-//! layer-shika is internally organized as a Cargo workspace with three implementation
+//! waio-shell is internally organized as a Cargo workspace with three implementation
 //! crates:
-//! - `layer-shika-domain`: Core domain models and business logic
-//! - `layer-shika-adapters`: Wayland and rendering implementations
-//! - `layer-shika-composition`: Public API composition layer
+//! - `waio-shell-domain`: Core domain models and business logic
+//! - `waio-shell-adapters`: Wayland and rendering implementations
+//! - `waio-shell-composition`: Public API composition layer
 //!
 //! **Users should never import from these internal crates directly.** This allows
 //! the internal architecture to evolve without breaking semver guarantees on the
@@ -33,7 +33,7 @@
 //! Single-surface use case with the fluent builder API:
 //!
 //! ```rust,no_run
-//! use layer_shika::prelude::*;
+//! use waio_shell::prelude::*;
 //!
 //! Shell::from_file("ui/bar.slint")
 //!     .surface("Main")
@@ -42,17 +42,17 @@
 //!         .exclusive_zone(42)
 //!     .build()?
 //!     .run()?;
-//! # Ok::<(), layer_shika::Error>(())
+//! # Ok::<(), waio_shell::Error>(())
 //! ```
 //!
-//! **See the [simple-bar example](https://codeberg.org/waydeer/layer-shika/src/examples/simple-bar) for a complete working implementation.**
+//! **See the [simple-bar example](https://codeberg.org/waydeer/waio-shell/src/examples/simple-bar) for a complete working implementation.**
 //!
 //! # Declarative Configuration
 //!
 //! For reusable, programmatically generated, or externally sourced configurations:
 //!
 //! ```rust,no_run
-//! use layer_shika::prelude::*;
+//! use waio_shell::prelude::*;
 //!
 //! let config = ShellConfig {
 //!     ui_source: CompiledUiSource::file("ui/bar.slint"),
@@ -67,17 +67,17 @@
 //! };
 //!
 //! Shell::from_config(config)?.run()?;
-//! # Ok::<(), layer_shika::Error>(())
+//! # Ok::<(), waio_shell::Error>(())
 //! ```
 //!
-//! **See the [declarative-config example](https://codeberg.org/waydeer/layer-shika/src/examples/declarative-config) for a complete working implementation.**
+//! **See the [declarative-config example](https://codeberg.org/waydeer/waio-shell/src/examples/declarative-config) for a complete working implementation.**
 //!
 //! # Multi-Surface Shell
 //!
 //! Same API naturally extends to multiple surfaces:
 //!
 //! ```rust,no_run
-//! use layer_shika::prelude::*;
+//! use waio_shell::prelude::*;
 //!
 //! Shell::from_file("ui/shell.slint")
 //!     .surface("TopBar")
@@ -88,17 +88,17 @@
 //!         .anchor(AnchorEdges::bottom_bar())
 //!     .build()?
 //!     .run()?;
-//! # Ok::<(), layer_shika::Error>(())
+//! # Ok::<(), waio_shell::Error>(())
 //! ```
 //!
-//! **See the [multi-surface example](https://codeberg.org/waydeer/layer-shika/src/examples/multi-surface) for a complete working implementation.**
+//! **See the [multi-surface example](https://codeberg.org/waydeer/waio-shell/src/examples/multi-surface) for a complete working implementation.**
 //!
 //! # Pre-compiled Slint
 //!
 //! For explicit compilation control:
 //!
 //! ```rust,no_run
-//! use layer_shika::prelude::*;
+//! use waio_shell::prelude::*;
 //!
 //! let compilation = Shell::compile_file("ui/shell.slint")?;
 //!
@@ -111,13 +111,13 @@
 //!         .height(64)
 //!     .build()?
 //!     .run()?;
-//! # Ok::<(), layer_shika::Error>(())
+//! # Ok::<(), waio_shell::Error>(())
 //! ```
 //!
 //! # Examples
 //!
 //! Comprehensive examples demonstrating all features are available in the
-//! [examples directory](https://codeberg.org/waydeer/layer-shika/src/examples).
+//! [examples directory](https://codeberg.org/waydeer/waio-shell/src/examples).
 //!
 //! Run any example with: `cargo run -p <example-name>`
 
@@ -132,7 +132,7 @@ pub mod slint_integration;
 pub mod window;
 
 pub use event::{EventDispatchContext, EventLoopHandle, ShellEventLoop};
-pub use layer_shika_composition::{
+pub use waio_shell_composition::{
     CallbackContext, Error, Handle, Result, SurfaceHandle, SurfaceInstanceId, SurfaceTarget,
 };
 pub use output::{OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry};
@@ -150,5 +150,5 @@ pub use window::{
 };
 
 pub mod calloop {
-    pub use layer_shika_composition::calloop::*;
+    pub use waio_shell_composition::calloop::*;
 }

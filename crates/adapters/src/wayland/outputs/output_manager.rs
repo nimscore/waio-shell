@@ -1,5 +1,5 @@
 use crate::{
-    errors::{LayerShikaError, Result},
+    errors::{WaioShellError, Result},
     rendering::egl::context_factory::RenderContextFactory,
     wayland::{
         config::{LayerSurfaceConfig, WaylandSurfaceConfig},
@@ -14,7 +14,7 @@ use crate::{
         },
     }, logger,
 };
-use layer_shika_domain::value_objects::{
+use waio_shell_domain::value_objects::{
     output_handle::OutputHandle,
     output_info::OutputInfo,
 };
@@ -116,7 +116,7 @@ impl OutputManager {
         let mut pending = self.pending_outputs.borrow_mut();
 
         let Some(pending_output) = pending.remove(output_id) else {
-            return Err(LayerShikaError::InvalidInput {
+            return Err(WaioShellError::InvalidInput {
                 message: format!("No pending output found for id {output_id:?}"),
             });
         };
@@ -166,7 +166,7 @@ impl OutputManager {
             self.context
                 .layer_shell
                 .as_ref()
-                .ok_or_else(|| LayerShikaError::InvalidInput {
+                .ok_or_else(|| WaioShellError::InvalidInput {
                     message:
                         "wlr-layer-shell protocol not available - cannot create layer surfaces"
                             .into(),
@@ -214,7 +214,7 @@ impl OutputManager {
         }
 
         let mut window_state =
-            SurfaceState::new(builder).map_err(|e| LayerShikaError::WindowConfiguration {
+            SurfaceState::new(builder).map_err(|e| WaioShellError::WindowConfiguration {
                 message: e.to_string(),
             })?;
 

@@ -1,27 +1,27 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use layer_shika_adapters::platform::calloop::channel;
-use layer_shika_adapters::platform::slint::ComponentHandle;
-use layer_shika_adapters::platform::slint_interpreter::{
+use waio_shell_adapters::platform::calloop::channel;
+use waio_shell_adapters::platform::slint::ComponentHandle;
+use waio_shell_adapters::platform::slint_interpreter::{
     CompilationResult, ComponentDefinition, ComponentInstance, Value,
 };
-use layer_shika_adapters::{AppState, PopupManager, SurfaceState};
-use layer_shika_domain::config::SurfaceConfig;
-use layer_shika_domain::entities::output_registry::OutputRegistry;
-use layer_shika_domain::errors::DomainError;
-use layer_shika_domain::prelude::{
+use waio_shell_adapters::{AppState, PopupManager, SurfaceState};
+use waio_shell_domain::config::SurfaceConfig;
+use waio_shell_domain::entities::output_registry::OutputRegistry;
+use waio_shell_domain::errors::DomainError;
+use waio_shell_domain::prelude::{
     AnchorEdges, KeyboardInteractivity, Layer, Margins, OutputPolicy, ScaleFactor,
 };
-use layer_shika_domain::value_objects::dimensions::{PopupDimensions, SurfaceDimension};
-use layer_shika_domain::value_objects::handle::{PopupHandle, SurfaceHandle};
-use layer_shika_domain::value_objects::lock_config::LockConfig;
-use layer_shika_domain::value_objects::output_handle::OutputHandle;
-use layer_shika_domain::value_objects::output_info::OutputInfo;
-use layer_shika_domain::value_objects::popup_config::PopupConfig;
-use layer_shika_domain::value_objects::popup_position::PopupPosition;
-use layer_shika_domain::value_objects::popup_size::PopupSize;
-use layer_shika_domain::value_objects::surface_instance_id::SurfaceInstanceId;
+use waio_shell_domain::value_objects::dimensions::{PopupDimensions, SurfaceDimension};
+use waio_shell_domain::value_objects::handle::{PopupHandle, SurfaceHandle};
+use waio_shell_domain::value_objects::lock_config::LockConfig;
+use waio_shell_domain::value_objects::output_handle::OutputHandle;
+use waio_shell_domain::value_objects::output_info::OutputInfo;
+use waio_shell_domain::value_objects::popup_config::PopupConfig;
+use waio_shell_domain::value_objects::popup_position::PopupPosition;
+use waio_shell_domain::value_objects::popup_size::PopupSize;
+use waio_shell_domain::value_objects::surface_instance_id::SurfaceInstanceId;
 use smithay_client_toolkit::reexports::client::protocol::wl_region::WlRegion;
 
 use crate::event_loop::FromAppState;

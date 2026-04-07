@@ -1,4 +1,4 @@
-use layer_shika_domain::surface_dimensions::SurfaceDimensions;
+use waio_shell_domain::surface_dimensions::SurfaceDimensions;
 use slint::PhysicalSize;
 
 pub trait SurfaceDimensionsExt {

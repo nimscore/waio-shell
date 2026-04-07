@@ -1,3 +1,3 @@
-pub use layer_shika_composition::{
+pub use waio_shell_composition::{
     OutputGeometry, OutputHandle, OutputInfo, OutputPolicy, OutputRegistry,
 };

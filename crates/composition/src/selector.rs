@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::sync::Arc;
 
-use layer_shika_domain::value_objects::surface_instance_id::SurfaceInstanceId;
+use waio_shell_domain::value_objects::surface_instance_id::SurfaceInstanceId;
 
 use crate::{OutputHandle, OutputInfo};
 

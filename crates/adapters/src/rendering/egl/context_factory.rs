@@ -15,7 +15,7 @@ use wayland_client::backend::ObjectId;
 
 use super::context::EGLContext;
 use super::render_context_manager::RenderContextManager;
-use crate::errors::{EGLError, LayerShikaError, Result};
+use crate::errors::{EGLError, WaioShellError, Result};
 use crate::logger;
 
 pub struct RenderContextFactory {
@@ -61,7 +61,7 @@ impl RenderContextFactory {
 
 fn create_surface_handle(surface_id: &ObjectId) -> Result<RawWindowHandle> {
     let surface = NonNull::new(surface_id.as_ptr().cast::<c_void>()).ok_or_else(|| {
-        LayerShikaError::InvalidInput {
+        WaioShellError::InvalidInput {
             message: "Failed to create NonNull pointer for surface".into(),
         }
     })?;
@@ -75,11 +75,11 @@ fn create_surface(
     surface_handle: RawWindowHandle,
     size: PhysicalSize,
 ) -> Result<Surface<WindowSurface>> {
-    let width = NonZeroU32::new(size.width).ok_or_else(|| LayerShikaError::InvalidInput {
+    let width = NonZeroU32::new(size.width).ok_or_else(|| WaioShellError::InvalidInput {
         message: "Width cannot be zero".into(),
     })?;
 
-    let height = NonZeroU32::new(size.height).ok_or_else(|| LayerShikaError::InvalidInput {
+    let height = NonZeroU32::new(size.height).ok_or_else(|| WaioShellError::InvalidInput {
         message: "Height cannot be zero".into(),
     })?;
 

@@ -1,6 +1,6 @@
-use layer_shika_domain::dimensions::{LogicalRect, LogicalSize as DomainLogicalSize};
-use layer_shika_domain::value_objects::popup_behavior::ConstraintAdjustment as DomainConstraintAdjustment;
-use layer_shika_domain::value_objects::popup_position::{Alignment, AnchorPoint, PopupPosition};
+use waio_shell_domain::dimensions::{LogicalRect, LogicalSize as DomainLogicalSize};
+use waio_shell_domain::value_objects::popup_behavior::ConstraintAdjustment as DomainConstraintAdjustment;
+use waio_shell_domain::value_objects::popup_position::{Alignment, AnchorPoint, PopupPosition};
 use slint::PhysicalSize;
 use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 use std::rc::Rc;
