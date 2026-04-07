@@ -1,6 +1,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
+use spin_on::spin_on;
 use waio_shell_adapters::platform::calloop::channel;
 use waio_shell_adapters::platform::slint::ComponentHandle;
 use waio_shell_adapters::platform::slint_interpreter::{
@@ -109,6 +110,17 @@ pub enum ShellCommand {
     Surface(SurfaceCommand),
     SessionLock(SessionLockCommand),
     Render,
+    SetProperty {
+        target: SurfaceTarget,
+        name: String,
+        value: Value,
+        response: tokio::sync::oneshot::Sender<std::result::Result<(), String>>,
+    },
+    GetProperty {
+        target: SurfaceTarget,
+        name: String,
+        response: tokio::sync::oneshot::Sender<std::result::Result<Value, String>>,
+    },
 }
 
 /// Context provided to callback handlers
@@ -318,6 +330,60 @@ impl ShellControl {
     /// Alias for `surface_by_name`
     pub fn surface(&self, name: impl Into<String>) -> SurfaceControlHandle {
         self.surface_by_name(name)
+    }
+
+    /// Sets a Slint property on a surface (blocks until processed)
+    ///
+    /// # Example
+    /// ```ignore
+    /// control.set_property("TimeLayer", "time_text", Value::from("12:00"))?;
+    /// ```
+    pub fn set_property(
+        &self,
+        surface: &str,
+        name: &str,
+        value: Value,
+    ) -> std::result::Result<(), Error> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.sender
+            .send(ShellCommand::SetProperty {
+                target: SurfaceTarget::ByName(surface.into()),
+                name: name.into(),
+                value,
+                response: tx,
+            })
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))?;
+        match spin_on(rx) {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(Error::Domain(DomainError::Configuration {
+                message: format!("set_property failed: {}", e),
+            })),
+            Err(_) => Err(Error::Domain(DomainError::ChannelClosed)),
+        }
+    }
+
+    /// Gets a Slint property from a surface (blocks until processed)
+    ///
+    /// # Example
+    /// ```ignore
+    /// let val = control.get_property("TimeLayer", "time_text")?;
+    /// ```
+    pub fn get_property(&self, surface: &str, name: &str) -> std::result::Result<Value, Error> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.sender
+            .send(ShellCommand::GetProperty {
+                target: SurfaceTarget::ByName(surface.into()),
+                name: name.into(),
+                response: tx,
+            })
+            .map_err(|_| Error::Domain(DomainError::ChannelClosed))?;
+        match spin_on(rx) {
+            Ok(Ok(val)) => Ok(val),
+            Ok(Err(e)) => Err(Error::Domain(DomainError::Configuration {
+                message: format!("get_property failed: {}", e),
+            })),
+            Err(_) => Err(Error::Domain(DomainError::ChannelClosed)),
+        }
     }
 }
 

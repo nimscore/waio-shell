@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{logger, wayland::{
     config::{LayerSurfaceConfig, ShellSurfaceConfig, WaylandSurfaceConfig},
     globals::context::GlobalContext,
@@ -725,6 +727,41 @@ impl WaylandShellSystem {
         Ok(())
     }
 
+    /// Single non-blocking tick of the event loop.
+    /// Processes Wayland events, fires timers, renders dirty surfaces.
+    /// Returns after `timeout` or when work is done.
+    pub fn tick(&mut self, timeout: Duration) -> Result<()> {
+        // Process pending Wayland events
+        if let Some(guard) = self.event_queue.prepare_read() {
+            guard
+                .read()
+                .map_err(|e| WaioShellError::WaylandProtocol { source: e })?;
+        }
+        self.event_queue
+            .dispatch_pending(&mut self.state)?;
+
+        // Dispatch calloop event sources (timers, channels, etc.)
+        self.event_loop
+            .dispatch(Some(timeout), &mut self.state)
+            .map_err(|e| EventLoopError::Execution { source: e })?;
+
+        // Update timers and animations
+        update_timers_and_animations();
+
+        // Render dirty surfaces
+        self.state.render_all_dirty()?;
+        if let Some(lock_manager) = self.state.lock_manager() {
+            lock_manager.render_all_dirty()?;
+        }
+
+        // Flush Wayland commands
+        self.connection
+            .flush()
+            .map_err(|e| WaioShellError::WaylandProtocol { source: e })?;
+
+        Ok(())
+    }
+
     fn setup_wayland_event_source(&self) -> Result<()> {
         let connection = Rc::clone(&self.connection);
 
@@ -857,6 +894,10 @@ impl ShellSystemPort for WaylandShellSystem {
 impl WaylandSystemOps for WaylandShellSystem {
     fn run(&mut self) -> Result<()> {
         WaylandShellSystem::run(self)
+    }
+
+    fn tick(&mut self, timeout: Duration) -> Result<()> {
+        WaylandShellSystem::tick(self, timeout)
     }
 
     fn spawn_surface(&mut self, config: &ShellSurfaceConfig) -> Result<Vec<OutputHandle>> {

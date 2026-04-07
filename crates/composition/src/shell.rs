@@ -587,6 +587,21 @@ impl Shell {
                                 logger::error!("Failed to render frame: {}", e);
                             }
                         }
+                        ShellCommand::SetProperty {
+                            target,
+                            name,
+                            value,
+                            response,
+                        } => {
+                            Self::handle_set_property_command(target, name, value, &mut ctx, response);
+                        }
+                        ShellCommand::GetProperty {
+                            target,
+                            name,
+                            response,
+                        } => {
+                            Self::handle_get_property_command(target, name, &mut ctx, response);
+                        }
                     }
                 }
             })
@@ -857,6 +872,73 @@ impl Shell {
         }
     }
 
+    fn handle_set_property_command(
+        target: SurfaceTarget,
+        name: String,
+        value: Value,
+        ctx: &mut EventDispatchContext<'_>,
+        response: tokio::sync::oneshot::Sender<std::result::Result<(), String>>,
+    ) {
+        let surfaces = Self::resolve_surface_target(ctx, &target);
+        if surfaces.is_empty() {
+            let _ = response.send(Err(format!("Surface target not found: {:?}", target)));
+            return;
+        }
+
+        let mut any_success = false;
+        let mut last_error = None;
+
+        for surface in surfaces {
+            let component = surface.component_instance();
+            match component.set_property(&name, value.clone()) {
+                Ok(()) => any_success = true,
+                Err(e) => last_error = Some(e.to_string()),
+            }
+        }
+
+        if any_success {
+            let _ = response.send(Ok(()));
+        } else {
+            let _ = response.send(Err(
+                last_error.unwrap_or_else(|| "No matching components found".into()),
+            ));
+        }
+
+        if let Err(e) = ctx.render_frame_if_dirty() {
+            logger::error!("Failed to render frame after set_property: {}", e);
+        }
+    }
+
+    fn handle_get_property_command(
+        target: SurfaceTarget,
+        name: String,
+        ctx: &mut EventDispatchContext<'_>,
+        response: tokio::sync::oneshot::Sender<std::result::Result<Value, String>>,
+    ) {
+        let surfaces = Self::resolve_surface_target(ctx, &target);
+        if surfaces.is_empty() {
+            let _ = response.send(Err(format!("Surface target not found: {:?}", target)));
+            return;
+        }
+
+        // Return value from first matching surface
+        for surface in surfaces {
+            let component = surface.component_instance();
+            match component.get_property(&name) {
+                Ok(val) => {
+                    let _ = response.send(Ok(val));
+                    return;
+                }
+                Err(e) => {
+                    let _ = response.send(Err(e.to_string()));
+                    return;
+                }
+            }
+        }
+
+        let _ = response.send(Err("No matching components found".into()));
+    }
+
     /// Returns a control handle for sending commands to the shell
     #[must_use]
     pub fn control(&self) -> ShellControl {
@@ -915,6 +997,31 @@ impl Shell {
             self.registry.len()
         );
         self.inner.borrow_mut().run()?;
+        Ok(())
+    }
+
+    /// Single non-blocking iteration of the event loop.
+    ///
+    /// Processes Wayland events, fires timers, and renders dirty surfaces.
+    /// Returns after `timeout` or when all pending work is done.
+    ///
+    /// # Host-Driven Event Loop Pattern
+    ///
+    /// This method implements the industry-standard host-driven pattern
+    /// (used by egui, GTK, libuv, Dear ImGui), allowing the caller
+    /// to own the main dispatch loop and integrate multiple subsystems.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// loop {
+    ///     shell.tick(Duration::from_millis(16))?;
+    ///     handle_ipc_commands()?;
+    ///     if shutdown_requested { break; }
+    /// }
+    /// ```
+    pub fn tick(&mut self, timeout: std::time::Duration) -> Result<()> {
+        self.inner.borrow_mut().tick(timeout)?;
         Ok(())
     }
 

@@ -2,13 +2,7 @@
 name = "waio-shell-composition"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
-repository.workspace = true
-rust-version.workspace = true
-keywords.workspace = true
-categories.workspace = true
 description = "Composition layer for waio-shell (internal implementation crate)"
-readme = "../../README.md"
 
 [lints]
 workspace = true
@@ -21,6 +15,7 @@ spin_on.workspace = true
 smithay-client-toolkit.workspace = true
 thiserror.workspace = true
 tracing = { workspace = true, optional = true }
+tokio = { version = "1", features = ["sync"] }
 
 [features]
 default = ["log"]

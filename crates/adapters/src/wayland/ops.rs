@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::time::Duration;
 
 use waio_shell_domain::value_objects::lock_config::LockConfig;
 use waio_shell_domain::value_objects::lock_state::LockState;
@@ -14,7 +15,13 @@ use crate::wayland::surfaces::app_state::AppState;
 type SessionLockCallback = Rc<dyn Fn(&[Value]) -> Value>;
 
 pub trait WaylandSystemOps {
+    /// Runs the event loop (blocking). Host-driven alternative: `tick()`.
     fn run(&mut self) -> Result<()>;
+
+    /// Single non-blocking iteration of the event loop.
+    /// Returns after `timeout` or when events are processed.
+    /// Host-driven pattern — allows the caller to own the main dispatch loop.
+    fn tick(&mut self, timeout: Duration) -> Result<()>;
 
     fn spawn_surface(&mut self, config: &ShellSurfaceConfig) -> Result<Vec<OutputHandle>>;
 

@@ -2,13 +2,7 @@
 name = "waio-shell-adapters"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
-repository.workspace = true
-rust-version.workspace = true
-keywords.workspace = true
-categories.workspace = true
 description = "Adapters layer for waio-shell (internal implementation crate)"
-readme = "../../README.md"
 
 [lints]
 workspace = true
