@@ -1,6 +1,6 @@
 # Runtime Surface Config Example
 
-This example demonstrates layer-shika's runtime surface configuration capabilities using the instance-based Surface Control API.
+This example demonstrates waio-shell's runtime surface configuration capabilities using the instance-based Surface Control API.
 
 ## Features Demonstrated
 

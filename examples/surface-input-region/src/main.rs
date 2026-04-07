@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use layer_shika::prelude::*;
-use layer_shika::slint_interpreter::Value;
+use waio_shell::prelude::*;
+use waio_shell::slint_interpreter::Value;
 
 fn main() -> Result<()> {
     env_logger::builder()

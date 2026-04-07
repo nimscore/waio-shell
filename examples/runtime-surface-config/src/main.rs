@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use layer_shika::calloop::channel::Sender;
-use layer_shika::prelude::*;
-use layer_shika::slint::SharedString;
-use layer_shika::slint_interpreter::Value;
+use waio_shell::calloop::channel::Sender;
+use waio_shell::prelude::*;
+use waio_shell::slint::SharedString;
+use waio_shell::slint_interpreter::Value;
 
 #[derive(Debug)]
 enum UiUpdate {

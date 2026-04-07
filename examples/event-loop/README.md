@@ -1,7 +1,7 @@
 # Event Loop Integration Examples
 
 This directory contains examples demonstrating how to integrate custom event sources
-with layer-shika's event loop.
+with waio-shell's event loop.
 
 ## Examples
 
@@ -63,7 +63,7 @@ std::thread::spawn(move || {
 ### File Descriptor Pattern
 
 ```rust
-use layer_shika::calloop::{Generic, Interest, Mode};
+use waio_shell::calloop::{Generic, Interest, Mode};
 
 let handle = shell.event_loop_handle();
 handle.add_fd(file, Interest::READ, Mode::Level, |app_state| {

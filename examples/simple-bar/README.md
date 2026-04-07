@@ -1,6 +1,6 @@
 # Simple Bar Example
 
-This example demonstrates the most basic use case of layer-shika: creating a status bar using the fluent builder API.
+This example demonstrates the most basic use case of waio-shell: creating a status bar using the fluent builder API.
 
 ## Running
 

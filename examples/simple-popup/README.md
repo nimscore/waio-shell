@@ -10,7 +10,7 @@ This example intentionally keeps the popup “resize callback” pattern, since 
 
 ## Run
 
-From the layer-shika workspace root:
+From the waio-shell workspace root:
 
 ```bash
 cargo run -p simple-popup

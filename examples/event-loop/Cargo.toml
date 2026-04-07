@@ -2,7 +2,6 @@
 name = "event-loop-examples"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
 publish = false
 
 [lints]
@@ -21,7 +20,7 @@ name = "custom-source"
 path = "src/custom_source.rs"
 
 [dependencies]
-layer-shika = { path = "../.." }
+waio-shell = { path = "../.." }
 anyhow = "1.0"
 env_logger = "0.11.7"
 log.workspace = true

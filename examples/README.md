@@ -1,6 +1,6 @@
-# layer-shika Examples
+# waio-shell Examples
 
-This directory contains comprehensive examples demonstrating the key features and use cases of layer-shika.
+This directory contains comprehensive examples demonstrating the key features and use cases of waio-shell.
 
 ## Quick Start
 
@@ -46,7 +46,7 @@ Each example includes `.slint` files in its `ui/` directory. These demonstrate:
 
 ### Error Handling
 
-All examples use layer-shika's `Result<()>` type for error handling with the `?` operator.
+All examples use waio-shell's `Result<()>` type for error handling with the `?` operator.
 
 ## Coming Soon
 

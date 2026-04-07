@@ -8,9 +8,9 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
-use layer_shika::calloop::{Interest, Mode, TimeoutAction};
-use layer_shika::prelude::*;
-use layer_shika::slint_interpreter::Value;
+use waio_shell::calloop::{Interest, Mode, TimeoutAction};
+use waio_shell::prelude::*;
+use waio_shell::slint_interpreter::Value;
 
 struct ReadablePipe {
     reader: BufReader<File>,

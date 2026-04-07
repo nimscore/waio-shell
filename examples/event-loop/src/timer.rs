@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
-use layer_shika::calloop::TimeoutAction;
-use layer_shika::prelude::*;
-use layer_shika::slint_interpreter::Value;
+use waio_shell::calloop::TimeoutAction;
+use waio_shell::prelude::*;
+use waio_shell::slint_interpreter::Value;
 
 fn main() -> Result<()> {
     env_logger::builder()

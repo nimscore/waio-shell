@@ -3,10 +3,10 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
-use layer_shika::calloop::TimeoutAction;
-use layer_shika::calloop::channel::Sender;
-use layer_shika::prelude::*;
-use layer_shika::slint_interpreter::Value;
+use waio_shell::calloop::TimeoutAction;
+use waio_shell::calloop::channel::Sender;
+use waio_shell::prelude::*;
+use waio_shell::slint_interpreter::Value;
 
 enum UiMessage {
     UpdateStatus(String),

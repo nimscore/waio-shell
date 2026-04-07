@@ -764,7 +764,7 @@ checksum = "be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376"
 
 [[package]]
 name = "declarative-config"
-version = "0.3.1"
+version = "0.0.1"
 dependencies = [
  "env_logger",
  "log",
@@ -1003,7 +1003,7 @@ dependencies = [
 
 [[package]]
 name = "event-loop-examples"
-version = "0.3.1"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "env_logger",
@@ -2402,7 +2402,7 @@ dependencies = [
 
 [[package]]
 name = "multi-surface"
-version = "0.3.1"
+version = "0.0.1"
 dependencies = [
  "env_logger",
  "log",
@@ -3306,7 +3306,7 @@ dependencies = [
 
 [[package]]
 name = "runtime-surface-config"
-version = "0.3.1"
+version = "0.0.1"
 dependencies = [
  "env_logger",
  "log",
@@ -3495,7 +3495,7 @@ dependencies = [
 
 [[package]]
 name = "session-lock"
-version = "0.3.1"
+version = "0.0.1"
 dependencies = [
  "env_logger",
  "log",
@@ -3504,7 +3504,7 @@ dependencies = [
 
 [[package]]
 name = "session-lock-selectors"
-version = "0.3.1"
+version = "0.0.1"
 dependencies = [
  "env_logger",
  "log",
@@ -3513,7 +3513,7 @@ dependencies = [
 
 [[package]]
 name = "session-lock-standalone"
-version = "0.3.1"
+version = "0.0.1"
 dependencies = [
  "env_logger",
  "log",
@@ -3560,7 +3560,7 @@ checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
 name = "simple-bar"
-version = "0.3.1"
+version = "0.0.1"
 dependencies = [
  "env_logger",
  "log",
@@ -3569,7 +3569,7 @@ dependencies = [
 
 [[package]]
 name = "simple-popup"
-version = "0.3.1"
+version = "0.0.1"
 dependencies = [
  "env_logger",
  "log",
@@ -3876,7 +3876,7 @@ dependencies = [
 
 [[package]]
 name = "surface-input-region"
-version = "0.3.1"
+version = "0.0.1"
 dependencies = [
  "env_logger",
  "log",
@@ -4059,6 +4059,15 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+
+[[package]]
+name = "tokio"
+version = "1.51.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bd1c4c0fc4a7ab90fc15ef6daaa3ec3b893f004f915f2392557ed23237820cd"
+dependencies = [
+ "pin-project-lite",
+]
 
 [[package]]
 name = "toml"
@@ -4378,7 +4387,7 @@ dependencies = [
 
 [[package]]
 name = "waio-shell-adapters"
-version = "0.3.1"
+version = "0.0.1"
 dependencies = [
  "glutin",
  "log",
@@ -4396,12 +4405,13 @@ dependencies = [
 
 [[package]]
 name = "waio-shell-composition"
-version = "0.3.1"
+version = "0.0.1"
 dependencies = [
  "log",
  "smithay-client-toolkit 0.20.0",
  "spin_on",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "waio-shell-adapters",
  "waio-shell-domain",
@@ -4409,7 +4419,7 @@ dependencies = [
 
 [[package]]
 name = "waio-shell-domain"
-version = "0.3.1"
+version = "0.0.1"
 dependencies = [
  "thiserror 2.0.18",
 ]
